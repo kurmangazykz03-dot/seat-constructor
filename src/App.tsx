@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import HomePage from "./pages/home/HomePage";
-import {EditorPage} from "./pages/editor/EditorPage";
-import {ViewerPage} from "./pages/viewer/ViewerPage";
+import HomePage from "./pages/HomePage";
+import EditorPage from "./pages/EditorPage";
+import {ViewerPage} from "./pages/ViewerPage";
 
 function App() {
   return (

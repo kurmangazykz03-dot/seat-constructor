@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import PropertiesPanel from "../components/editor/PropertiesPanel";
 import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
 function EditorPage() {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
   return (
     <div className="flex flex-col w-full h-screen">
       {/* Верхняя панель */}
@@ -15,10 +18,10 @@ function EditorPage() {
 
         {/* Центр */}
         <div className="flex-1 bg-gray-50 p-6 ">
-          <SeatmapCanvas />
+          <SeatmapCanvas selectedId={selectedId} setSelectedId={setSelectedId} />
         </div>
         {/* Правая панель свойств */}
-        <PropertiesPanel />
+        <PropertiesPanel selectedId={selectedId}/>
       </div>
     </div>
   );

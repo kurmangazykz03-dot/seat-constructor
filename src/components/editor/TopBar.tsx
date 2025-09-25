@@ -16,7 +16,7 @@ function TopBar() {
         <button className="pt-2 pb-3 px-4 py-2 bg-[#525252] text-white rounded-[8px] hover:bg-blue-500 cursor-pointer">
           Export
         </button>
-        ]
+        
       </div>
     </div>
   );

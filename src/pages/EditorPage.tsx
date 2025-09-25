@@ -1,4 +1,5 @@
 import PropertiesPanel from "../components/editor/PropertiesPanel";
+import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
@@ -13,9 +14,8 @@ function EditorPage() {
         <Toolbar />
 
         {/* Центр */}
-        <div className="flex-1 bg-gray-50 flex items-center justify-center">
-          {/* <SeatmapCanvas /> */}
-          <div className="text-black">Center</div>
+        <div className="flex-1 bg-gray-50 p-6 ">
+          <SeatmapCanvas />
         </div>
         {/* Правая панель свойств */}
         <PropertiesPanel />

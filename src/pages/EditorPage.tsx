@@ -1,11 +1,28 @@
-import { useState } from 'react'
+import { useState } from "react";
 import PropertiesPanel from "../components/editor/PropertiesPanel";
 import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
+export interface Seat {
+  id: string;
+  x: number;
+  y: number;
+  fill: string;
+  radius: number;
+  label: string;
+}
+
 function EditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [currentTool, setCurrentTool] = useState<"select" | "add-seat" | "add-row" | "add-zone">(
+    "select"
+  );
+
+  const [seats, setSeats] = useState<Seat[]>([
+    { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#33DEF1", label: "A1" },
+    { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#33DEF1", label: "A2" },
+  ]);
 
   return (
     <div className="flex flex-col w-full h-screen">
@@ -14,14 +31,14 @@ function EditorPage() {
 
       <div className="flex flex-1">
         {/* Левая панель инструментов */}
-        <Toolbar />
+        <Toolbar currentTool={currentTool} setCurrentTool={setCurrentTool} />
 
         {/* Центр */}
         <div className="flex-1 bg-gray-50 p-6 ">
-          <SeatmapCanvas selectedId={selectedId} setSelectedId={setSelectedId} />
+          <SeatmapCanvas seats={seats} setSeats={setSeats} selectedId={selectedId} setSelectedId={setSelectedId} currentTool={currentTool}  />
         </div>
         {/* Правая панель свойств */}
-        <PropertiesPanel selectedId={selectedId}/>
+        <PropertiesPanel selectedId={selectedId} />
       </div>
     </div>
   );

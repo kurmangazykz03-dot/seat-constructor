@@ -1,44 +1,72 @@
-import { Dispatch, SetStateAction, useState } from "react";
-import { Circle, Layer, Stage } from "react-konva";
+import { Dispatch, SetStateAction } from "react";
+import { Circle, Layer, Stage,Text } from "react-konva";
+import React from 'react';
+import { Seat } from '../../pages/EditorPage';
 
-interface Seat {
-  id: string;
-  x: number;
-  y: number;
-  fill: string;
-  radius: number;
-}
 interface SeatmapCanvasProps {
+  seats: Seat[];
+  setSeats: Dispatch<SetStateAction<Seat[]>>;
   selectedId: string | null;
   setSelectedId: Dispatch<SetStateAction<string | null>>;
+  currentTool: "select" | "add-seat" | "add-row" | "add-zone";
 }
 
-function SeatmapCanvas({ selectedId, setSelectedId }: SeatmapCanvasProps) {
-  const [seats, setSeats] = useState<Seat[]>([
-    { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#33DEF1" },
-    { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#33def1" },
-  ]);
+function SeatmapCanvas({
+  seats,
+  setSeats,
+  selectedId,
+  setSelectedId,
+  currentTool,
+}: SeatmapCanvasProps) {
 
-  const handleDragMove = (id: string, x: number, y: number) => {
-    setSeats((prev) => prev.map((seat) => (seat.id === id ? { ...seat, x, y } : seat)));
-  };
+  const handleStageClick=(e:any)=>{
+    if(e.target===e.target.getStage()){
+      if(currentTool==='add-seat'){
+        const pointer=e.target.getPointerPosition();
+        if(!pointer) return ;
+        
+        const newSeat: Seat={
+          id: `seat-${Date.now()}`,
+          x:pointer.x,
+          y:pointer.y,
+          radius:16,
+          fill: `#33DEF1`,
+          label: `A${seats.length + 1}`        
+        }
+        setSeats((prev) => [...prev, newSeat]);
+      }
+      setSelectedId(null);
+    }
+  }
+
+  const handleDragMove= (id:string ,x:number,y:number)=>{
+    setSeats((prev)=>prev.map((seat)=>(seat.id===id?{...seat,x,y}:seat)));
+  }
+
+
+
+
+
+  
   return (
-    <div className=" rounded-[16px] drop-shadow-[0_0_2px_rgba(0,0,0,0.1)] border border-[#e5e5e5]  ">
-      <Stage width={990} height={750}>
+     <div className="rounded-[16px] drop-shadow-[0_0_2px_rgba(0,0,0,0.1)] border border-[#e5e5e5]">
+      <Stage width={990} height={750} onClick={handleStageClick}>
         <Layer>
           {seats.map((seat) => (
-            <Circle
-              key={seat.id}
-              x={seat.x}
-              y={seat.y}
-              radius={seat.radius}
-              fill={seat.fill}
-              stroke={selectedId === seat.id ? "blue" : ""}
-              strokeWidth={selectedId === seat.id ? 2 : 0}
-              onClick={() => setSelectedId(seat.id)}
-              onDragMove={(e) => handleDragMove(seat.id, e.target.x(), e.target.y())}
-              draggable
-            />
+            <React.Fragment key={seat.id}>
+              <Circle
+                x={seat.x}
+                y={seat.y}
+                radius={seat.radius}
+                fill={seat.fill}
+                stroke={selectedId === seat.id ? "blue" : ""}
+                strokeWidth={selectedId === seat.id ? 2 : 0}
+                onClick={() => setSelectedId(seat.id)}
+                onDragMove={(e) => handleDragMove(seat.id, e.target.x(), e.target.y())}
+                draggable
+              />
+              <Text text={seat.label} x={seat.x - 8} y={seat.y + 20} fontSize={12} fill="black" />
+            </React.Fragment>
           ))}
         </Layer>
       </Stage>

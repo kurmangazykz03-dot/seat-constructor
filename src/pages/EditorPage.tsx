@@ -1,3 +1,4 @@
+import Toolbar from '../components/editor/ToolBar'
 import TopBar from "../components/editor/TopBar";
 
 function EditorPage() {
@@ -8,8 +9,7 @@ function EditorPage() {
 
       <div className="flex flex-1">
         {/* Левая панель инструментов */}
-        {/* <Toolbar /> */}
-        <div>Left</div>
+        <Toolbar/>
 
         {/* Холст */}
         <div className="flex-1 bg-gray-50 flex items-center justify-center">

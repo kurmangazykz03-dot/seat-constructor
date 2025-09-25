@@ -1,4 +1,5 @@
-import Toolbar from '../components/editor/ToolBar'
+import PropertiesPanel from "../components/editor/PropertiesPanel";
+import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
 function EditorPage() {
@@ -9,17 +10,15 @@ function EditorPage() {
 
       <div className="flex flex-1">
         {/* Левая панель инструментов */}
-        <Toolbar/>
+        <Toolbar />
 
-        {/* Холст */}
+        {/* Центр */}
         <div className="flex-1 bg-gray-50 flex items-center justify-center">
           {/* <SeatmapCanvas /> */}
           <div className="text-black">Center</div>
         </div>
-        <div>Right</div>
-
         {/* Правая панель свойств */}
-        {/* <PropertiesPanel /> */}
+        <PropertiesPanel />
       </div>
     </div>
   );

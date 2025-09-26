@@ -4,17 +4,21 @@ import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
+// EditorPage.tsx (или types.ts)
 export interface Seat {
   id: string;
   x: number;
   y: number;
   radius: number;
-  label: string;
   fill: string;
-  category: 'standard'|'vip';
-  status:'available'|'disabled'|'occupied';
-
+  label: string;          // "A1"
+  category: "standard" | "vip";
+  status: "available" | "occupied" | "disabled";
+  zoneId?: string | null; // если сид в зоне
+  rowId?: string | null;  // связь с логической Row (опционально)
+  colIndex?: number;      // номер колонки (1..N)
 }
+
 export interface Zone {
   id: string;
   x: number;
@@ -23,6 +27,8 @@ export interface Zone {
   height: number;
   fill: string;
   label: string;
+  color?: string;
+  // seats?: Seat[]  // лучше не дублировать — используем zoneId в Seat
 }
 
 

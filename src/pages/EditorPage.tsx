@@ -15,6 +15,16 @@ export interface Seat {
   status:'available'|'disabled'|'occupied';
 
 }
+export interface Zone {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fill: string;
+  label: string;
+}
+
 
 function EditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -23,9 +33,11 @@ function EditorPage() {
   );
 
 const [seats, setSeats] = useState<Seat[]>([
-  { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#33DEF1", label: "A1", category: "standard", status: "available" },
-  { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#33DEF1", label: "A2", category: "vip", status: "occupied" },
+  { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#22c55e", label: "A1", category: "standard", status: "available" },
+  { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#22c55e", label: "A2", category: "vip", status: "occupied" },
 ]);
+const [zones, setZones] = useState<Zone[]>([]);
+
 
 
   return (
@@ -39,7 +51,16 @@ const [seats, setSeats] = useState<Seat[]>([
 
         {/* Центр */}
         <div className="flex-1 bg-gray-50 p-6 ">
-          <SeatmapCanvas seats={seats} setSeats={setSeats} selectedId={selectedId} setSelectedId={setSelectedId} currentTool={currentTool}  />
+          <SeatmapCanvas
+  seats={seats}
+  setSeats={setSeats}
+  zones={zones}
+  setZones={setZones}
+  selectedId={selectedId}
+  setSelectedId={setSelectedId}
+  currentTool={currentTool}
+/>
+
         </div>
         {/* Правая панель свойств */}
         <PropertiesPanel selectedId={selectedId} seats={seats} setSeats={setSeats}/>

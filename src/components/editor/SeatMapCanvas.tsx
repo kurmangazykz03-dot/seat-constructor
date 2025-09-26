@@ -27,35 +27,44 @@ function SeatmapCanvas({
   // 🔹 Ссылка на Stage
   const stageRef = useRef<any>(null);
 
-  const handleStageMouseDown = (e: any) => {
+ const handleStageMouseDown = (e: any) => {
   const stage = e.target.getStage();
 
-  
-if (currentTool === "add-seat") {
-  const pointer = stage.getPointerPosition();
-  if (!pointer) return;
+  const getNextSeatLabel = () => {
+    const seatNumbers = seats
+      .map((s) => parseInt(s.label.replace(/\D/g, "")))
+      .filter((n) => !isNaN(n));
 
-  const newSeat: Seat = {
-    id: `seat-${Date.now()}`,
-    x: pointer.x,
-    y: pointer.y,
-    radius: 16,
-    fill: "#33DEF1",
-    label: `A${seats.length + 1}`,
-    category: "standard",
-    status: "available",
+    const nextNumber = seatNumbers.length > 0 ? Math.max(...seatNumbers) + 1 : 1;
+    return `A${nextNumber}`;
   };
 
-  setSeats((prev) => [...prev, newSeat]);
-  setSelectedId(newSeat.id);
-}
+  // 👉 Добавление сиденья только при клике на пустом месте
+  if (currentTool === "add-seat" && e.target === stage) {
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
 
-  // 👉 Если select tool и клик по пустому месту → снять выделение
+    const newSeat: Seat = {
+      id: `seat-${Date.now()}`,
+      x: pointer.x,
+      y: pointer.y,
+      radius: 16,
+      fill: "#33DEF1",
+      label: getNextSeatLabel(),
+      category: "standard",
+      status: "available",
+    };
+
+    setSeats((prev) => [...prev, newSeat]);
+    setSelectedId(newSeat.id);
+    return; // ⬅️ остановим выполнение, чтобы не шло дальше
+  }
+
+  // 👉 Снятие выделения
   if (currentTool === "select" && e.target === stage) {
     setSelectedId(null);
     return;
   }
-  
 
   // 👉 Добавление зоны
   if (currentTool === "add-zone" && e.target === stage) {
@@ -75,27 +84,8 @@ if (currentTool === "add-seat") {
     setDrawingZone(newZone);
     return;
   }
-
-  // 👉 Добавление места
-  if (currentTool === "add-seat" && e.target === stage) {
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-
-    const newSeat: Seat = {
-      id: `seat-${Date.now()}`,
-      x: pointer.x,
-      y: pointer.y,
-      radius: 16,
-      fill: "#33DEF1",
-      label: `A${seats.length + 1}`,
-      category: "standard",
-      status: "available",
-    };
-
-    setSeats((prev) => [...prev, newSeat]);
-    setSelectedId(newSeat.id);
-  }
 };
+
 
 
   const handleStageMouseMove = (e: any) => {
@@ -113,9 +103,12 @@ if (currentTool === "add-seat") {
 
   const handleStageMouseUp = () => {
     if (drawingZone) {
+    // Проверяем чтобы зона имела размер
+    if (Math.abs(drawingZone.width) > 5 && Math.abs(drawingZone.height) > 5) {
       setZones((prev) => [...prev, drawingZone]);
-      setDrawingZone(null);
     }
+    setDrawingZone(null);
+  }
   };
 
   const handleDragMove = (id: string, x: number, y: number) => {

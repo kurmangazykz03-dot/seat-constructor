@@ -63,7 +63,14 @@ const [zones, setZones] = useState<Zone[]>([]);
 
         </div>
         {/* Правая панель свойств */}
-        <PropertiesPanel selectedId={selectedId} seats={seats} setSeats={setSeats}/>
+        <PropertiesPanel
+  selectedId={selectedId}
+  seats={seats}
+  setSeats={setSeats}
+  zones={zones}
+  setZones={setZones}
+/>
+
       </div>
     </div>
   );

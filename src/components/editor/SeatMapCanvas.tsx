@@ -30,11 +30,32 @@ function SeatmapCanvas({
   const handleStageMouseDown = (e: any) => {
   const stage = e.target.getStage();
 
+  
+if (currentTool === "add-seat") {
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
+
+  const newSeat: Seat = {
+    id: `seat-${Date.now()}`,
+    x: pointer.x,
+    y: pointer.y,
+    radius: 16,
+    fill: "#33DEF1",
+    label: `A${seats.length + 1}`,
+    category: "standard",
+    status: "available",
+  };
+
+  setSeats((prev) => [...prev, newSeat]);
+  setSelectedId(newSeat.id);
+}
+
   // 👉 Если select tool и клик по пустому месту → снять выделение
   if (currentTool === "select" && e.target === stage) {
     setSelectedId(null);
     return;
   }
+  
 
   // 👉 Добавление зоны
   if (currentTool === "add-zone" && e.target === stage) {
@@ -102,7 +123,11 @@ function SeatmapCanvas({
       prev.map((seat) => (seat.id === id ? { ...seat, x, y } : seat))
     );
   };
-
+const handleZoneDragMove = (id: string, x: number, y: number) => {
+  setZones((prev) =>
+    prev.map((zone) => (zone.id === id ? { ...zone, x, y } : zone))
+  );
+};
   return (
     <div className="rounded-[16px] border border-[#e5e5e5] drop-shadow-[0_0_2px_rgba(0,0,0,0.1)]">
       <Stage
@@ -115,20 +140,35 @@ function SeatmapCanvas({
       >
         <Layer>
           {/* Zones */}
-          {zones.map((zone) => (
-            <Rect
-              key={zone.id}
-              x={zone.x}
-              y={zone.y}
-              width={zone.width}
-              height={zone.height}
-              fill={zone.fill}
-              stroke={selectedId === zone.id ? "blue" : "black"}
-              strokeWidth={selectedId === zone.id ? 2 : 1}
-              onClick={() => setSelectedId(zone.id)}
-              draggable
-            />
-          ))}
+      {zones.map((zone) => (
+  <React.Fragment key={zone.id}>
+    {/* Прямоугольник зоны */}
+    <Rect
+      x={zone.x}
+      y={zone.y}
+      width={zone.width}
+      height={zone.height}
+      fill={zone.fill}
+      stroke={selectedId === zone.id ? "blue" : "black"}
+      strokeWidth={selectedId === zone.id ? 2 : 1}
+      onClick={() => setSelectedId(zone.id)}
+      onDragMove={(e) =>
+        handleZoneDragMove(zone.id, e.target.x(), e.target.y())
+      }
+      draggable
+    />
+    {/* Текст зоны */}
+    <Text
+      text={zone.label}
+      x={zone.x + 4}
+      y={zone.y + 4}
+      fontSize={14}
+      fill="black"
+    />
+  </React.Fragment>
+))}
+
+
 
           {/* Preview while drawing */}
           {drawingZone && (

@@ -19,6 +19,7 @@ function SeatmapCanvas({
   currentTool,
 }: SeatmapCanvasProps) {
 
+  
   const handleStageClick=(e:any)=>{
     if(e.target===e.target.getStage()){
       if(currentTool==='add-seat'){
@@ -31,7 +32,9 @@ function SeatmapCanvas({
           y:pointer.y,
           radius:16,
           fill: `#33DEF1`,
-          label: `A${seats.length + 1}`        
+          label: `A${seats.length + 1}`,
+          category:'standard',
+          status:'available'        
         }
         setSeats((prev) => [...prev, newSeat]);
       }

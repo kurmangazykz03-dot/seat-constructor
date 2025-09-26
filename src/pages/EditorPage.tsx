@@ -8,9 +8,12 @@ export interface Seat {
   id: string;
   x: number;
   y: number;
-  fill: string;
   radius: number;
   label: string;
+  fill: string;
+  category: 'standard'|'vip';
+  status:'available'|'disabled'|'occupied';
+
 }
 
 function EditorPage() {
@@ -19,10 +22,11 @@ function EditorPage() {
     "select"
   );
 
-  const [seats, setSeats] = useState<Seat[]>([
-    { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#33DEF1", label: "A1" },
-    { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#33DEF1", label: "A2" },
-  ]);
+const [seats, setSeats] = useState<Seat[]>([
+  { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#33DEF1", label: "A1", category: "standard", status: "available" },
+  { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#33DEF1", label: "A2", category: "vip", status: "occupied" },
+]);
+
 
   return (
     <div className="flex flex-col w-full h-screen">
@@ -38,7 +42,7 @@ function EditorPage() {
           <SeatmapCanvas seats={seats} setSeats={setSeats} selectedId={selectedId} setSelectedId={setSelectedId} currentTool={currentTool}  />
         </div>
         {/* Правая панель свойств */}
-        <PropertiesPanel selectedId={selectedId} />
+        <PropertiesPanel selectedId={selectedId} seats={seats} setSeats={setSeats}/>
       </div>
     </div>
   );

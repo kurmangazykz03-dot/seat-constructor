@@ -1,22 +1,31 @@
 import { useState } from "react";
 import PropertiesPanel from "../components/editor/PropertiesPanel";
-import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
+import SeatmapCanvas from '../components/editor/SeatMapCanvas'
 
-// EditorPage.tsx (или types.ts)
+// ---------- Типы ----------
 export interface Seat {
   id: string;
   x: number;
   y: number;
   radius: number;
   fill: string;
-  label: string;          // "A1"
+  label: string;
   category: "standard" | "vip";
   status: "available" | "occupied" | "disabled";
-  zoneId?: string | null; // если сид в зоне
-  rowId?: string | null;  // связь с логической Row (опционально)
-  colIndex?: number;      // номер колонки (1..N)
+  zoneId?: string | null;
+  rowId?: string | null;
+  colIndex?: number;
+}
+
+export interface Row {
+  id: string;
+  zoneId?: string | null;
+  index: number;
+  label: string; // A, B, C...
+  x: number; // локальная координата X внутри зоны
+  y: number; // локальная координата Y внутри зоны
 }
 
 export interface Zone {
@@ -28,23 +37,40 @@ export interface Zone {
   fill: string;
   label: string;
   color?: string;
-  // seats?: Seat[]  // лучше не дублировать — используем zoneId в Seat
 }
 
-
+// ---------- Страница ----------
 function EditorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [currentTool, setCurrentTool] = useState<"select" | "add-seat" | "add-row" | "add-zone">(
-    "select"
-  );
+  const [currentTool, setCurrentTool] = useState<
+    "select" | "add-seat" | "add-row" | "add-zone"
+  >("select");
 
-const [seats, setSeats] = useState<Seat[]>([
-  { id: "seat-1", x: 100, y: 100, radius: 16, fill: "#22c55e", label: "A1", category: "standard", status: "available" },
-  { id: "seat-2", x: 200, y: 150, radius: 16, fill: "#22c55e", label: "A2", category: "vip", status: "occupied" },
-]);
-const [zones, setZones] = useState<Zone[]>([]);
+  const [seats, setSeats] = useState<Seat[]>([
+    {
+      id: "seat-1",
+      x: 100,
+      y: 100,
+      radius: 16,
+      fill: "#22c55e",
+      label: "A1",
+      category: "standard",
+      status: "available",
+    },
+    {
+      id: "seat-2",
+      x: 200,
+      y: 150,
+      radius: 16,
+      fill: "#ef4444",
+      label: "A2",
+      category: "vip",
+      status: "occupied",
+    },
+  ]);
 
-
+  const [rows, setRows] = useState<Row[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
 
   return (
     <div className="flex flex-col w-full h-screen">
@@ -55,28 +81,31 @@ const [zones, setZones] = useState<Zone[]>([]);
         {/* Левая панель инструментов */}
         <Toolbar currentTool={currentTool} setCurrentTool={setCurrentTool} />
 
-        {/* Центр */}
-        <div className="flex-1 bg-gray-50 p-6 ">
+        {/* Центральное поле */}
+        <div className="flex-1 bg-gray-50 p-6">
           <SeatmapCanvas
-  seats={seats}
-  setSeats={setSeats}
-  zones={zones}
-  setZones={setZones}
-  selectedId={selectedId}
-  setSelectedId={setSelectedId}
-  currentTool={currentTool}
-/>
-
+            seats={seats}
+            setSeats={setSeats}
+            rows={rows}
+            setRows={setRows}
+            zones={zones}
+            setZones={setZones}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+            currentTool={currentTool}
+          />
         </div>
+
         {/* Правая панель свойств */}
         <PropertiesPanel
-  selectedId={selectedId}
-  seats={seats}
-  setSeats={setSeats}
-  zones={zones}
-  setZones={setZones}
-/>
-
+          selectedId={selectedId}
+          seats={seats}
+          setSeats={setSeats}
+          rows={rows}
+          setRows={setRows}
+          zones={zones}
+          setZones={setZones}
+        />
       </div>
     </div>
   );

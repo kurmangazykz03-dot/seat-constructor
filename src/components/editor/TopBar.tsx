@@ -1,11 +1,12 @@
-import { Link } from 'react-router-dom'
+import { Link } from "react-router-dom";
 
 function TopBar() {
   return (
     <div className="h-[60px] bg-white border-b border-[#e5e5e5] flex items-center justify-between px-6 py-3  shadow-sm">
-      <Link to={'/'} className='text-[#171717] text-[20px]'>Seat Constructor</Link>
-    
-      
+      <Link to={"/"} className="text-[#171717] text-[20px]">
+        Seat Constructor
+      </Link>
+
       <div className="flex gap-2 ">
         <button className="pt-2 pb-3 px-4 py-2 bg-[#525252] text-white rounded-[8px] hover:bg-blue-500 cursor-pointer">
           Save
@@ -19,7 +20,6 @@ function TopBar() {
         <button className="pt-2 pb-3 px-4 py-2 bg-[#525252] text-white rounded-[8px] hover:bg-blue-500 cursor-pointer">
           Export
         </button>
-        
       </div>
     </div>
   );

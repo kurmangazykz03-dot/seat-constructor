@@ -1,6 +1,6 @@
 import React, { Dispatch, SetStateAction, useRef, useState } from "react";
 import { Circle, Group, Layer, Rect, Stage, Text } from "react-konva";
-import { Seat, Zone, Row } from "../../pages/EditorPage";
+import { Row, Seat, Zone } from "../../pages/EditorPage";
 
 interface SeatmapCanvasProps {
   seats: Seat[];
@@ -99,20 +99,25 @@ function SeatmapCanvas({
 
     // --- add-row ---
     if (currentTool === "add-row") {
-      const cols = Math.max(1, Math.floor(width / seatSpacingX));
-      const rowsCount = Math.max(1, Math.floor(height / seatSpacingY));
+ if (width < seatSpacingX || height < seatSpacingY) {
+    setDrawingZone(null);
+    return; // слишком маленькая зона — не создаем row
+  }
 
-      const newZone: Zone = {
-        id: `zone-${Date.now()}`,
-        x: startX,
-        y: startY,
-        width,
-        height,
-        fill: "#FAFAFA",
-        label: `Zone ${zones.length + 1}`,
-      };
+  const cols = Math.max(1, Math.floor(width / seatSpacingX));
+  const rowsCount = Math.max(1, Math.floor(height / seatSpacingY));
 
-      setZones((prev) => [...prev, newZone]);
+  const newZone: Zone = {
+    id: `zone-${Date.now()}`,
+    x: startX,
+    y: startY,
+    width: width ,
+    height: height ,
+    fill: "#FAFAFA",
+    label: `Zone ${zones.length + 1}`,
+  };
+
+  setZones((prev) => [...prev, newZone]);
 
       const newRows: Row[] = [];
       const newSeats: Seat[] = [];
@@ -220,13 +225,7 @@ function SeatmapCanvas({
                   opacity={0.7}
                   cornerRadius={4}
                 />
-                <Text
-                  text={zone.label}
-                  x={5}
-                  y={-18}
-                  fontSize={14}
-                  fill="black"
-                />
+                <Text text={zone.label} x={5} y={-18} fontSize={14} fill="black" />
 
                 {/* ряды зоны */}
                 {zoneRows.map((row) => {
@@ -250,9 +249,7 @@ function SeatmapCanvas({
                         const newX = e.target.x();
                         const newY = e.target.y();
                         setRows((prev) =>
-                          prev.map((r) =>
-                            r.id === row.id ? { ...r, x: newX, y: newY } : r
-                          )
+                          prev.map((r) => (r.id === row.id ? { ...r, x: newX, y: newY } : r))
                         );
                       }}
                     >

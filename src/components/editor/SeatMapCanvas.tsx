@@ -129,7 +129,7 @@ function SeatmapCanvas({
           id: rowId,
           zoneId: newZone.id,
           index: r,
-          label: `Row ${String.fromCharCode(65 + r)}`,
+          label: `Row ${r+1}`,
           x: 0,
           y: r * seatSpacingY + 20,
         });
@@ -141,7 +141,7 @@ function SeatmapCanvas({
             y: r * seatSpacingY + seatRadius,
             radius: seatRadius,
             fill: "#33DEF1",
-            label: `${String.fromCharCode(65 + r)}${c + 1}`,
+            label: `${c + 1}`,
             category: "standard",
             status: "available",
             zoneId: newZone.id,
@@ -210,7 +210,7 @@ function SeatmapCanvas({
                   width={zone.width}
                   height={zone.height}
                   fill={zone.fill}
-                  stroke="black"
+
                   strokeWidth={1}
                   fillOpacity={0.2}
                 />
@@ -225,7 +225,7 @@ function SeatmapCanvas({
                   opacity={0.7}
                   cornerRadius={4}
                 />
-                <Text text={zone.label} x={5} y={-18} fontSize={14} fill="black" />
+                <Text text={zone.label} x={80} y={-18} fontSize={14} fill="black" />
 
                 {/* ряды зоны */}
                 {zoneRows.map((row) => {
@@ -254,23 +254,24 @@ function SeatmapCanvas({
                       }}
                     >
                       {/* подпись ряда */}
-                      <Rect
-                        x={-40}
-                        y={-14}
-                        width={row.label.length * 8 + 10}
-                        height={18}
-                        fill="white"
-                        opacity={0.7}
-                        cornerRadius={4}
-                      />
-                      <Text
-                        text={row.label}
-                        x={-35}
-                        y={-12}
-                        fontSize={14}
-                        fill={selectedId === row.id ? "blue" : "black"}
-                      />
-
+                      {/* подпись ряда */}
+<Rect
+  x={-50} // чуть левее
+  y={-8} // чуть выше
+  width={row.label.length * 8 + 12} // ширина под длину текста
+  height={20} // высота фона
+  fill="white"
+  opacity={0.7}
+  cornerRadius={4}
+/>
+<Text
+  text={row.label}
+  x={-46
+  } // чуть сдвинуто вправо, чтобы текст был внутри Rect
+  y={-10} // чуть ниже Rect, чтобы текст не был срезан
+  fontSize={14}
+  fill={selectedId === row.id ? "blue" : "black"}
+/>
                       {/* сиденья ряда */}
                       {rowSeats.map((seat, i) => (
                         <React.Fragment key={seat.id}>

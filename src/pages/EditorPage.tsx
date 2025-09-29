@@ -21,11 +21,14 @@ export interface Seat {
 
 export interface Row {
   id: string;
-  zoneId?: string | null;
+  zoneId: string;
   index: number;
-  label: string; // A, B, C...
-  x: number; // локальная координата X внутри зоны
-  y: number; // локальная координата Y внутри зоны
+  label: string;
+  x: number;
+  y: number;
+  category?: "standard" | "vip";
+  status?: "available" | "occupied" | "disabled";
+  fill?: string;
 }
 
 export interface Zone {

@@ -99,25 +99,25 @@ function SeatmapCanvas({
 
     // --- add-row ---
     if (currentTool === "add-row") {
- if (width < seatSpacingX || height < seatSpacingY) {
-    setDrawingZone(null);
-    return; // слишком маленькая зона — не создаем row
-  }
+      if (width < seatSpacingX || height < seatSpacingY) {
+        setDrawingZone(null);
+        return; // слишком маленькая зона — не создаем row
+      }
 
-  const cols = Math.max(1, Math.floor(width / seatSpacingX));
-  const rowsCount = Math.max(1, Math.floor(height / seatSpacingY));
+      const cols = Math.max(1, Math.floor(width / seatSpacingX));
+      const rowsCount = Math.max(1, Math.floor(height / seatSpacingY));
 
-  const newZone: Zone = {
-    id: `zone-${Date.now()}`,
-    x: startX,
-    y: startY,
-    width: width ,
-    height: height ,
-    fill: "#FAFAFA",
-    label: `Zone ${zones.length + 1}`,
-  };
+      const newZone: Zone = {
+        id: `zone-${Date.now()}`,
+        x: startX,
+        y: startY,
+        width: width,
+        height: height,
+        fill: "#FAFAFA",
+        label: `Zone ${zones.length + 1}`,
+      };
 
-  setZones((prev) => [...prev, newZone]);
+      setZones((prev) => [...prev, newZone]);
 
       const newRows: Row[] = [];
       const newSeats: Seat[] = [];
@@ -129,7 +129,7 @@ function SeatmapCanvas({
           id: rowId,
           zoneId: newZone.id,
           index: r,
-          label: `Row ${r+1}`,
+          label: `${r + 1}`,
           x: 0,
           y: r * seatSpacingY + 20,
         });
@@ -210,22 +210,21 @@ function SeatmapCanvas({
                   width={zone.width}
                   height={zone.height}
                   fill={zone.fill}
-
-                  strokeWidth={1}
+                  stroke={selectedId === zone.id ? "blue" : ""}
+                  strokeWidth={selectedId === zone.id ? 2 : 0}
                   fillOpacity={0.2}
                 />
 
                 {/* подпись зоны */}
-                <Rect
-                  x={0}
-                  y={-20}
-                  width={zone.label.length * 8 + 10}
-                  height={18}
-                  fill="white"
-                  opacity={0.7}
-                  cornerRadius={4}
+                <Text
+                  text={zone.label}
+                  x={zone.width / 2}
+                  y={-18}
+                  fontSize={14}
+                  fill="black"
+                  align="center"
+                  offsetX={(zone.label.length * 7) / 2}
                 />
-                <Text text={zone.label} x={80} y={-18} fontSize={14} fill="black" />
 
                 {/* ряды зоны */}
                 {zoneRows.map((row) => {
@@ -244,7 +243,10 @@ function SeatmapCanvas({
                           y: Math.max(0, Math.min(pos.y, stage.height() - 40)),
                         };
                       }}
-                      onClick={() => setSelectedId(row.id)}
+                      onClick={(e) => {
+                        e.cancelBubble = true;
+                        setSelectedId(row.id);
+                      }}
                       onDragEnd={(e) => {
                         const newX = e.target.x();
                         const newY = e.target.y();
@@ -254,24 +256,23 @@ function SeatmapCanvas({
                       }}
                     >
                       {/* подпись ряда */}
-                      {/* подпись ряда */}
-<Rect
-  x={-50} // чуть левее
-  y={-8} // чуть выше
-  width={row.label.length * 8 + 12} // ширина под длину текста
-  height={20} // высота фона
-  fill="white"
-  opacity={0.7}
-  cornerRadius={4}
-/>
-<Text
-  text={row.label}
-  x={-46
-  } // чуть сдвинуто вправо, чтобы текст был внутри Rect
-  y={-10} // чуть ниже Rect, чтобы текст не был срезан
-  fontSize={14}
-  fill={selectedId === row.id ? "blue" : "black"}
-/>
+                      <Rect
+                        x={-50}
+                        y={-8}
+                        width={row.label.length * 8 + 12}
+                        height={20}
+                        fill="white"
+                        opacity={0.7}
+                        cornerRadius={4}
+                      />
+                      <Text
+                        text={row.label}
+                        x={-46}
+                        y={-10}
+                        fontSize={14}
+                        fill={selectedId === row.id ? "blue" : "black"}
+                      />
+
                       {/* сиденья ряда */}
                       {rowSeats.map((seat, i) => (
                         <React.Fragment key={seat.id}>
@@ -282,7 +283,10 @@ function SeatmapCanvas({
                             fill={seat.fill}
                             stroke={selectedId === seat.id ? "blue" : ""}
                             strokeWidth={selectedId === seat.id ? 2 : 0}
-                            onClick={() => setSelectedId(seat.id)}
+                            onClick={(e) => {
+                              e.cancelBubble = true;
+                              setSelectedId(seat.id);
+                            }}
                           />
                           <Text
                             text={seat.label}

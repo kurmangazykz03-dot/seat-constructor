@@ -35,7 +35,6 @@ function SeatmapCanvas({
   const handleStageMouseDown = (e: any) => {
     const stage = e.target.getStage();
 
-    // --- одиночное место ---
     if (currentTool === "add-seat" && e.target === stage) {
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
@@ -56,7 +55,6 @@ function SeatmapCanvas({
       return;
     }
 
-    // --- начало зоны или ряда ---
     if ((currentTool === "add-zone" || currentTool === "add-row") && e.target === stage) {
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
@@ -97,11 +95,10 @@ function SeatmapCanvas({
     const width = Math.abs(drawingZone.width);
     const height = Math.abs(drawingZone.height);
 
-    // --- add-row ---
     if (currentTool === "add-row") {
       if (width < seatSpacingX || height < seatSpacingY) {
         setDrawingZone(null);
-        return; // слишком маленькая зона — не создаем row
+        return;
       }
 
       const cols = Math.max(1, Math.floor(width / seatSpacingX));
@@ -155,7 +152,6 @@ function SeatmapCanvas({
       setSeats((prev) => [...prev, ...newSeats]);
     }
 
-    // --- add-zone ---
     if (currentTool === "add-zone") {
       if (width > 5 && height > 5) {
         const newZone: Zone = {
@@ -182,7 +178,6 @@ function SeatmapCanvas({
         onMouseUp={handleStageMouseUp}
       >
         <Layer>
-          {/* Zones */}
           {zones.map((zone) => {
             const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
             const zoneRows = rows.filter((r) => r.zoneId === zone.id);
@@ -203,7 +198,6 @@ function SeatmapCanvas({
                 }}
                 onClick={() => setSelectedId(zone.id)}
               >
-                {/* сама зона */}
                 <Rect
                   x={0}
                   y={0}
@@ -215,7 +209,6 @@ function SeatmapCanvas({
                   fillOpacity={0.2}
                 />
 
-                {/* подпись зоны */}
                 <Text
                   text={zone.label}
                   x={zone.width / 2}
@@ -227,89 +220,90 @@ function SeatmapCanvas({
                 />
 
                 {/* ряды зоны */}
-                {zoneRows.map((row) => {
-                  const rowSeats = zoneSeats.filter((s) => s.rowId === row.id);
-                  return (
-                    <Group
-                      key={row.id}
-                      x={row.x}
-                      y={row.y}
-                      draggable
-                      dragBoundFunc={(pos) => {
-                        const stage = stageRef.current;
-                        if (!stage) return pos;
-                        return {
-                          x: Math.max(0, Math.min(pos.x, stage.width() - 200)),
-                          y: Math.max(0, Math.min(pos.y, stage.height() - 40)),
-                        };
-                      }}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        setSelectedId(row.id);
-                      }}
-                      onDragEnd={(e) => {
-                        const newX = e.target.x();
-                        const newY = e.target.y();
-                        setRows((prev) =>
-                          prev.map((r) => (r.id === row.id ? { ...r, x: newX, y: newY } : r))
-                        );
-                      }}
-                    >
-                      {/* подпись ряда */}
-                      <Rect
-                        x={-50}
-                        y={-8}
-                        width={row.label.length * 8 + 12}
-                        height={20}
-                        fill="white"
-                        opacity={0.7}
-                        cornerRadius={4}
-                      />
-                      <Text
-                        text={row.label}
-                        x={-46}
-                        y={-10}
-                        fontSize={14}
-                        fill={selectedId === row.id ? "blue" : "black"}
-                      />
+{zoneRows.map((row) => {
+  const rowSeats = zoneSeats.filter((s) => s.rowId === row.id);
+  const isRowSelected = selectedId === row.id;
 
-                      {/* сиденья ряда */}
-                      {rowSeats.map((seat, i) => (
-                        <React.Fragment key={seat.id}>
-                          <Circle
-                            x={i * seatSpacingX + seatRadius}
-                            y={0}
-                            radius={seat.radius}
-                            fill={seat.fill}
-                            stroke={selectedId === seat.id ? "blue" : ""}
-                            strokeWidth={selectedId === seat.id ? 2 : 0}
-                            onClick={(e) => {
-                              e.cancelBubble = true;
-                              setSelectedId(seat.id);
-                            }}
-                          />
-                          <Text
-                            text={seat.label}
-                            x={i * seatSpacingX + seatRadius}
-                            y={0}
-                            fontSize={12}
-                            fill="white"
-                            align="center"
-                            verticalAlign="middle"
-                            offsetX={seat.label.length * 3}
-                            offsetY={6}
-                            listening={false}
-                          />
-                        </React.Fragment>
-                      ))}
-                    </Group>
-                  );
-                })}
+  return (
+    <Group
+      key={row.id}
+      x={row.x}
+      y={row.y}
+      draggable
+      dragBoundFunc={(pos) => {
+        const stage = stageRef.current;
+        if (!stage) return pos;
+        return {
+          x: Math.max(0, Math.min(pos.x, stage.width() - 200)),
+          y: Math.max(0, Math.min(pos.y, stage.height() - 40)),
+        };
+      }}
+      onClick={(e) => {
+        e.cancelBubble = true;
+        setSelectedId(row.id);
+      }}
+      onDragEnd={(e) => {
+        const newX = e.target.x();
+        const newY = e.target.y();
+        setRows((prev) =>
+          prev.map((r) => (r.id === row.id ? { ...r, x: newX, y: newY } : r))
+        );
+      }}
+    >
+      {/* подпись ряда */}
+      <Rect
+        x={-50}
+        y={-8}
+        width={row.label.length * 8 + 12}
+        height={20}
+        fill={isRowSelected ? "#D0E8FF" : "white"} // подсветка при выборе
+        opacity={0.7}
+        cornerRadius={4}
+      />
+      <Text
+        text={row.label}
+        x={-46}
+        y={-10}
+        fontSize={14}
+        fill={isRowSelected ? "blue" : "black"} // текст подсвечен
+      />
+
+      {/* сиденья ряда */}
+      {rowSeats.map((seat, i) => (
+        <React.Fragment key={seat.id}>
+          <Circle
+            x={i * seatSpacingX + seatRadius}
+            y={0}
+            radius={seat.radius}
+            fill={seat.fill}
+            stroke={selectedId === seat.id || isRowSelected ? "blue" : ""}
+            strokeWidth={selectedId === seat.id || isRowSelected ? 2 : 0}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              setSelectedId(seat.id);
+            }}
+          />
+          <Text
+            text={seat.label}
+            x={i * seatSpacingX + seatRadius}
+            y={0}
+            fontSize={12}
+            fill="white"
+            align="center"
+            verticalAlign="middle"
+            offsetX={seat.label.length * 3}
+            offsetY={6}
+            listening={false}
+          />
+        </React.Fragment>
+      ))}
+    </Group>
+  );
+})}
               </Group>
             );
           })}
 
-          {/* Preview */}
           {drawingZone && (
             <Rect
               x={drawingZone.x}
@@ -322,7 +316,6 @@ function SeatmapCanvas({
             />
           )}
 
-          {/* Одиночные сиденья вне зон */}
           {seats
             .filter((s) => !s.zoneId)
             .map((seat) => {

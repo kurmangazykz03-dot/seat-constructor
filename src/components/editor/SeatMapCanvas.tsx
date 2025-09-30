@@ -33,8 +33,14 @@ function SeatmapCanvas({
   const seatSpacingX = 30;
   const seatSpacingY = 30;
 
-  // Создание ряда с сиденьями
-  const createRowWithSeats = (zoneId: string, rowIndex: number, cols: number, offsetX: number, offsetY: number) => {
+  // создание ряда с сиденьями
+  const createRowWithSeats = (
+    zoneId: string,
+    rowIndex: number,
+    cols: number,
+    offsetX: number,
+    offsetY: number
+  ) => {
     const rowId = `row-${Date.now()}-${rowIndex}`;
     const row: Row = {
       id: rowId,
@@ -73,21 +79,7 @@ function SeatmapCanvas({
     }
 
     if (currentTool === "add-seat" && e.target === stage) {
-      const pointer = stage.getPointerPosition();
-      if (!pointer) return;
-
-      const newSeat: Seat = {
-        id: `seat-${Date.now()}`,
-        x: pointer.x,
-        y: pointer.y,
-        radius: seatRadius,
-        fill: "#33DEF1",
-        label: `S${seats.length + 1}`,
-        category: "standard",
-        status: "available",
-      };
-      setSeats(prev => [...prev, newSeat]);
-      setSelectedIds([newSeat.id]);
+      // клик по пустому месту ничего не делает
       return;
     }
 
@@ -124,8 +116,10 @@ function SeatmapCanvas({
   const handleStageMouseUp = () => {
     if (!drawingZone) return;
 
-    const startX = drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
-    const startY = drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
+    const startX =
+      drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
+    const startY =
+      drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
     const width = Math.abs(drawingZone.width);
     const height = Math.abs(drawingZone.height);
 
@@ -147,7 +141,7 @@ function SeatmapCanvas({
         fill: "#FAFAFA",
         label: `Zone ${zones.length + 1}`,
       };
-      setZones(prev => [...prev, newZone]);
+      setZones((prev) => [...prev, newZone]);
 
       const newRows: Row[] = [];
       const newSeats: Seat[] = [];
@@ -157,82 +151,133 @@ function SeatmapCanvas({
       const offsetY = (height - totalSeatsHeight) / 2;
 
       for (let r = 0; r < rowsCount; r++) {
-        const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
+        const { row, seats: rowSeats } = createRowWithSeats(
+          newZone.id,
+          r,
+          cols,
+          offsetX,
+          offsetY
+        );
         newRows.push(row);
         newSeats.push(...rowSeats);
       }
 
-      setRows(prev => [...prev, ...newRows]);
-      setSeats(prev => [...prev, ...newSeats]);
+      setRows((prev) => [...prev, ...newRows]);
+      setSeats((prev) => [...prev, ...newSeats]);
     }
 
     setDrawingZone(null);
   };
 
-const handleZoneClick = (zone: Zone, e: any) => {
-  e.cancelBubble = true;
+  const handleZoneClick = (zone: Zone, e: any) => {
+    e.cancelBubble = true;
 
-if (currentTool === "add-row") {
-  const zoneRows = rows.filter(r => r.zoneId === zone.id);
-  const zoneSeats = seats.filter(s => s.zoneId === zone.id);
-  const cols = zoneSeats.length > 0 ? Math.max(...zoneSeats.map(s => s.colIndex || 1)) : 5;
+    // 👉 добавляем сиденье в зоне
+    if (currentTool === "add-seat") {
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
 
-  const newRowIndex = zoneRows.length;
-  const totalRowsHeight = (newRowIndex + 1) * seatSpacingY;
-  const newZoneHeight = Math.max(zone.height, totalRowsHeight);
+      // локальные координаты
+      const localX = pointer.x - zone.x;
+      const localY = pointer.y - zone.y;
 
-  const offsetY = (newZoneHeight - totalRowsHeight) / 2;
-  const totalSeatsWidth = cols * seatSpacingX;
-  const offsetX = (zone.width - totalSeatsWidth) / 2;
+      const newSeat: Seat = {
+        id: `seat-${Date.now()}`,
+        x: localX,
+        y: localY,
+        radius: seatRadius,
+        fill: "#33DEF1",
+        label: `S${seats.length + 1}`,
+        category: "standard",
+        status: "available",
+        zoneId: zone.id,
+      };
 
-  // Пересчитываем Y существующих рядов
-  setRows(prev =>
-    prev.map(r =>
-      r.zoneId === zone.id
-        ? { ...r, y: offsetY + r.index * seatSpacingY + seatSpacingY / 2 }
-        : r
-    )
-  );
+      setSeats((prev) => [...prev, newSeat]);
+      setSelectedIds([newSeat.id]);
+      return;
+    }
 
-  // Пересчитываем Y и X существующих сидений
-  setSeats(prev =>
-    prev.map(s =>
-      s.zoneId === zone.id
-        ? {
-            ...s,
-            y: offsetY + (s.rowId ? zoneRows.find(r => r.id === s.rowId)?.index ?? 0 : 0) * seatSpacingY + seatSpacingY / 2,
-            x: offsetX + ((s.colIndex ?? 1) - 1) * seatSpacingX + seatRadius,
-          }
-        : s
-    )
-  );
+    if (currentTool === "add-row") {
+      const zoneRows = rows.filter((r) => r.zoneId === zone.id);
+      const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
+      const cols =
+        zoneSeats.length > 0
+          ? Math.max(...zoneSeats.map((s) => s.colIndex || 1))
+          : 5;
 
-  // Создаём новый ряд
-  const { row: newRow, seats: newSeats } = createRowWithSeats(zone.id, newRowIndex, cols, offsetX, offsetY);
+      const newRowIndex = zoneRows.length;
+      const totalRowsHeight = (newRowIndex + 1) * seatSpacingY;
+      const newZoneHeight = Math.max(zone.height, totalRowsHeight);
 
-  setZones(prev =>
-    prev.map(z => z.id === zone.id ? { ...z, height: newZoneHeight } : z)
-  );
-  setRows(prev => [...prev, newRow]);
-  setSeats(prev => [...prev, ...newSeats]);
-  return;
-}
+      const offsetY = (newZoneHeight - totalRowsHeight) / 2;
+      const totalSeatsWidth = cols * seatSpacingX;
+      const offsetX = (zone.width - totalSeatsWidth) / 2;
 
-  if (e.evt.shiftKey) {
-    setSelectedIds(prev =>
-      prev.includes(zone.id) ? prev.filter(i => i !== zone.id) : [...prev, zone.id]
-    );
-  } else {
-    setSelectedIds([zone.id]);
-  }
-};
+      // пересчитываем позиции рядов
+      setRows((prev) =>
+        prev.map((r) =>
+          r.zoneId === zone.id
+            ? { ...r, y: offsetY + r.index * seatSpacingY + seatSpacingY / 2 }
+            : r
+        )
+      );
 
+      // пересчитываем позиции сидений
+      setSeats((prev) =>
+        prev.map((s) =>
+          s.zoneId === zone.id
+            ? {
+                ...s,
+                y:
+                  offsetY +
+                  (s.rowId
+                    ? zoneRows.find((r) => r.id === s.rowId)?.index ?? 0
+                    : 0) *
+                    seatSpacingY +
+                  seatSpacingY / 2,
+                x: offsetX + ((s.colIndex ?? 1) - 1) * seatSpacingX + seatRadius,
+              }
+            : s
+        )
+      );
+
+      const { row: newRow, seats: newSeats } = createRowWithSeats(
+        zone.id,
+        newRowIndex,
+        cols,
+        offsetX,
+        offsetY
+      );
+
+      setZones((prev) =>
+        prev.map((z) =>
+          z.id === zone.id ? { ...z, height: newZoneHeight } : z
+        )
+      );
+      setRows((prev) => [...prev, newRow]);
+      setSeats((prev) => [...prev, ...newSeats]);
+      return;
+    }
+
+    if (e.evt.shiftKey) {
+      setSelectedIds((prev) =>
+        prev.includes(zone.id)
+          ? prev.filter((i) => i !== zone.id)
+          : [...prev, zone.id]
+      );
+    } else {
+      setSelectedIds([zone.id]);
+    }
+  };
 
   const handleElementClick = (id: string, e: any) => {
     e.cancelBubble = true;
     if (e.evt.shiftKey) {
-      setSelectedIds(prev =>
-        prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+      setSelectedIds((prev) =>
+        prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
       );
     } else {
       setSelectedIds([id]);
@@ -250,9 +295,9 @@ if (currentTool === "add-row") {
         onMouseUp={handleStageMouseUp}
       >
         <Layer>
-          {zones.map(zone => {
-            const zoneSeats = seats.filter(s => s.zoneId === zone.id);
-            const zoneRows = rows.filter(r => r.zoneId === zone.id);
+          {zones.map((zone) => {
+            const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
+            const zoneRows = rows.filter((r) => r.zoneId === zone.id);
 
             return (
               <Group
@@ -260,17 +305,9 @@ if (currentTool === "add-row") {
                 x={zone.x}
                 y={zone.y}
                 draggable
-                onClick={e => handleZoneClick(zone, e)}
+                onClick={(e) => handleZoneClick(zone, e)}
                 onMouseEnter={() => setHoveredZoneId(zone.id)}
                 onMouseLeave={() => setHoveredZoneId(null)}
-                dragBoundFunc={pos => {
-                  const stage = stageRef.current;
-                  if (!stage) return pos;
-                  return {
-                    x: Math.max(0, Math.min(pos.x, stage.width() - zone.width)),
-                    y: Math.max(0, Math.min(pos.y, stage.height() - zone.height)),
-                  };
-                }}
               >
                 <Rect
                   x={0}
@@ -281,11 +318,16 @@ if (currentTool === "add-row") {
                   stroke={
                     selectedIds.includes(zone.id)
                       ? "blue"
-                      : hoveredZoneId === zone.id && currentTool === "add-row"
+                      : hoveredZoneId === zone.id &&
+                        currentTool === "add-row"
                       ? "orange"
                       : ""
                   }
-                  strokeWidth={selectedIds.includes(zone.id) || hoveredZoneId === zone.id ? 2 : 0}
+                  strokeWidth={
+                    selectedIds.includes(zone.id) || hoveredZoneId === zone.id
+                      ? 2
+                      : 0
+                  }
                   fillOpacity={0.2}
                 />
 
@@ -299,8 +341,52 @@ if (currentTool === "add-row") {
                   offsetX={(zone.label.length * 7) / 2}
                 />
 
-                {zoneRows.map(row => {
-                  const rowSeats = zoneSeats.filter(s => s.rowId === row.id);
+                {/* сиденья без ряда */}
+                {zoneSeats
+                  .filter((s) => !s.rowId)
+                  .map((seat) => (
+                    <React.Fragment key={seat.id}>
+                      <Circle
+                        x={seat.x}
+                        y={seat.y}
+                        radius={seat.radius}
+                        fill={seat.fill}
+                        stroke={selectedIds.includes(seat.id) ? "blue" : ""}
+                        strokeWidth={
+                          selectedIds.includes(seat.id) ? 2 : 0
+                        }
+                        draggable
+                        onClick={(e) => handleElementClick(seat.id, e)}
+                        onDragEnd={(e) => {
+                          const newX = e.target.x();
+                          const newY = e.target.y();
+                          setSeats((prev) =>
+                            prev.map((s) =>
+                              s.id === seat.id
+                                ? { ...s, x: newX, y: newY }
+                                : s
+                            )
+                          );
+                        }}
+                      />
+                      <Text
+                        text={seat.label}
+                        x={seat.x}
+                        y={seat.y}
+                        fontSize={12}
+                        fill="white"
+                        offsetX={seat.label.length * 3}
+                        offsetY={6}
+                        listening={false}
+                      />
+                    </React.Fragment>
+                  ))}
+
+                {/* ряды с сиденьями */}
+                {zoneRows.map((row) => {
+                  const rowSeats = zoneSeats.filter(
+                    (s) => s.rowId === row.id
+                  );
                   const isRowSelected = selectedIds.includes(row.id);
 
                   return (
@@ -309,12 +395,16 @@ if (currentTool === "add-row") {
                       x={row.x}
                       y={row.y}
                       draggable
-                      onClick={e => handleElementClick(row.id, e)}
-                      onDragEnd={e => {
+                      onClick={(e) => handleElementClick(row.id, e)}
+                      onDragEnd={(e) => {
                         const newX = e.target.x();
                         const newY = e.target.y();
-                        setRows(prev =>
-                          prev.map(r => (r.id === row.id ? { ...r, x: newX, y: newY } : r))
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.id === row.id
+                              ? { ...r, x: newX, y: newY }
+                              : r
+                          )
                         );
                       }}
                     >
@@ -335,16 +425,28 @@ if (currentTool === "add-row") {
                         fill={isRowSelected ? "blue" : "black"}
                       />
 
-                      {rowSeats.map((seat, i) => (
+                      {rowSeats.map((seat) => (
                         <React.Fragment key={seat.id}>
                           <Circle
                             x={seat.x}
                             y={0}
                             radius={seat.radius}
                             fill={seat.fill}
-                            stroke={selectedIds.includes(seat.id) || isRowSelected ? "blue" : ""}
-                            strokeWidth={selectedIds.includes(seat.id) || isRowSelected ? 2 : 0}
-                            onClick={e => handleElementClick(seat.id, e)}
+                            stroke={
+                              selectedIds.includes(seat.id) ||
+                              isRowSelected
+                                ? "blue"
+                                : ""
+                            }
+                            strokeWidth={
+                              selectedIds.includes(seat.id) ||
+                              isRowSelected
+                                ? 2
+                                : 0
+                            }
+                            onClick={(e) =>
+                              handleElementClick(seat.id, e)
+                            }
                           />
                           <Text
                             text={seat.label}
@@ -352,8 +454,6 @@ if (currentTool === "add-row") {
                             y={0}
                             fontSize={12}
                             fill="white"
-                            align="center"
-                            verticalAlign="middle"
                             offsetX={seat.label.length * 3}
                             offsetY={6}
                             listening={false}
@@ -367,6 +467,7 @@ if (currentTool === "add-row") {
             );
           })}
 
+          {/* временная зона при рисовании */}
           {drawingZone && (
             <Group>
               <Rect
@@ -381,15 +482,21 @@ if (currentTool === "add-row") {
               />
               {currentTool === "add-zone" && (
                 <Text
-                  text={`${Math.max(1, Math.floor(Math.abs(drawingZone.height) / seatSpacingY))} × ${Math.max(
+                  text={`${Math.max(
                     1,
-                    Math.floor(Math.abs(drawingZone.width) / seatSpacingX)
+                    Math.floor(
+                      Math.abs(drawingZone.height) / seatSpacingY
+                    )
+                  )} × ${Math.max(
+                    1,
+                    Math.floor(
+                      Math.abs(drawingZone.width) / seatSpacingX
+                    )
                   )}`}
                   x={drawingZone.x + drawingZone.width / 2}
                   y={drawingZone.y - 20}
                   fontSize={14}
                   fill="blue"
-                  align="center"
                   offsetX={20}
                 />
               )}

@@ -74,7 +74,7 @@ function EditorPage() {
 
   const [rows, setRows] = useState<Row[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
-
+const [selectedIds, setSelectedIds] = useState<string[]>([]);
   return (
     <div className="flex flex-col w-full h-screen">
       {/* Верхняя панель */}
@@ -85,30 +85,31 @@ function EditorPage() {
         <Toolbar currentTool={currentTool} setCurrentTool={setCurrentTool} />
 
         {/* Центральное поле */}
+        
         <div className="flex-1 bg-gray-50 p-6">
           <SeatmapCanvas
-            seats={seats}
-            setSeats={setSeats}
-            rows={rows}
-            setRows={setRows}
-            zones={zones}
-            setZones={setZones}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            currentTool={currentTool}
-          />
+  seats={seats}
+  setSeats={setSeats}
+  rows={rows}
+  setRows={setRows}
+  zones={zones}
+  setZones={setZones}
+  selectedIds={selectedIds}
+  setSelectedIds={setSelectedIds}
+  currentTool={currentTool}
+/>
         </div>
 
         {/* Правая панель свойств */}
         <PropertiesPanel
-          selectedId={selectedId}
-          seats={seats}
-          setSeats={setSeats}
-          rows={rows}
-          setRows={setRows}
-          zones={zones}
-          setZones={setZones}
-        />
+  selectedIds={selectedIds}
+  seats={seats}
+  setSeats={setSeats}
+  rows={rows}
+  setRows={setRows}
+  zones={zones}
+  setZones={setZones}
+/>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { Dispatch, SetStateAction, useRef, useState } from "react";
+import React, { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { Circle, Group, Layer, Rect, Stage, Text } from "react-konva";
 import { Row, Seat, Zone } from "../../pages/EditorPage";
 
@@ -28,6 +28,158 @@ function SeatmapCanvas({
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
   const stageRef = useRef<any>(null);
+  const [scale, setScale] = useState(1);
+
+
+ useEffect(() => {
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    // 🗑 УДАЛЕНИЕ
+    if (selectedIds.length > 0 && (e.key === "Delete" || e.key === "Backspace")) {
+      setSeats((prev) => prev.filter((s) => !selectedIds.includes(s.id)));
+      setRows((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
+      setZones((prev) => prev.filter((z) => !selectedIds.includes(z.id)));
+      setSelectedIds([]);
+      return;
+    }
+
+    // 📋 КОПИРОВАНИЕ (Ctrl+C / Cmd+C)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      const copiedSeats = seats.filter((s) => selectedIds.includes(s.id));
+      const copiedRows = rows
+        .filter((r) => selectedIds.includes(r.id))
+        .map((r) => ({
+          ...r,
+          seats: seats.filter((s) => s.rowId === r.id),
+        }));
+      const copiedZones = zones
+        .filter((z) => selectedIds.includes(z.id))
+        .map((z) => ({
+          ...z,
+          rows: rows
+            .filter((r) => r.zoneId === z.id)
+            .map((r) => ({
+              ...r,
+              seats: seats.filter((s) => s.rowId === r.id),
+            })),
+        }));
+
+      const clipboard = { seats: copiedSeats, rows: copiedRows, zones: copiedZones };
+      localStorage.setItem("seatmap_clipboard", JSON.stringify(clipboard));
+      return;
+    }
+
+    // 📥 ВСТАВКА (Ctrl+V / Cmd+V)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+      const data = localStorage.getItem("seatmap_clipboard");
+      if (!data) return;
+
+      const parsed = JSON.parse(data);
+      const offset = 40;
+
+      const newSeats: Seat[] = [];
+      const newRows: Row[] = [];
+      const newZones: Zone[] = [];
+
+      // --- вставляем одиночные сиденья ---
+      (parsed.seats || []).forEach((s: Seat) => {
+        newSeats.push({
+          ...s,
+          id: `seat-${crypto.randomUUID()}`,
+          x: s.x + offset,
+          y: s.y + offset,
+        });
+      });
+
+      // --- вставляем ряды ---
+      (parsed.rows || []).forEach((r: Row) => {
+        const newRowId = `row-${crypto.randomUUID()}`;
+
+        const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
+          ...s,
+          id: `seat-${crypto.randomUUID()}`,
+          rowId: newRowId,
+          x: s.x + offset,
+          y: s.y + offset,
+        }));
+
+        newSeats.push(...rowSeats);
+
+        newRows.push({
+          ...r,
+          id: newRowId,
+          x: r.x + offset,
+          y: r.y + offset,
+        });
+      });
+
+      // --- вставляем зоны ---
+      (parsed.zones || []).forEach((z: Zone) => {
+        const newZoneId = `zone-${crypto.randomUUID()}`;
+
+        const zoneRows: Row[] = (z.rows || []).map((r: Row) => {
+          const newRowId = `row-${crypto.randomUUID()}`;
+
+          const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
+            ...s,
+            id: `seat-${crypto.randomUUID()}`,
+            rowId: newRowId,     // ✅ новый rowId
+            zoneId: newZoneId,   // ✅ новая зона
+            x: s.x + offset,
+            y: s.y + offset,
+          }));
+
+          newSeats.push(...rowSeats);
+
+          return {
+            ...r,
+            id: newRowId,
+            zoneId: newZoneId,   // ✅ привязка к зоне
+            x: r.x + offset,
+            y: r.y + offset,
+          };
+        });
+
+        newRows.push(...zoneRows);
+
+        newZones.push({
+          ...z,
+          id: newZoneId,
+          rows: zoneRows,        // ✅ новые ряды внутри зоны
+          x: z.x + offset,
+          y: z.y + offset,
+        });
+      });
+
+      // --- обновляем состояние ---
+      setSeats((prev) => [...prev, ...newSeats]);
+      setRows((prev) => [...prev, ...newRows]);
+      setZones((prev) => [...prev, ...newZones]);
+
+      setSelectedIds([
+        ...newSeats.map((s) => s.id),
+        ...newRows.map((r) => r.id),
+        ...newZones.map((z) => z.id),
+      ]);
+
+      return;
+    }
+
+    // 🔍 ZOOM (Cmd + и Cmd -)
+    if (e.metaKey && (e.key === "+" || e.key === "=")) {
+      setScale((prev) => Math.min(prev + 0.1, 3)); // максимум 3x
+      e.preventDefault();
+    }
+    if (e.metaKey && e.key === "-") {
+      setScale((prev) => Math.max(prev - 0.1, 0.3)); // минимум 0.3x
+      e.preventDefault();
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [selectedIds, seats, rows, zones, setSeats, setRows, setZones, setSelectedIds, setScale]);
+
 
   const seatRadius = 12;
   const seatSpacingX = 30;
@@ -285,13 +437,18 @@ const handleZoneClick = (zone: Zone, e: any) => {
   return (
     <div className="rounded-[16px] border border-[#e5e5e5]">
       <Stage
-        ref={stageRef}
-        width={1420}
-        height={750}
-        onMouseDown={handleStageMouseDown}
-        onMouseMove={handleStageMouseMove}
-        onMouseUp={handleStageMouseUp}
-      >
+  ref={stageRef}
+  width={1420}
+  height={750}
+  scaleX={scale}
+  scaleY={scale}
+  x={0}
+  y={0}
+  onMouseDown={handleStageMouseDown}
+  onMouseMove={handleStageMouseMove}
+  onMouseUp={handleStageMouseUp}
+>
+
         <Layer>
           {zones.map((zone) => {
             const zoneSeats = seats.filter((s) => s.zoneId === zone.id);

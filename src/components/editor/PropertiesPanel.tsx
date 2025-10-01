@@ -92,7 +92,7 @@ function PropertiesPanel({
         selectedRows.map(row => {
           const rowSeats = seats.filter(seat => seat.rowId === row.id);
           return (
-            <div key={row.id} className="mb-6 px-4 py-3 bg-[#FAFAFA] rounded-[12px]">
+            <div key={row.id} className="text-black mb-6 px-4 py-3 bg-[#FAFAFA] rounded-[12px]">
               <div className="text-[#404040] mb-2 text-sm">Selected: Row {row.label}</div>
               <label className="block text-sm text-[#404040] mb-1">Label</label>
               <input

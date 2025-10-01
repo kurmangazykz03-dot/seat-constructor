@@ -5,6 +5,17 @@ import TopBar from "../components/editor/TopBar";
 import SeatmapCanvas from '../components/editor/SeatMapCanvas'
 
 // ---------- Типы ----------
+
+
+export interface Row {
+  id: string;
+  zoneId: string | null;
+  index: number;
+  label: string;
+  x: number;
+  y: number;
+}
+
 export interface Seat {
   id: string;
   x: number;
@@ -14,22 +25,11 @@ export interface Seat {
   label: string;
   category: "standard" | "vip";
   status: "available" | "occupied" | "disabled";
-  zoneId?: string | null;
-  rowId?: string | null;
-  colIndex?: number;
+  zoneId: string | null;
+  rowId: string | null;   // ✅ сиденье может быть в ряду или без
+  colIndex: number | null; // ✅ порядковый номер в ряду или null
 }
 
-export interface Row {
-  id: string;
-  zoneId: string;
-  index: number;
-  label: string;
-  x: number;
-  y: number;
-  category?: "standard" | "vip";
-  status?: "available" | "occupied" | "disabled";
-  fill?: string;
-}
 
 export interface Zone {
   id: string;
@@ -49,28 +49,35 @@ function EditorPage() {
     "select" | "add-seat" | "add-row" | "add-zone"
   >("select");
 
-  const [seats, setSeats] = useState<Seat[]>([
-    {
-      id: "seat-1",
-      x: 100,
-      y: 100,
-      radius: 16,
-      fill: "#22c55e",
-      label: "A1",
-      category: "standard",
-      status: "available",
-    },
-    {
-      id: "seat-2",
-      x: 200,
-      y: 150,
-      radius: 16,
-      fill: "#ef4444",
-      label: "A2",
-      category: "vip",
-      status: "occupied",
-    },
-  ]);
+ const [seats, setSeats] = useState<Seat[]>([
+  {
+    id: "seat-1",
+    x: 100,
+    y: 100,
+    radius: 16,
+    fill: "#22c55e",
+    label: "A1",
+    category: "standard",
+    status: "available",
+    zoneId: null,
+    rowId: null,
+    colIndex: null,
+  },
+  {
+    id: "seat-2",
+    x: 200,
+    y: 150,
+    radius: 16,
+    fill: "#ef4444",
+    label: "A2",
+    category: "vip",
+    status: "occupied",
+    zoneId: null,
+    rowId: null,
+    colIndex: null,
+  },
+]);
+
 
   const [rows, setRows] = useState<Row[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);

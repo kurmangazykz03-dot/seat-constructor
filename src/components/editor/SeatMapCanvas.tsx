@@ -176,31 +176,44 @@ const handleZoneClick = (zone: Zone, e: any) => {
   e.cancelBubble = true;
 
   // 👉 добавляем сиденье в зоне
-  if (currentTool === "add-seat") {
-    const stage = e.target.getStage();
-    if (!stage) return;
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
+ if (currentTool === "add-seat") {
+  const stage = e.target.getStage();
+  if (!stage) return;
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
 
-    const localX = pointer.x - zone.x;
-    const localY = pointer.y - zone.y;
+  const localX = pointer.x - zone.x;
+  const localY = pointer.y - zone.y;
 
-    const newSeat: Seat = {
-      id: `seat-${crypto.randomUUID()}`,
-      x: localX,
-      y: localY,
-      radius: seatRadius,
-      fill: "#33DEF1",
-      label: `S${seats.length + 1}`,
-      category: "standard",
-      status: "available",
-      zoneId: zone.id,
-    };
+  // проверяем — сиденье в ряду?
+  const parentRow = rows.find(
+    (r) =>
+      r.zoneId === zone.id &&
+      localY >= r.y - seatSpacingY / 2 &&
+      localY <= r.y + seatSpacingY / 2
+  );
 
-    setSeats((prev) => [...prev, newSeat]);
-    setSelectedIds([newSeat.id]);
-    return;
-  }
+  const newSeat: Seat = {
+    id: `seat-${crypto.randomUUID()}`,
+    x: localX,
+    y: localY,
+    radius: seatRadius,
+    fill: "#33DEF1",
+    label: `${seats.length + 1}`,
+    category: "standard",
+    status: "available",
+    zoneId: zone.id,
+    rowId: parentRow ? parentRow.id : null, // ✅ если есть ряд → привязываем
+    colIndex: parentRow
+      ? (seats.filter((s) => s.rowId === parentRow.id).length || 0) + 1
+      : null,
+  };
+
+  setSeats((prev) => [...prev, newSeat]);
+  setSelectedIds([newSeat.id]);
+  return;
+}
+
 
   // 👉 добавляем ряд
   if (currentTool === "add-row") {

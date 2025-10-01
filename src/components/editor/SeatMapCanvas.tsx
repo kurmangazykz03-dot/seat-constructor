@@ -32,43 +32,45 @@ function SeatmapCanvas({
   const seatRadius = 12;
   const seatSpacingX = 30;
   const seatSpacingY = 30;
+  
 
   // создание ряда с сиденьями
-  const createRowWithSeats = (
-    zoneId: string,
-    rowIndex: number,
-    cols: number,
-    offsetX: number,
-    offsetY: number
-  ) => {
-    const rowId = `row-${Date.now()}-${rowIndex}`;
-    const row: Row = {
-      id: rowId,
-      zoneId,
-      index: rowIndex,
-      label: `${rowIndex + 1}`,
-      x: 0,
-      y: offsetY + rowIndex * seatSpacingY + seatSpacingY / 2,
-    };
-
-    const newSeats: Seat[] = [];
-    for (let c = 0; c < cols; c++) {
-      newSeats.push({
-        id: `seat-${Date.now()}-${c}`,
-        x: offsetX + c * seatSpacingX + seatRadius,
-        y: row.y,
-        radius: seatRadius,
-        fill: "#33DEF1",
-        label: `${c + 1}`,
-        category: "standard",
-        status: "available",
-        zoneId,
-        rowId,
-        colIndex: c + 1,
-      });
-    }
-    return { row, seats: newSeats };
+ const createRowWithSeats = (
+  zoneId: string,
+  rowIndex: number,
+  cols: number,
+  offsetX: number,
+  offsetY: number
+) => {
+  const rowId = `row-${crypto.randomUUID()}`;
+  const row: Row = {
+    id: rowId,
+    zoneId,
+    index: rowIndex,
+    label: `${rowIndex + 1}`,
+    x: 0,
+    y: rowIndex * seatSpacingY + seatSpacingY / 2,
   };
+
+  const newSeats: Seat[] = [];
+  for (let c = 0; c < cols; c++) {
+    newSeats.push({
+      id: `seat-${crypto.randomUUID()}`, // ✅ уникальный id
+      x: c * seatSpacingX + seatRadius,
+      y: row.y,
+      radius: seatRadius,
+      fill: "#33DEF1",
+      label: `${c + 1}`, // тут можно одинаковые числа
+      category: "standard",
+      status: "available",
+      zoneId,
+      rowId,
+      colIndex: c + 1,
+    });
+  }
+  return { row, seats: newSeats };
+};
+
 
   const handleStageMouseDown = (e: any) => {
     const stage = e.target.getStage();
@@ -133,14 +135,15 @@ function SeatmapCanvas({
       const rowsCount = Math.max(1, Math.floor(height / seatSpacingY));
 
       const newZone: Zone = {
-        id: `zone-${Date.now()}`,
-        x: startX,
-        y: startY,
-        width,
-        height,
-        fill: "#FAFAFA",
-        label: `Zone ${zones.length + 1}`,
-      };
+  id: `zone-${crypto.randomUUID()}`, // ✅ уникальный id
+  x: startX,
+  y: startY,
+  width,
+  height,
+  fill: "#FAFAFA",
+  label: `Zone ${zones.length + 1}`,
+};
+
       setZones((prev) => [...prev, newZone]);
 
       const newRows: Row[] = [];
@@ -169,109 +172,91 @@ function SeatmapCanvas({
     setDrawingZone(null);
   };
 
-  const handleZoneClick = (zone: Zone, e: any) => {
-    e.cancelBubble = true;
+const handleZoneClick = (zone: Zone, e: any) => {
+  e.cancelBubble = true;
 
-    // 👉 добавляем сиденье в зоне
-    if (currentTool === "add-seat") {
-      const stage = e.target.getStage();
-      if (!stage) return;
-      const pointer = stage.getPointerPosition();
-      if (!pointer) return;
+  // 👉 добавляем сиденье в зоне
+  if (currentTool === "add-seat") {
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
 
-      // локальные координаты
-      const localX = pointer.x - zone.x;
-      const localY = pointer.y - zone.y;
+    const localX = pointer.x - zone.x;
+    const localY = pointer.y - zone.y;
 
-      const newSeat: Seat = {
-        id: `seat-${Date.now()}`,
-        x: localX,
-        y: localY,
-        radius: seatRadius,
-        fill: "#33DEF1",
-        label: `S${seats.length + 1}`,
-        category: "standard",
-        status: "available",
-        zoneId: zone.id,
-      };
+    const newSeat: Seat = {
+      id: `seat-${crypto.randomUUID()}`,
+      x: localX,
+      y: localY,
+      radius: seatRadius,
+      fill: "#33DEF1",
+      label: `S${seats.length + 1}`,
+      category: "standard",
+      status: "available",
+      zoneId: zone.id,
+    };
 
-      setSeats((prev) => [...prev, newSeat]);
-      setSelectedIds([newSeat.id]);
-      return;
-    }
+    setSeats((prev) => [...prev, newSeat]);
+    setSelectedIds([newSeat.id]);
+    return;
+  }
 
-    if (currentTool === "add-row") {
-      const zoneRows = rows.filter((r) => r.zoneId === zone.id);
-      const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
-      const cols =
-        zoneSeats.length > 0
-          ? Math.max(...zoneSeats.map((s) => s.colIndex || 1))
-          : 5;
+  // 👉 добавляем ряд
+  if (currentTool === "add-row") {
+    const zoneRows = rows.filter((r) => r.zoneId === zone.id);
+    const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
 
-      const newRowIndex = zoneRows.length;
-      const totalRowsHeight = (newRowIndex + 1) * seatSpacingY;
-      const newZoneHeight = Math.max(zone.height, totalRowsHeight);
+    const cols =
+      zoneSeats.length > 0
+        ? Math.max(...zoneSeats.map((s) => s.colIndex || 1))
+        : 5;
 
-      const offsetY = (newZoneHeight - totalRowsHeight) / 2;
-      const totalSeatsWidth = cols * seatSpacingX;
-      const offsetX = (zone.width - totalSeatsWidth) / 2;
+    const newRowIndex = zoneRows.length;
 
-      // пересчитываем позиции рядов
-      setRows((prev) =>
-        prev.map((r) =>
-          r.zoneId === zone.id
-            ? { ...r, y: offsetY + r.index * seatSpacingY + seatSpacingY / 2 }
-            : r
-        )
-      );
+    // новый ряд добавляем "снизу"
+    const newY = zone.height + seatSpacingY / 2;
+    const offsetX = (zone.width - cols * seatSpacingX) / 2;
 
-      // пересчитываем позиции сидений
-      setSeats((prev) =>
-        prev.map((s) =>
-          s.zoneId === zone.id
-            ? {
-                ...s,
-                y:
-                  offsetY +
-                  (s.rowId
-                    ? zoneRows.find((r) => r.id === s.rowId)?.index ?? 0
-                    : 0) *
-                    seatSpacingY +
-                  seatSpacingY / 2,
-                x: offsetX + ((s.colIndex ?? 1) - 1) * seatSpacingX + seatRadius,
-              }
-            : s
-        )
-      );
+    const { row: newRow, seats: newSeats } = createRowWithSeats(
+      zone.id,
+      newRowIndex,
+      cols,
+      offsetX,
+      0 // мы используем newY для реального Y
+    );
 
-      const { row: newRow, seats: newSeats } = createRowWithSeats(
-        zone.id,
-        newRowIndex,
-        cols,
-        offsetX,
-        offsetY
-      );
+    // поправляем координату ряда (чтобы реально встал вниз зоны)
+    const adjustedRow = { ...newRow, y: newY };
+    const adjustedSeats = newSeats.map((s, i) => ({
+      ...s,
+      y: newY,
+      x: offsetX + i * seatSpacingX + seatRadius,
+    }));
 
-      setZones((prev) =>
-        prev.map((z) =>
-          z.id === zone.id ? { ...z, height: newZoneHeight } : z
-        )
-      );
-      setRows((prev) => [...prev, newRow]);
-      setSeats((prev) => [...prev, ...newSeats]);
-      return;
-    }
+    // увеличиваем зону по высоте
+    setZones((prev) =>
+      prev.map((z) =>
+        z.id === zone.id ? { ...z, height: z.height + seatSpacingY } : z
+      )
+    );
+    setRows((prev) => [...prev, adjustedRow]);
+    setSeats((prev) => [...prev, ...adjustedSeats]);
+    return;
+  }
 
-    if (e.evt.shiftKey) {
-      setSelectedIds((prev) =>
-        prev.includes(zone.id)
-          ? prev.filter((i) => i !== zone.id)
-          : [...prev, zone.id]
-      );
-    } else {
-      setSelectedIds([zone.id]);
-    }
-  };
+  // 👉 выделение зоны
+  if (e.evt.shiftKey) {
+    setSelectedIds((prev) =>
+      prev.includes(zone.id)
+        ? prev.filter((i) => i !== zone.id)
+        : [...prev, zone.id]
+    );
+  } else {
+    setSelectedIds([zone.id]);
+  }
+};
+
 
   const handleElementClick = (id: string, e: any) => {
     e.cancelBubble = true;
@@ -383,86 +368,149 @@ function SeatmapCanvas({
                   ))}
 
                 {/* ряды с сиденьями */}
-                {zoneRows.map((row) => {
-                  const rowSeats = zoneSeats.filter(
-                    (s) => s.rowId === row.id
-                  );
-                  const isRowSelected = selectedIds.includes(row.id);
+         {zoneRows.map((row) => {
+  const rowSeats = zoneSeats.filter((s) => s.rowId === row.id);
+  const isRowSelected = selectedIds.includes(row.id);
 
-                  return (
-                    <Group
-                      key={row.id}
-                      x={row.x}
-                      y={row.y}
-                      draggable
-                      onClick={(e) => handleElementClick(row.id, e)}
-                      onDragEnd={(e) => {
-                        const newX = e.target.x();
-                        const newY = e.target.y();
-                        setRows((prev) =>
-                          prev.map((r) =>
-                            r.id === row.id
-                              ? { ...r, x: newX, y: newY }
-                              : r
-                          )
-                        );
-                      }}
-                    >
-                      <Rect
-                        x={-50}
-                        y={-8}
-                        width={row.label.length * 8 + 12}
-                        height={20}
-                        fill={isRowSelected ? "#D0E8FF" : "white"}
-                        opacity={0.7}
-                        cornerRadius={4}
-                      />
-                      <Text
-                        text={row.label}
-                        x={-46}
-                        y={-10}
-                        fontSize={14}
-                        fill={isRowSelected ? "blue" : "black"}
-                      />
+  // границы ряда (для рамки)
+  const minX = Math.min(...rowSeats.map((s) => s.x));
+  const maxX = Math.max(...rowSeats.map((s) => s.x));
+  const minY = Math.min(...rowSeats.map((s) => s.y));
+  const maxY = Math.max(...rowSeats.map((s) => s.y));
+  const padding = 10;
 
-                      {rowSeats.map((seat) => (
-                        <React.Fragment key={seat.id}>
-                          <Circle
-                            x={seat.x}
-                            y={0}
-                            radius={seat.radius}
-                            fill={seat.fill}
-                            stroke={
-                              selectedIds.includes(seat.id) ||
-                              isRowSelected
-                                ? "blue"
-                                : ""
-                            }
-                            strokeWidth={
-                              selectedIds.includes(seat.id) ||
-                              isRowSelected
-                                ? 2
-                                : 0
-                            }
-                            onClick={(e) =>
-                              handleElementClick(seat.id, e)
-                            }
-                          />
-                          <Text
-                            text={seat.label}
-                            x={seat.x}
-                            y={0}
-                            fontSize={12}
-                            fill="white"
-                            offsetX={seat.label.length * 3}
-                            offsetY={6}
-                            listening={false}
-                          />
-                        </React.Fragment>
-                      ))}
-                    </Group>
-                  );
-                })}
+  return (
+    <Group
+      key={row.id}
+      x={row.x}
+      y={row.y}
+      draggable={isRowSelected}
+      onClick={(e) => handleElementClick(row.id, e)}
+      onDragMove={(e) => {
+        if (!isRowSelected) return;
+
+        const dx = e.target.x() - row.x;
+        const dy = e.target.y() - row.y;
+
+        // двигаем ВСЕ выделенные ряды
+        setRows((prev) =>
+          prev.map((r) =>
+            selectedIds.includes(r.id)
+              ? { ...r, x: r.x + dx, y: r.y + dy }
+              : r
+          )
+        );
+
+        // двигаем сиденья всех выделенных рядов
+        setSeats((prev) =>
+          prev.map((s) =>
+            selectedIds.includes(s.rowId ?? "")
+              ? { ...s, x: s.x + dx, y: s.y + dy }
+              : s
+          )
+        );
+      }}
+      onDragEnd={(e) => {
+        e.target.position({ x: row.x, y: row.y }); // сбрасываем, чтобы не было двойного смещения
+      }}
+    >
+      {/* Рамка выделенного ряда */}
+      {isRowSelected && rowSeats.length > 0 && (
+        <Rect
+          x={minX - row.x - seatRadius - padding}
+          y={minY - row.y - seatRadius - padding}
+          width={maxX - minX + seatRadius * 2 + padding * 2}
+          height={maxY - minY + seatRadius * 2 + padding * 2}
+          stroke="blue"
+          strokeWidth={2}
+          dash={[6, 4]}
+          listening={false}
+        />
+      )}
+
+      {/* Лейбл ряда */}
+      <Rect
+        x={-50}
+        y={-10}
+        width={row.label.length * 8 + 12}
+        height={20}
+        fill={isRowSelected ? "#D0E8FF" : "white"}
+        opacity={0.7}
+        cornerRadius={4}
+      />
+      <Text
+        text={row.label}
+        x={-46}
+        y={-10}
+        fontSize={14}
+        fill={isRowSelected ? "blue" : "black"}
+      />
+
+      {/* Сиденья ряда */}
+      {rowSeats.map((seat) => (
+  <React.Fragment key={seat.id}>
+    <Circle
+      x={seat.x - row.x}
+      y={seat.y - row.y}
+      radius={seat.radius}
+      fill={seat.fill}
+      stroke={
+        selectedIds.includes(seat.id) || isRowSelected ? "blue" : ""
+      }
+      strokeWidth={
+        selectedIds.includes(seat.id) || isRowSelected ? 2 : 0
+      }
+      draggable
+      onClick={(e) => handleElementClick(seat.id, e)}
+      onDragEnd={(e) => {
+        const newX = e.target.x() + row.x;
+        const newY = e.target.y() + row.y;
+
+        // 🔹 границы ряда
+        const rowLeft = row.x - seatSpacingX / 2;
+        const rowRight = row.x + rowSeats.length * seatSpacingX;
+        const rowTop = row.y - seatSpacingY / 2;
+        const rowBottom = row.y + seatSpacingY / 2;
+
+        let newRowId: string | null = row.id;
+
+        // 🔹 если ушло за рамку ряда → сиденье больше не в ряду
+        if (
+          newX < rowLeft ||
+          newX > rowRight ||
+          newY < rowTop ||
+          newY > rowBottom
+        ) {
+          newRowId = null;
+        }
+
+        setSeats((prev) =>
+          prev.map((s) =>
+            s.id === seat.id
+              ? { ...s, x: newX, y: newY, rowId: newRowId }
+              : s
+          )
+        );
+      }}
+    />
+    <Text
+      text={seat.label}
+      x={seat.x - row.x}
+      y={seat.y - row.y}
+      fontSize={12}
+      fill="white"
+      offsetX={seat.label.length * 3}
+      offsetY={6}
+      listening={false}
+    />
+  </React.Fragment>
+))}
+
+    </Group>
+  );
+})}
+
+
               </Group>
             );
           })}

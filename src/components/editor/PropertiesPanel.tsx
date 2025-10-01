@@ -11,6 +11,8 @@ interface PropertiesPanelProps {
   setRows: Dispatch<SetStateAction<Row[]>>;
 }
 
+
+
 function PropertiesPanel({
   selectedIds,
   seats,
@@ -20,6 +22,27 @@ function PropertiesPanel({
   rows,
   setRows,
 }: PropertiesPanelProps) {
+  const updateRowPosition = (rowId: string, newX: number, newY: number) => {
+  // получаем старую позицию ряда
+  const oldRow = rows.find(r => r.id === rowId);
+  if (!oldRow) return;
+
+  const dx = newX - oldRow.x;
+  const dy = newY - oldRow.y;
+
+  // обновляем ряд
+  setRows(prev =>
+    prev.map(r => (r.id === rowId ? { ...r, x: newX, y: newY } : r))
+  );
+
+  // обновляем все сиденья в этом ряду
+  setSeats(prev =>
+    prev.map(s =>
+      s.rowId === rowId ? { ...s, x: s.x + dx, y: s.y + dy } : s
+    )
+  );
+};
+
   // Определяем выбранные объекты
   const selectedZones = zones.filter(zone => selectedIds.includes(zone.id));
   const selectedRows = rows.filter(row => selectedIds.includes(row.id));
@@ -102,26 +125,28 @@ function PropertiesPanel({
                 className="mt-1 block w-full border border-[#D4D4D4] rounded-[8px] p-2 text-sm text-black bg-white"
               />
 
-              <div className="flex gap-2 mt-2">
-                <div>
-                  <label className="block text-sm text-[#404040]">X</label>
-                  <input
-                    type="number"
-                    value={row.x}
-                    onChange={e => updateRow("x", Number(e.target.value))}
-                    className="mt-1 block w-full border border-[#D4D4D4] rounded-[8px] p-1 text-sm text-black bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-[#404040]">Y</label>
-                  <input
-                    type="number"
-                    value={row.y}
-                    onChange={e => updateRow("y", Number(e.target.value))}
-                    className="mt-1 block w-full border border-[#D4D4D4] rounded-[8px] p-1 text-sm text-black bg-white"
-                  />
-                </div>
-              </div>
+             
+            <div className="flex gap-2 mt-2">
+  <div>
+    <label className="block text-sm text-[#404040]">X</label>
+    <input
+      type="number"
+      value={row.x}
+      onChange={e => updateRowPosition(row.id, Number(e.target.value), row.y)}
+      className="mt-1 block w-full border border-[#D4D4D4] rounded-[8px] p-1 text-sm text-black bg-white"
+    />
+  </div>
+  <div>
+    <label className="block text-sm text-[#404040]">Y</label>
+    <input
+      type="number"
+      value={row.y}
+      onChange={e => updateRowPosition(row.id, row.x, Number(e.target.value))}
+      className="mt-1 block w-full border border-[#D4D4D4] rounded-[8px] p-1 text-sm text-black bg-white"
+    />
+  </div>
+</div>
+
 
               {/* Групповое управление сиденьями */}
               {rowSeats.length > 0 && (

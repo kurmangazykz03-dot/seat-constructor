@@ -32,36 +32,35 @@ function SeatmapCanvas({
 
 
  useEffect(() => {
-
   const handleKeyDown = (e: KeyboardEvent) => {
+    const activeEl = document.activeElement;
+    const isInput =
+      activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+
+    if (isInput) return; // игнорируем Delete/Backspace если в input
+
     // 🗑 УДАЛЕНИЕ
     if (selectedIds.length > 0 && (e.key === "Delete" || e.key === "Backspace")) {
-      setSeats((prev) => prev.filter((s) => !selectedIds.includes(s.id)));
-      setRows((prev) => prev.filter((r) => !selectedIds.includes(r.id)));
-      setZones((prev) => prev.filter((z) => !selectedIds.includes(z.id)));
+      setSeats(prev => prev.filter(s => !selectedIds.includes(s.id)));
+      setRows(prev => prev.filter(r => !selectedIds.includes(r.id)));
+      setZones(prev => prev.filter(z => !selectedIds.includes(z.id)));
       setSelectedIds([]);
       return;
     }
 
     // 📋 КОПИРОВАНИЕ (Ctrl+C / Cmd+C)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
-      const copiedSeats = seats.filter((s) => selectedIds.includes(s.id));
+      const copiedSeats = seats.filter(s => selectedIds.includes(s.id));
       const copiedRows = rows
-        .filter((r) => selectedIds.includes(r.id))
-        .map((r) => ({
-          ...r,
-          seats: seats.filter((s) => s.rowId === r.id),
-        }));
+        .filter(r => selectedIds.includes(r.id))
+        .map(r => ({ ...r, seats: seats.filter(s => s.rowId === r.id) }));
       const copiedZones = zones
-        .filter((z) => selectedIds.includes(z.id))
-        .map((z) => ({
+        .filter(z => selectedIds.includes(z.id))
+        .map(z => ({
           ...z,
           rows: rows
-            .filter((r) => r.zoneId === z.id)
-            .map((r) => ({
-              ...r,
-              seats: seats.filter((s) => s.rowId === r.id),
-            })),
+            .filter(r => r.zoneId === z.id)
+            .map(r => ({ ...r, seats: seats.filter(s => s.rowId === r.id) })),
         }));
 
       const clipboard = { seats: copiedSeats, rows: copiedRows, zones: copiedZones };
@@ -81,20 +80,12 @@ function SeatmapCanvas({
       const newRows: Row[] = [];
       const newZones: Zone[] = [];
 
-      // --- вставляем одиночные сиденья ---
       (parsed.seats || []).forEach((s: Seat) => {
-        newSeats.push({
-          ...s,
-          id: `seat-${crypto.randomUUID()}`,
-          x: s.x + offset,
-          y: s.y + offset,
-        });
+        newSeats.push({ ...s, id: `seat-${crypto.randomUUID()}`, x: s.x + offset, y: s.y + offset });
       });
 
-      // --- вставляем ряды ---
       (parsed.rows || []).forEach((r: Row) => {
         const newRowId = `row-${crypto.randomUUID()}`;
-
         const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
           ...s,
           id: `seat-${crypto.randomUUID()}`,
@@ -102,83 +93,97 @@ function SeatmapCanvas({
           x: s.x + offset,
           y: s.y + offset,
         }));
-
         newSeats.push(...rowSeats);
-
-        newRows.push({
-          ...r,
-          id: newRowId,
-          x: r.x + offset,
-          y: r.y + offset,
-        });
+        newRows.push({ ...r, id: newRowId, x: r.x + offset, y: r.y + offset });
       });
 
-      // --- вставляем зоны ---
       (parsed.zones || []).forEach((z: Zone) => {
         const newZoneId = `zone-${crypto.randomUUID()}`;
-
         const zoneRows: Row[] = (z.rows || []).map((r: Row) => {
           const newRowId = `row-${crypto.randomUUID()}`;
-
           const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
             ...s,
             id: `seat-${crypto.randomUUID()}`,
-            rowId: newRowId,     // ✅ новый rowId
-            zoneId: newZoneId,   // ✅ новая зона
+            rowId: newRowId,
+            zoneId: newZoneId,
             x: s.x + offset,
             y: s.y + offset,
           }));
-
           newSeats.push(...rowSeats);
-
-          return {
-            ...r,
-            id: newRowId,
-            zoneId: newZoneId,   // ✅ привязка к зоне
-            x: r.x + offset,
-            y: r.y + offset,
-          };
+          return { ...r, id: newRowId, zoneId: newZoneId, x: r.x + offset, y: r.y + offset };
         });
-
         newRows.push(...zoneRows);
-
-        newZones.push({
-          ...z,
-          id: newZoneId,
-          rows: zoneRows,        // ✅ новые ряды внутри зоны
-          x: z.x + offset,
-          y: z.y + offset,
-        });
+        newZones.push({ ...z, id: newZoneId, rows: zoneRows, x: z.x + offset, y: z.y + offset });
       });
 
-      // --- обновляем состояние ---
-      setSeats((prev) => [...prev, ...newSeats]);
-      setRows((prev) => [...prev, ...newRows]);
-      setZones((prev) => [...prev, ...newZones]);
-
-      setSelectedIds([
-        ...newSeats.map((s) => s.id),
-        ...newRows.map((r) => r.id),
-        ...newZones.map((z) => z.id),
-      ]);
-
+      setSeats(prev => [...prev, ...newSeats]);
+      setRows(prev => [...prev, ...newRows]);
+      setZones(prev => [...prev, ...newZones]);
+      setSelectedIds([...newSeats.map(s => s.id), ...newRows.map(r => r.id), ...newZones.map(z => z.id)]);
       return;
     }
 
-    // 🔍 ZOOM (Cmd + и Cmd -)
+    // 🔍 ZOOM через Cmd + / -
     if (e.metaKey && (e.key === "+" || e.key === "=")) {
-      setScale((prev) => Math.min(prev + 0.1, 3)); // максимум 3x
+      setScale(prev => Math.min(prev + 0.1, 3));
       e.preventDefault();
     }
     if (e.metaKey && e.key === "-") {
-      setScale((prev) => Math.max(prev - 0.1, 0.3)); // минимум 0.3x
+      setScale(prev => Math.max(prev - 0.1, 0.3));
       e.preventDefault();
     }
   };
 
+  const handleWheel = (e: WheelEvent) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    e.preventDefault();
+    const scaleBy = 1.05;
+    const oldScale = scale;
+    const pointer = stage.getPointerPosition ? stage.getPointerPosition() : { x: e.clientX, y: e.clientY };
+    if (!pointer) return;
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+    const clampedScale = Math.max(0.3, Math.min(3, newScale));
+    setScale(clampedScale);
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * clampedScale,
+      y: pointer.y - mousePointTo.y * clampedScale,
+    };
+
+    // ограничиваем Stage внутри видимой области
+    const stageWidth = stage.width() * clampedScale;
+    const stageHeight = stage.height() * clampedScale;
+    const containerWidth = stage.container().offsetWidth;
+    const containerHeight = stage.container().offsetHeight;
+
+    const maxX = 0;
+    const minX = containerWidth - stageWidth;
+    const maxY = 0;
+    const minY = containerHeight - stageHeight;
+
+    setStagePos({
+      x: Math.min(maxX, Math.max(minX, newPos.x)),
+      y: Math.min(maxY, Math.max(minY, newPos.y)),
+    });
+  };
+
   window.addEventListener("keydown", handleKeyDown);
-  return () => window.removeEventListener("keydown", handleKeyDown);
-}, [selectedIds, seats, rows, zones, setSeats, setRows, setZones, setSelectedIds, setScale]);
+  const stageEl = stageRef.current?.content || window;
+  stageEl.addEventListener("wheel", handleWheel, { passive: false });
+
+  return () => {
+    window.removeEventListener("keydown", handleKeyDown);
+    stageEl.removeEventListener("wheel", handleWheel);
+  };
+}, [selectedIds, seats, rows, zones, setSeats, setRows, setZones, setSelectedIds, scale, stageRef]);
 
 
   const seatRadius = 12;
@@ -447,6 +452,7 @@ const handleZoneClick = (zone: Zone, e: any) => {
   onMouseDown={handleStageMouseDown}
   onMouseMove={handleStageMouseMove}
   onMouseUp={handleStageMouseUp}
+  draggable={currentTool === "select"}
 >
 
         <Layer>
@@ -554,7 +560,7 @@ const handleZoneClick = (zone: Zone, e: any) => {
       key={row.id}
       x={row.x}
       y={row.y}
-      draggable={isRowSelected}
+     draggable={isRowSelected && currentTool === "select"}
       onClick={(e) => handleElementClick(row.id, e)}
       onDragMove={(e) => {
         if (!isRowSelected) return;

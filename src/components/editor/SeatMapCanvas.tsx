@@ -29,6 +29,9 @@ function SeatmapCanvas({
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
   const stageRef = useRef<any>(null);
   const [scale, setScale] = useState(1);
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+
+  
 
 
  useEffect(() => {
@@ -123,65 +126,16 @@ function SeatmapCanvas({
       return;
     }
 
-    // 🔍 ZOOM через Cmd + / -
-    if (e.metaKey && (e.key === "+" || e.key === "=")) {
-      setScale(prev => Math.min(prev + 0.1, 3));
-      e.preventDefault();
-    }
-    if (e.metaKey && e.key === "-") {
-      setScale(prev => Math.max(prev - 0.1, 0.3));
-      e.preventDefault();
-    }
+  
   };
 
-  const handleWheel = (e: WheelEvent) => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    e.preventDefault();
-    const scaleBy = 1.05;
-    const oldScale = scale;
-    const pointer = stage.getPointerPosition ? stage.getPointerPosition() : { x: e.clientX, y: e.clientY };
-    if (!pointer) return;
-
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
-    };
-
-    const newScale = e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
-    const clampedScale = Math.max(0.3, Math.min(3, newScale));
-    setScale(clampedScale);
-
-    const newPos = {
-      x: pointer.x - mousePointTo.x * clampedScale,
-      y: pointer.y - mousePointTo.y * clampedScale,
-    };
-
-    // ограничиваем Stage внутри видимой области
-    const stageWidth = stage.width() * clampedScale;
-    const stageHeight = stage.height() * clampedScale;
-    const containerWidth = stage.container().offsetWidth;
-    const containerHeight = stage.container().offsetHeight;
-
-    const maxX = 0;
-    const minX = containerWidth - stageWidth;
-    const maxY = 0;
-    const minY = containerHeight - stageHeight;
-
-    setStagePos({
-      x: Math.min(maxX, Math.max(minX, newPos.x)),
-      y: Math.min(maxY, Math.max(minY, newPos.y)),
-    });
-  };
 
   window.addEventListener("keydown", handleKeyDown);
-  const stageEl = stageRef.current?.content || window;
-  stageEl.addEventListener("wheel", handleWheel, { passive: false });
+  
 
   return () => {
     window.removeEventListener("keydown", handleKeyDown);
-    stageEl.removeEventListener("wheel", handleWheel);
+  
   };
 }, [selectedIds, seats, rows, zones, setSeats, setRows, setZones, setSelectedIds, scale, stageRef]);
 
@@ -441,14 +395,15 @@ const handleZoneClick = (zone: Zone, e: any) => {
 
   return (
     <div className="rounded-[16px] border border-[#e5e5e5]">
+      
       <Stage
   ref={stageRef}
   width={1420}
   height={750}
   scaleX={scale}
   scaleY={scale}
-  x={0}
-  y={0}
+  x={stagePos.x}
+  y={stagePos.y}
   onMouseDown={handleStageMouseDown}
   onMouseMove={handleStageMouseMove}
   onMouseUp={handleStageMouseUp}
@@ -456,6 +411,7 @@ const handleZoneClick = (zone: Zone, e: any) => {
 >
 
         <Layer>
+          
           {zones.map((zone) => {
             const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
             const zoneRows = rows.filter((r) => r.zoneId === zone.id);
@@ -727,7 +683,25 @@ const handleZoneClick = (zone: Zone, e: any) => {
             </Group>
           )}
         </Layer>
+        
+       
       </Stage>
+      <div className="w-[156px] h-[50px] absolute top-22 left-30 flex items-center space-x-2 bg-white border border-gray-200 shadow-md rounded-[8px] px-3 py-2">
+    
+    <button
+      className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-md hover:bg-gray-200 text-black"
+      onClick={() => setScale((prev) => Math.max(prev - 0.1, 0.3))}
+    >
+      –
+    </button>
+    <span className="text-gray-700 font-bold">{Math.round(scale * 100)}%</span>
+    <button
+      className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-md hover:bg-gray-200 text-black"
+      onClick={() => setScale((prev) => Math.min(prev + 0.1, 3))}
+    >
+      +
+    </button>
+  </div>
     </div>
   );
 }

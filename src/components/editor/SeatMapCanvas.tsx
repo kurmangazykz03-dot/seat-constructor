@@ -1,6 +1,7 @@
 import React, { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Circle, Group, Layer, Rect, Stage, Text } from "react-konva";
+import { Circle, Group, Layer, Line, Rect, Stage, Text } from "react-konva";
 import { Row, Seat, Zone } from "../../pages/EditorPage";
+
 
 interface SeatmapCanvasProps {
   seats: Seat[];
@@ -30,6 +31,10 @@ function SeatmapCanvas({
   const stageRef = useRef<any>(null);
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+// Сетка и привязка
+const [showGrid, setShowGrid] = useState(true);
+const [snapToGrid, setSnapToGrid] = useState(true);
+const [gridSize, setGridSize] = useState(30);
 
   
 
@@ -683,6 +688,28 @@ const handleZoneClick = (zone: Zone, e: any) => {
             </Group>
           )}
         </Layer>
+        <Layer listening={false}>
+
+  {showGrid &&
+    [...Array(Math.ceil(1420 / gridSize))].map((_, i) => (
+      <Line
+        key={`v-${i}`}
+        points={[i * gridSize, 0, i * gridSize, 750]}
+        stroke="#e5e7eb"
+        strokeWidth={1}
+      />
+    ))}
+  {showGrid &&
+    [...Array(Math.ceil(750 / gridSize))].map((_, i) => (
+      <Line
+        key={`h-${i}`}
+        points={[0, i * gridSize, 1420, i * gridSize]}
+        stroke="#e5e7eb"
+        strokeWidth={1}
+      />
+    ))}
+</Layer>
+
         
        
       </Stage>

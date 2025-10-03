@@ -1,122 +1,169 @@
-import { useState } from "react";
-import PropertiesPanel from "../components/editor/PropertiesPanel";
-import Toolbar from "../components/editor/ToolBar";
+import React, { useState } from "react";
+
+// Компоненты UI
 import TopBar from "../components/editor/TopBar";
-import SeatmapCanvas from '../components/editor/SeatMapCanvas'
+import Toolbar from '../components/editor/ToolBar';
+import PropertiesPanel from "../components/editor/PropertiesPanel";
+import SeatmapCanvas from '../components/editor/SeatMapCanvas';
 
-// ---------- Типы ----------
+// Хук для Undo/Redo и типы данных
+import { useHistory } from '../hooks/useHistory';
 
+import { Seat, Row, Zone } from "../types/types";
 
-export interface Row {
-  id: string;
-  zoneId: string | null;
-  index: number;
-  label: string;
-  x: number;
-  y: number;
+// ------------------ Тип для всего состояния схемы ------------------
+export interface SeatmapState {
+  zones: Zone[];
+  rows: Row[];
+  seats: Seat[];
 }
 
-export interface Seat {
-  id: string;
-  x: number;
-  y: number;
-  radius: number;
-  fill: string;
-  label: string;
-  category: "standard" | "vip";
-  status: "available" | "occupied" | "disabled";
-  zoneId: string | null;
-  rowId: string | null;   // ✅ сиденье может быть в ряду или без
-  colIndex: number | null; // ✅ порядковый номер в ряду или null
-}
+// ------------------ Начальное (пустое) состояние ------------------
+const INITIAL_STATE: SeatmapState = {
+  zones: [],
+  rows: [],
+  // Можно убрать демо-данные, чтобы начинать с чистого холста
+  seats: [], 
+};
 
-
-export interface Zone {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fill: string;
-  label: string;
-  color?: string;
-}
-
-// ---------- Страница ----------
+// ======================= ОСНОВНОЙ КОМПОНЕНТ СТРАНИЦЫ =======================
 function EditorPage() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [currentTool, setCurrentTool] = useState<
-    "select" | "add-seat" | "add-row" | "add-zone"
-  >("select");
+  // ------------------ УПРАВЛЕНИЕ ОСНОВНЫМ СОСТОЯНИЕМ (ДАННЫМИ) ------------------
+  // Используем наш кастомный хук для управления состоянием схемы и историей изменений.
+  // Все, что связано с местами, рядами и зонами, теперь живет здесь.
+  const { 
+    state,        // Текущее состояние (state.seats, state.rows, state.zones)
+    setState,     // Функция для обновления состояния (создает запись в истории)
+    undo,         // Функция отмены
+    redo,         // Функция возврата
+    clear,        // Функция полной очистки с сбросом истории
+    canUndo,      // Флаг, можно ли отменить действие
+    canRedo       // Флаг, можно ли вернуть действие
+  } = useHistory<SeatmapState>(INITIAL_STATE);
 
- const [seats, setSeats] = useState<Seat[]>([
-  {
-    id: "seat-1",
-    x: 100,
-    y: 100,
-    radius: 16,
-    fill: "#22c55e",
-    label: "A1",
-    category: "standard",
-    status: "available",
-    zoneId: null,
-    rowId: null,
-    colIndex: null,
-  },
-  {
-    id: "seat-2",
-    x: 200,
-    y: 150,
-    radius: 16,
-    fill: "#ef4444",
-    label: "A2",
-    category: "vip",
-    status: "occupied",
-    zoneId: null,
-    rowId: null,
-    colIndex: null,
-  },
-]);
+  // ------------------ УПРАВЛЕНИЕ UI-СОСТОЯНИЕМ ------------------
+  // Эти состояния не требуют истории (undo/redo) и не сохраняются в JSON.
+  // Они отвечают только за интерфейс в текущий момент времени.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentTool, setCurrentTool] = useState<"select" | "add-seat" | "add-row" | "add-zone">("select");
+  
+  // ======================= ФУНКЦИИ-ОБРАБОТЧИКИ ДЛЯ TOPBAR =======================
+
+  // 💾 Сохранение текущего состояния в localStorage браузера
+  const handleSave = () => {
+    try {
+      localStorage.setItem('seatmap_schema', JSON.stringify(state));
+      alert('Схема успешно сохранена в локальное хранилище!');
+    } catch (error) {
+      console.error("Ошибка при сохранении:", error);
+      alert('Не удалось сохранить схему.');
+    }
+  };
+
+  // 📥 Загрузка состояния из localStorage
+  const handleLoad = () => {
+    try {
+      const savedStateJSON = localStorage.getItem('seatmap_schema');
+      if (savedStateJSON) {
+        const parsedState: SeatmapState = JSON.parse(savedStateJSON);
+        setState(parsedState); // Обновляем состояние через setState, чтобы это действие попало в историю
+        alert('Схема загружена!');
+      } else {
+        alert('Сохраненная схема не найдена.');
+      }
+    } catch (error) {
+      console.error("Ошибка при загрузке:", error);
+      alert('Не удалось загрузить схему. Данные могут быть повреждены.');
+    }
+  };
+
+  // 🗑️ Полная очистка холста и истории
+  const handleClear = () => {
+    if (window.confirm('Вы уверены, что хотите полностью очистить сцену? Это действие нельзя будет отменить.')) {
+      clear(); // Используем `clear` из хука useHistory
+    }
+  };
+
+  // ექსპორტი Экспорт схемы в JSON-файл
+  const handleExport = () => {
+    // Формируем красивую вложенную структуру для экспорта, как вы и просили
+    const exportData = {
+      version: 1,
+      hallName: "Экспортированный зал",
+      zones: state.zones.map(zone => ({
+        id: zone.id,
+        name: zone.label,
+        ...zone, // Добавляем остальные свойства зоны (x, y, width, etc.)
+        rows: state.rows
+          .filter(row => row.zoneId === zone.id)
+          .map(row => ({
+            id: row.id,
+            label: row.label,
+            ...row, // Добавляем остальные свойства ряда
+            seats: state.seats
+              .filter(seat => seat.rowId === row.id)
+              .map(seat => ({
+                id: seat.id,
+                label: seat.label,
+                ...seat, // Добавляем остальные свойства места
+              }))
+          }))
+      }))
+    };
+    
+    const jsonString = JSON.stringify(exportData, null, 2); // `null, 2` для красивого форматирования
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'seatmap-schema.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Очищаем память
+  };
 
 
-  const [rows, setRows] = useState<Row[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
-const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // ======================= РЕНДЕР КОМПОНЕНТА =======================
   return (
-    <div className="flex flex-col w-full h-screen">
-      {/* Верхняя панель */}
-      <TopBar />
+    <div className="flex flex-col w-full h-screen bg-gray-100">
+      <TopBar 
+        onSave={handleSave}
+        onLoad={handleLoad}
+        onClear={handleClear}
+        onExport={handleExport}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={canUndo}
+        canRedo={canRedo}
+      />
 
-      <div className="flex flex-1">
-        {/* Левая панель инструментов */}
+      <div className="flex flex-1 overflow-hidden">
         <Toolbar currentTool={currentTool} setCurrentTool={setCurrentTool} />
 
-        {/* Центральное поле */}
-        
-        <div className="flex-1 bg-gray-50 p-6">
+        <main className="flex-1 bg-gray-50 p-4">
           <SeatmapCanvas
-  seats={seats}
-  setSeats={setSeats}
-  rows={rows}
-  setRows={setRows}
-  zones={zones}
-  setZones={setZones}
-  selectedIds={selectedIds}
-  setSelectedIds={setSelectedIds}
-  currentTool={currentTool}
-/>
-        </div>
+            // Передаем все данные из нашего единого `state`
+            seats={state.seats}
+            rows={state.rows}
+            zones={state.zones}
+            // ❗ Самое важное: передаем единую функцию для обновления ВСЕГО состояния
+            setState={setState} 
+            
+            // UI-состояние передаем как и раньше
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            currentTool={currentTool}
+          />
+        </main>
 
-        {/* Правая панель свойств */}
-        <PropertiesPanel
+       <PropertiesPanel
   selectedIds={selectedIds}
-  seats={seats}
-  setSeats={setSeats}
-  rows={rows}
-  setRows={setRows}
-  zones={zones}
-  setZones={setZones}
+  state={state}        // весь state сразу
+  setState={setState}  // метод обновления всего state
 />
+
       </div>
     </div>
   );

@@ -176,6 +176,7 @@ setState(prevState => ({
               setSelectedIds={setSelectedIds}
               setHoveredZoneId={setHoveredZoneId}
               handleElementClick={handleElementClick}
+              isViewerMode={false}
             />
           ))}
           <DrawingZone drawingZone={drawingZone} seatSpacingX={SEAT_SPACING_X} seatSpacingY={SEAT_SPACING_Y} />

@@ -3,6 +3,7 @@ import { Group, Rect, Text } from 'react-konva';
 import { Zone, Row, Seat } from '../../types/types';
 import RowComponent from './RowComponent';
 import SeatComponent from './SeatComponent';
+import { SeatmapState } from '../../pages/EditorPage';
 
 
 interface ZoneComponentProps {
@@ -16,6 +17,7 @@ interface ZoneComponentProps {
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   setHoveredZoneId: React.Dispatch<React.SetStateAction<string | null>>;
   handleElementClick: (id: string, e: any) => void;
+  isViewerMode?: boolean;
 }
 
 
@@ -51,7 +53,8 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   selectedIds,
   currentTool,
   hoveredZoneId,
- 
+ isViewerMode = false,
+
   setState,
   setSelectedIds,
   setHoveredZoneId,
@@ -126,6 +129,13 @@ setSelectedIds([newSeat.id]);
       setSelectedIds([zone.id]);
     }
   };
+  const handleZoneClickLocal = (e: any) => {
+    if (isViewerMode) { // << ИЗМЕНЕНО: В режиме просмотра ничего не делаем
+      e.cancelBubble = true;
+      return;
+    }
+    handleZoneClick(e); // Вызываем старую логику только в редакторе
+  };
 
   const handleSeatDragEnd = (e: any, seat: Seat) => {
     const newX = e.target.x();
@@ -143,10 +153,12 @@ setSelectedIds([newSeat.id]);
       key={zone.id}
       x={zone.x}
       y={zone.y}
-      draggable
-      onClick={handleZoneClick}
+
+
       onMouseEnter={() => setHoveredZoneId(zone.id)}
       onMouseLeave={() => setHoveredZoneId(null)}
+      draggable={!isViewerMode} // << ИЗМЕНЕНО
+      onClick={handleZoneClickLocal} // << ИЗМЕНЕНО
     >
       <Rect
         width={zone.width}
@@ -167,6 +179,7 @@ setSelectedIds([newSeat.id]);
           isRowSelected={false}
           onClick={handleElementClick}
           onDragEnd={handleSeatDragEnd}
+          isViewerMode={isViewerMode}
         />
       ))}
       
@@ -180,6 +193,7 @@ setSelectedIds([newSeat.id]);
           setState={setState}
           handleElementClick={handleElementClick}
           currentTool={currentTool}
+          isViewerMode={isViewerMode}
         />
       ))}
     </Group>

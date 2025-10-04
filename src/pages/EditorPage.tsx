@@ -155,6 +155,7 @@ function EditorPage() {
             selectedIds={selectedIds}
             setSelectedIds={setSelectedIds}
             currentTool={currentTool}
+            
           />
         </main>
 

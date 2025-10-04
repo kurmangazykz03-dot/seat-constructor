@@ -11,6 +11,7 @@ interface RowComponentProps {
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   handleElementClick: (id: string, e: any) => void;
   currentTool: string;
+  isViewerMode?: boolean; // << НОВЫЙ ПРОПС
 }
 
 const seatSpacingX = 30;
@@ -24,6 +25,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
   setState,
   handleElementClick,
   currentTool,
+   isViewerMode = false,
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
 
@@ -73,12 +75,14 @@ const RowComponent: React.FC<RowComponentProps> = ({
       key={row.id}
       x={row.x}
       y={row.y}
-      draggable={isRowSelected && currentTool === "select"}
-      onClick={(e) => handleElementClick(row.id, e)}
+
+
       onDragMove={handleRowDragMove}
       onDragEnd={(e) => {
         e.target.position({ x: row.x, y: row.y });
       }}
+      draggable={!isViewerMode && isRowSelected && currentTool === "select"} // << ИЗМЕНЕНО
+      onClick={(e) => !isViewerMode && handleElementClick(row.id, e)} // << ИЗМЕНЕНО
     >
       {isRowSelected && rowSeats.length > 0 && (
         <Rect
@@ -106,8 +110,10 @@ const RowComponent: React.FC<RowComponentProps> = ({
           onDragEnd={handleSeatDragEnd}
           offsetX={row.x}
           offsetY={row.y}
+          isViewerMode={isViewerMode} // << ПЕРЕДАЕМ ДАЛЬШЕ
         />
       ))}
+      
     </Group>
   );
 };

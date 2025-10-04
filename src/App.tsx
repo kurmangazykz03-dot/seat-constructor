@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import EditorPage from "./pages/EditorPage";
-import {ViewerPage} from "./pages/ViewerPage";
+import ViewerPage from "./pages/ViewerPage";
 
 function App() {
   return (

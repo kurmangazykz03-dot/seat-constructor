@@ -174,7 +174,8 @@ setSelectedIds([newSeat.id]);
       {seatsWithoutRow.map(seat => (
         <SeatComponent
           key={seat.id}
-          seat={seat}
+          // 👇 ИЗМЕНЕНИЕ: передаем относительные координаты
+          seat={{...seat, x: seat.x - zone.x, y: seat.y - zone.y}}
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={false}
           onClick={handleElementClick}
@@ -186,8 +187,9 @@ setSelectedIds([newSeat.id]);
       {/* Ряды с местами */}
       {zoneRows.map(row => (
         <RowComponent
-          key={row.id}
-          row={row}
+         key={row.id}
+          // 👇 ИЗМЕНЕНИЕ: передаем относительные координаты
+          row={{...row, x: row.x - zone.x, y: row.y - zone.y}}
           rowSeats={zoneSeats.filter(s => s.rowId === row.id)}
           selectedIds={selectedIds}
           setState={setState}

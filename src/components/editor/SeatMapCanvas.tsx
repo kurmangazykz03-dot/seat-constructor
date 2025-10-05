@@ -73,22 +73,53 @@ useKeyboardShortcuts({
       setSelectedIds([]);
     }
     if (currentTool === "add-zone" && e.target === e.target.getStage()) {
-      const pointer = e.target.getStage().getPointerPosition();
-      if (!pointer) return;
-      const newZone: Zone = {
-        id: "zone-temp",
-        x: pointer.x, y: pointer.y, width: 0, height: 0,
-        fill: "#FAFAFA", label: `Zone ${zones.length + 1}`,
-      };
-      setDrawingZone(newZone);
-    }
+  const stage = e.target.getStage();
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
+
+  // Преобразуем экранные координаты в координаты канваса (с учётом масштаба и позиции)
+  const transform = stage.getAbsoluteTransform().copy().invert();
+  const realPos = transform.point(pointer);
+
+  // Привязка к сетке
+  const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+  const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+
+  const newZone: Zone = {
+    id: "zone-temp",
+    x: snappedX,
+    y: snappedY,
+    width: 0,
+    height: 0,
+    fill: "#FAFAFA",
+    label: `Zone ${zones.length + 1}`,
+  };
+
+  setDrawingZone(newZone);
+}
   };
 
   const handleStageMouseMove = (e: any) => {
     if (!drawingZone) return;
-    const pointer = e.target.getStage().getPointerPosition();
-    if (!pointer) return;
-    setDrawingZone(prev => prev ? { ...prev, width: pointer.x - prev.x, height: pointer.y - prev.y } : null);
+    const stage = e.target.getStage();
+const pointer = stage.getPointerPosition();
+if (!pointer || !drawingZone) return;
+
+// Пересчёт координат с учётом зума и позиции
+const transform = stage.getAbsoluteTransform().copy().invert();
+const realPos = transform.point(pointer);
+
+// Привязка к сетке
+const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+
+setDrawingZone(prev =>
+  prev ? {
+    ...prev,
+    width: snappedX - prev.x,
+    height: snappedY - prev.y
+  } : null
+);
   };
 
   const handleStageMouseUp = () => {
@@ -181,7 +212,14 @@ setState(prevState => ({
           ))}
           <DrawingZone drawingZone={drawingZone} seatSpacingX={SEAT_SPACING_X} seatSpacingY={SEAT_SPACING_Y} />
         </Layer>
-        <GridLayer width={CANVAS_WIDTH} height={CANVAS_HEIGHT} gridSize={GRID_SIZE} showGrid={showGrid} />
+       <GridLayer 
+  width={CANVAS_WIDTH} 
+  height={CANVAS_HEIGHT} 
+  gridSize={GRID_SIZE} 
+  showGrid={showGrid} 
+  scale={scale} 
+  stagePos={stagePos} 
+/>
       </Stage>
       <ZoomControls scale={scale} setScale={setScale} />
     </div>

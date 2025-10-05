@@ -16,14 +16,23 @@ export interface SeatmapState {
   zones: Zone[];
   rows: Row[];
   seats: Seat[];
+  stage: {
+    scale: number;
+    x: number;
+    y: number;
+  };
 }
 
 // ------------------ Начальное (пустое) состояние ------------------
 const INITIAL_STATE: SeatmapState = {
   zones: [],
   rows: [],
-  // Можно убрать демо-данные, чтобы начинать с чистого холста
-  seats: [], 
+  seats: [],
+  stage: {
+    scale: 1,
+    x: 0,
+    y: 0
+  }
 };
 
 // ======================= ОСНОВНОЙ КОМПОНЕНТ СТРАНИЦЫ =======================
@@ -61,21 +70,29 @@ function EditorPage() {
   };
 
   // 📥 Загрузка состояния из localStorage
-  const handleLoad = () => {
-    try {
-      const savedStateJSON = localStorage.getItem('seatmap_schema');
-      if (savedStateJSON) {
-        const parsedState: SeatmapState = JSON.parse(savedStateJSON);
-        setState(parsedState); // Обновляем состояние через setState, чтобы это действие попало в историю
-        alert('Схема загружена!');
-      } else {
-        alert('Сохраненная схема не найдена.');
-      }
-    } catch (error) {
-      console.error("Ошибка при загрузке:", error);
-      alert('Не удалось загрузить схему. Данные могут быть повреждены.');
+ const handleLoad = () => {
+  try {
+    const savedStateJSON = localStorage.getItem('seatmap_schema');
+    if (savedStateJSON) {
+      const parsedState: SeatmapState = JSON.parse(savedStateJSON);
+
+      // ✅ Важно: сохраняем позицию stage
+      setState(prev => ({
+        ...parsedState,
+        stage: {
+          ...parsedState.stage, // <-- не теряем x/y/scale
+        }
+      }));
+
+      alert('Схема загружена!');
+    } else {
+      alert('Сохраненная схема не найдена.');
     }
-  };
+  } catch (error) {
+    console.error("Ошибка при загрузке:", error);
+    alert('Не удалось загрузить схему. Данные могут быть повреждены.');
+  }
+};
 
   // 🗑️ Полная очистка холста и истории
   const handleClear = () => {

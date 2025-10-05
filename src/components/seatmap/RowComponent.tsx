@@ -1,6 +1,6 @@
 import React from 'react';
 import { Group, Rect, Text } from 'react-konva';
-import { Row, Seat } from  '../../types/types';
+import { Row, Seat } from '../../types/types';
 import SeatComponent from './SeatComponent';
 import { SeatmapState } from '../../pages/EditorPage';
 
@@ -11,7 +11,7 @@ interface RowComponentProps {
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   handleElementClick: (id: string, e: any) => void;
   currentTool: string;
-  isViewerMode?: boolean; // << НОВЫЙ ПРОПС
+  isViewerMode?: boolean;
 }
 
 const seatSpacingX = 30;
@@ -25,17 +25,18 @@ const RowComponent: React.FC<RowComponentProps> = ({
   setState,
   handleElementClick,
   currentTool,
-   isViewerMode = false,
+  isViewerMode = false,
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
+  const padding = 8;
 
-  const minX = Math.min(...rowSeats.map((s) => s.x));
-  const maxX = Math.max(...rowSeats.map((s) => s.x));
-  const minY = Math.min(...rowSeats.map((s) => s.y));
-  const maxY = Math.max(...rowSeats.map((s) => s.y));
-  const padding = 10;
+  // Безопасные min/max если мест нет
+  const minX = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.x)) : row.x - seatRadius;
+  const maxX = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.x)) : row.x + seatRadius;
+  const minY = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.y)) : row.y - seatRadius;
+  const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.y)) : row.y + seatRadius;
 
-  // Перетаскивание отдельного места
+  // Обработчик перетаскивания отдельного места
   const handleSeatDragEnd = (e: any, seat: Seat) => {
     const newX = e.target.x() + row.x;
     const newY = e.target.y() + row.y;
@@ -43,7 +44,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
     const rowTop = row.y - seatSpacingY / 2;
     const rowBottom = row.y + seatSpacingY / 2;
 
-    const newRowId = (newY < rowTop || newY > rowBottom) ? null : row.id;
+    const newRowId = newY < rowTop || newY > rowBottom ? null : row.id;
 
     setState(prev => ({
       ...prev,
@@ -53,7 +54,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
     }));
   };
 
-  // Перетаскивание ряда целиком
+  // Перетаскивание ряда целиком (движение всех выбранных)
   const handleRowDragMove = (e: any) => {
     if (!isRowSelected) return;
     const dx = e.target.x() - row.x;
@@ -70,26 +71,60 @@ const RowComponent: React.FC<RowComponentProps> = ({
     }));
   };
 
+  // Позиции для фонового rect и метки (локальные координаты внутри Group)
+  const localMinX = minX - row.x;
+  const localMaxX = maxX - row.x;
+  const localMinY = minY - row.y;
+  const localMaxY = maxY - row.y;
+
+  const bboxX = localMinX - seatRadius - padding;
+  const bboxY = localMinY - seatRadius - padding;
+  const bboxW = (localMaxX - localMinX) + seatRadius * 2 + padding * 2;
+  const bboxH = (localMaxY - localMinY) + seatRadius * 2 + padding * 2;
+
+  // Позиция метки слева, по центру по вертикали
+  const labelWidth = Math.max(24, row.label.length * 8 + 12);
+  const labelGap = 8;
+  const labelX = bboxX - labelWidth - labelGap;
+  const labelY = bboxY + bboxH / 2 - 10; // rect height 20 -> -10 для центрирования
+
   return (
     <Group
       key={row.id}
       x={row.x}
       y={row.y}
-
-
+      draggable={!isViewerMode && isRowSelected && currentTool === "select"}
       onDragMove={handleRowDragMove}
       onDragEnd={(e) => {
+        // Вернуть группу в исходную позицию (мы отражаем перемещение через state)
         e.target.position({ x: row.x, y: row.y });
       }}
-      draggable={!isViewerMode && isRowSelected && currentTool === "select"} // << ИЗМЕНЕНО
-      onClick={(e) => !isViewerMode && handleElementClick(row.id, e)} // << ИЗМЕНЕНО
     >
-      {isRowSelected && rowSeats.length > 0 && (
+      {/* Прозрачный фон — ловит клики по пустой области ряда */}
+      <Rect
+        x={bboxX}
+        y={bboxY}
+        width={bboxW}
+        height={bboxH}
+        fill={'transparent'}
+        listening={true}
+        onMouseDown={(e: any) => {
+          e.cancelBubble = true;
+          if (!isViewerMode) handleElementClick(row.id, e);
+        }}
+        onTouchStart={(e: any) => {
+          e.cancelBubble = true;
+          if (!isViewerMode) handleElementClick(row.id, e);
+        }}
+      />
+
+      {/* Рисуем рамку выделения поверх фона, но под сиденьями */}
+      {isRowSelected && (
         <Rect
-          x={minX - row.x - seatRadius - padding}
-          y={minY - row.y - seatRadius - padding}
-          width={maxX - minX + seatRadius * 2 + padding * 2}
-          height={maxY - minY + seatRadius * 2 + padding * 2}
+          x={bboxX}
+          y={bboxY}
+          width={bboxW}
+          height={bboxH}
           stroke="blue"
           strokeWidth={2}
           dash={[6, 4]}
@@ -97,10 +132,40 @@ const RowComponent: React.FC<RowComponentProps> = ({
         />
       )}
 
-      <Rect x={-50} y={-10} width={row.label.length * 8 + 12} height={20} fill={isRowSelected ? "#D0E8FF" : "white"} opacity={0.7} cornerRadius={4} />
-      <Text text={row.label} x={-46} y={-10} fontSize={14} fill={isRowSelected ? "blue" : "black"} />
+      {/* Метка ряда — теперь кликабельна */}
+      <Rect
+        x={labelX}
+        y={labelY}
+        width={labelWidth}
+        height={20}
+        fill={isRowSelected ? "#D0E8FF" : "white"}
+        opacity={0.95}
+        cornerRadius={4}
+        listening={true}
+        onClick={(e: any) => {
+          e.cancelBubble = true;
+          if (!isViewerMode) handleElementClick(row.id, e);
+        }}
+      />
+      <Text
+        text={row.label}
+        x={labelX}
+        y={labelY}
+        width={labelWidth}
+        height={20}
+        align="center"
+        verticalAlign="middle"
+        fontSize={14}
+        fill={isRowSelected ? "blue" : "black"}
+        listening={true}
+        onClick={(e: any) => {
+          e.cancelBubble = true;
+          if (!isViewerMode) handleElementClick(row.id, e);
+        }}
+      />
 
-      {rowSeats.map((seat) => (
+      {/* Сами сиденья — рендерим поверх фоновой зоны */}
+      {rowSeats.map(seat => (
         <SeatComponent
           key={seat.id}
           seat={seat}
@@ -110,10 +175,9 @@ const RowComponent: React.FC<RowComponentProps> = ({
           onDragEnd={handleSeatDragEnd}
           offsetX={row.x}
           offsetY={row.y}
-          isViewerMode={isViewerMode} // << ПЕРЕДАЕМ ДАЛЬШЕ
+          isViewerMode={isViewerMode}
         />
       ))}
-      
     </Group>
   );
 };

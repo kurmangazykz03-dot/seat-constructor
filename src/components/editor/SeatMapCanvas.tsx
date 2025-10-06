@@ -49,24 +49,42 @@ useKeyboardShortcuts({
 });
 
 
-  const createRowWithSeats = (zoneId: string, rowIndex: number, cols: number, offsetX: number, offsetY: number) => {
-    const rowId = `row-${crypto.randomUUID()}`;
-    const row: Row = { id: rowId, zoneId, index: rowIndex, label: `${rowIndex + 1}`, x: offsetX, y: offsetY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2 };
-    const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
-      id: `seat-${crypto.randomUUID()}`,
-      x: offsetX + c * SEAT_SPACING_X + SEAT_RADIUS,
-      y: row.y,
-      radius: SEAT_RADIUS,
-      fill: "#33DEF1",
-      label: `${c + 1}`,
-      category: "standard",
-      status: "available",
-      zoneId,
-      rowId,
-      colIndex: c + 1,
-    }));
-    return { row, seats: newSeats };
+// --- Заменить старую функцию createRowWithSeats на эту ---
+const createRowWithSeats = (
+  zoneId: string,
+  rowIndex: number,
+  cols: number,
+  baseX: number, // абсолютная X (zone.x + offsetX)
+  baseY: number  // абсолютная Y (zone.y + offsetY + ...)
+) => {
+  const rowId = `row-${crypto.randomUUID()}`;
+  const y = baseY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2;
+  const row: Row = {
+    id: rowId,
+    zoneId,
+    index: rowIndex,
+    label: `${rowIndex + 1}`,
+    x: baseX,
+    y,
   };
+
+  const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
+    id: `seat-${crypto.randomUUID()}`,
+    x: baseX + c * SEAT_SPACING_X + SEAT_RADIUS,
+    y,
+    radius: SEAT_RADIUS,
+    fill: "#33DEF1",
+    label: `${c + 1}`,
+    category: "standard",
+    status: "available",
+    zoneId,
+    rowId,
+    colIndex: c + 1,
+  }));
+
+  return { row, seats: newSeats };
+};
+
 
   const handleStageMouseDown = (e: any) => {
     if (currentTool === "select" && e.target === e.target.getStage()) {

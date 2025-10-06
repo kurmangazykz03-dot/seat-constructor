@@ -1,63 +1,88 @@
 import React from 'react';
-import { Circle, Text } from 'react-konva';
+import { Circle, Text, Group } from 'react-konva';
 import { Seat } from '../../types/types';
 
 interface SeatComponentProps {
   seat: Seat;
   isSelected: boolean;
-  isRowSelected?: boolean; // Сделаем опциональным
+  isRowSelected: boolean;
   onClick: (id: string, e: any) => void;
-  onDragEnd?: (e: any, seat: Seat) => void; // Сделаем опциональным
+  onDragEnd?: (e: any, seat: Seat) => void;
   offsetX?: number;
   offsetY?: number;
-  isViewerMode?: boolean; // << НОВЫЙ ПРОПС
+  isViewerMode?: boolean;
+  currentTool?: string;
 }
 
 const SeatComponent: React.FC<SeatComponentProps> = ({
   seat,
   isSelected,
+  isRowSelected,
   onClick,
   onDragEnd,
-  isRowSelected = false, // Значение по умолчанию
   offsetX = 0,
   offsetY = 0,
-  isViewerMode = false, // Значение по умолчанию
+  isViewerMode = false,
+  currentTool = 'select',
 }) => {
-  const strokeColor = isSelected ? '#3b82f6' : (isRowSelected && !isViewerMode ? 'blue' : '');
-  const strokeWidth = isSelected ? 2.5 : (isRowSelected && !isViewerMode ? 2 : 0);
+  const strokeColor = isSelected
+    ? 'blue'
+    : isRowSelected
+    ? '#99CCFF'
+    : 'transparent';
+  const strokeWidth = isSelected ? 2 : isRowSelected ? 1 : 0;
 
   return (
-    <React.Fragment>
+    <Group
+      x={seat.x - offsetX}
+      y={seat.y - offsetY}
+      draggable={!isViewerMode && currentTool === 'select'}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+      }}
+      onDragEnd={(e) => {
+        e.cancelBubble = true;
+        if (!isViewerMode && onDragEnd) {
+          // Берем локальные координаты (относительно родителя)
+          const newSeat = {
+            ...seat,
+            x: e.target.x() + offsetX,
+            y: e.target.y() + offsetY,
+          };
+          onDragEnd(e, newSeat);
+        }
+      }}
+      onClick={(e) => {
+        e.cancelBubble = true;
+        onClick(seat.id, e);
+      }}
+      onTap={(e) => {
+        e.cancelBubble = true;
+        onClick(seat.id, e);
+      }}
+    >
       <Circle
-        x={seat.x - offsetX}
-        y={seat.y - offsetY}
         radius={seat.radius}
         fill={seat.fill}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
-        draggable={!isViewerMode} // << ИЗМЕНЕНО: Отключаем перетаскивание
-        onClick={(e) => onClick(seat.id, e)}
-        onTap={(e) => onClick(seat.id, e)} // для мобильных
-        onDragEnd={(e) => !isViewerMode && onDragEnd?.(e, seat)} // << ИЗМЕНЕНО: Вызываем только в режиме редактора
-        // Эффекты для режима просмотра
-        scaleX={isSelected && isViewerMode ? 1.2 : 1}
-        scaleY={isSelected && isViewerMode ? 1.2 : 1}
-        shadowColor="#000000"
-        shadowBlur={isSelected && isViewerMode ? 8 : 4}
-        shadowOpacity={0.3}
         perfectDrawEnabled={false}
       />
+
       <Text
         text={seat.label}
-        x={seat.x - offsetX}
-        y={seat.y - offsetY}
+        x={0}
+        y={0}
         fontSize={10}
         fill="white"
-        offsetX={seat.label.length * 5 / 2}
+        offsetX={(seat.label.length * 5) / 2}
         offsetY={5}
         listening={false}
       />
-    </React.Fragment>
+    </Group>
   );
 };
 

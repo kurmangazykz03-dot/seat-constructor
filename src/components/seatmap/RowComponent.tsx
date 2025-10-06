@@ -90,15 +90,21 @@ const RowComponent: React.FC<RowComponentProps> = ({
 
   return (
     <Group
-      key={row.id}
-      x={row.x}
-      y={row.y}
-      draggable={!isViewerMode && isRowSelected && currentTool === "select"}
-      onDragMove={handleRowDragMove}
-      onDragEnd={(e) => {
-        // Вернуть группу в исходную позицию (мы отражаем перемещение через state)
-        e.target.position({ x: row.x, y: row.y });
-      }}
+        key={row.id}
+  x={row.x}
+  y={row.y}
+  draggable={!isViewerMode && isRowSelected && currentTool === "select"}
+  onDragStart={(e) => {
+    e.cancelBubble = true; // 🧠 не даём всплыть в зону
+  }}
+  onDragMove={(e) => {
+    e.cancelBubble = true; // 🧠 блокируем всплытие
+    handleRowDragMove(e);
+  }}
+  onDragEnd={(e) => {
+    e.cancelBubble = true; // 🧠 чтобы зона не получила dragEnd
+    e.target.position({ x: row.x, y: row.y }); // возвращаем визуально назад
+  }}
     >
       {/* Прозрачный фон — ловит клики по пустой области ряда */}
       <Rect

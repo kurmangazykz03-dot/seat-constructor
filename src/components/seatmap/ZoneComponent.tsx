@@ -150,16 +150,29 @@ setSelectedIds([newSeat.id]);
 
   return (
     <Group
-      key={zone.id}
-      x={zone.x}
-      y={zone.y}
+  key={zone.id}
+  x={zone.x}
+  y={zone.y}
+  draggable={!isViewerMode}
+  onMouseEnter={() => setHoveredZoneId(zone.id)}
+  onMouseLeave={() => setHoveredZoneId(null)}
+  onClick={handleZoneClickLocal}
 
+  // ✅ Исправленный обработчик
+  onDragEnd={(e) => {
+    const newX = e.target.x();
+    const newY = e.target.y();
 
-      onMouseEnter={() => setHoveredZoneId(zone.id)}
-      onMouseLeave={() => setHoveredZoneId(null)}
-      draggable={!isViewerMode} // << ИЗМЕНЕНО
-      onClick={handleZoneClickLocal} // << ИЗМЕНЕНО
-    >
+    // Обновляем ТОЛЬКО позицию зоны
+    setState((prev) => ({
+      ...prev,
+      zones: prev.zones.map((z) =>
+        z.id === zone.id ? { ...z, x: newX, y: newY } : z
+      ),
+    }));
+  }}
+>
+
       <Rect
         width={zone.width}
         height={zone.height}

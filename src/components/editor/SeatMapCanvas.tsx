@@ -26,7 +26,7 @@ const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
 const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
-const CANVAS_WIDTH = 1420;
+const CANVAS_WIDTH = 1900;
 const CANVAS_HEIGHT = 750;
 
 function SeatmapCanvas({

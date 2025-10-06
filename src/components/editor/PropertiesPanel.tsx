@@ -128,20 +128,7 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
               onChange={e => updateRow("label", e.target.value)}
             />
 
-            <div className="flex gap-4">
-              <PropertyInput
-                label="X Position"
-                type="number"
-                value={row.x}
-                onChange={e => updateRow("x", Number(e.target.value))}
-              />
-              <PropertyInput
-                label="Y Position"
-                type="number"
-                value={row.y}
-                onChange={e => updateRow("y", Number(e.target.value))}
-              />
-            </div>
+           
 
             {/* Seats in row */}
             {rowSeats.length > 0 && (
@@ -204,7 +191,7 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
                       <select
                         value={seat.category || "Standard"} // Используем Standard по умолчанию, если пусто
                         onChange={e => updateSeat("category", e.target.value, seat.id)}
-                        className="text-xs border border-gray-300 rounded-md p-1 bg-white"
+                        className="text-black text-xs border border-gray-300 rounded-md p-1 bg-white"
                       >
                          {CATEGORIES.map(cat => (
                            <option key={cat} value={cat}>{cat}</option>
@@ -232,7 +219,8 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
         );
       })}
 
-      {/* Individual seats (not part of selected rows) */}
+      {/* Individual seats (not part of selected 
+      s) */}
       {selectedIndividualSeats.map(seat => (
         <div key={seat.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-base font-semibold text-purple-700 mb-3">Seat: {seat.label} (Selected)</h3>
@@ -274,6 +262,7 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
                 style={{ backgroundColor: color }}
                 className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === color ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
                 onClick={() => updateSeat("fill", color, seat.id)}
+                aria-label='color'
               />
             ))}
           </div>

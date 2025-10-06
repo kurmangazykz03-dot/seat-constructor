@@ -39,7 +39,7 @@ const createRowWithSeats = (zoneId: string, rowIndex: number, cols: number) => {
     x: c * seatSpacingX + seatRadius, // локальная X
     y: row.y, // локальная Y
     radius: seatRadius,
-    fill: "#33DEF1",
+    fill: "#22C55E",
     label: `${c + 1}`,
     category: "standard",
     status: "available",
@@ -94,7 +94,7 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
     x: localX,
     y: parentRow ? parentRow.y : localY,
     radius: seatRadius,
-    fill: '#33DEF1',
+    fill: '#22C55E',
     label: `${seats.length + 1}`,
     category: 'standard',
     status: 'available',

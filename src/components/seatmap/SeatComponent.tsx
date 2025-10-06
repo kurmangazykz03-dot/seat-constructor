@@ -32,10 +32,14 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
     : 'transparent';
   const strokeWidth = isSelected ? 2 : isRowSelected ? 1 : 0;
 
+  // Округляем координаты для четкости
+  const x = Math.round(seat.x - offsetX);
+  const y = Math.round(seat.y - offsetY);
+
   return (
     <Group
-      x={seat.x - offsetX}
-      y={seat.y - offsetY}
+      x={x}
+      y={y}
       draggable={!isViewerMode && currentTool === 'select'}
       onDragStart={(e) => {
         e.cancelBubble = true;
@@ -46,7 +50,6 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
       onDragEnd={(e) => {
         e.cancelBubble = true;
         if (!isViewerMode && onDragEnd) {
-          // Берем локальные координаты (относительно родителя)
           const newSeat = {
             ...seat,
             x: e.target.x() + offsetX,
@@ -69,17 +72,17 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
         fill={seat.fill}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
-        perfectDrawEnabled={false}
+        perfectDrawEnabled={true} // оставляем true для четкого круга
       />
 
       <Text
         text={seat.label}
+        fontSize={12} // немного увеличим для читаемости
+        fill="white"
         x={0}
         y={0}
-        fontSize={10}
-        fill="white"
-        offsetX={(seat.label.length * 5) / 2}
-        offsetY={5}
+        offsetX={Math.round((seat.label.length * 6) / 2)} // округляем смещение
+        offsetY={6} // округляем смещение по Y
         listening={false}
       />
     </Group>

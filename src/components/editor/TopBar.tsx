@@ -20,10 +20,14 @@ function TopBar({ onSave, onLoad, onClear, onExport, onUndo, onRedo, canUndo, ca
 
   return (
     <div className="h-[60px] bg-white border-b border-[#e5e5e5] flex items-center justify-between px-6 py-3 shadow-sm">
+      <div className='flex items-center gap-4'>
       <Link to={"/"} className="text-[#171717] text-[20px] font-bold">
         Seat Constructor
       </Link>
-
+      <span className="text-sm bg-gray-100 text-gray-600 font-medium px-3 py-1 rounded-lg">
+        Editing Mode
+      </span>
+      </div>
       <div className="flex items-center gap-2">
         {/* Undo/Redo Buttons */}
         <button 

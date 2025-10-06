@@ -13,8 +13,12 @@ function Toolbar({currentTool,setCurrentTool}:ToolBarProps) {
         <div className="flex flex-col items-center  gap-1">
           <button className={`w-12 h-12 rounded-[12px] ${currentTool === "add-row" ? "bg-blue-400" : "bg-[#e7e7eb]"} hover:bg-blue-400 cursor-pointer`}
             onClick={() => setCurrentTool("add-row")}>
-            {/* <svg></svg> */}
-            row
+              <div className='flex items-center justify-center '>
+            <svg className='w-3 h-4'>
+                <use xlinkHref="#icon-row" />
+            </svg>
+            </div>
+
           </button>
           <span className="text-black ">
             Add <br /> Row
@@ -22,8 +26,11 @@ function Toolbar({currentTool,setCurrentTool}:ToolBarProps) {
         </div>
         <div className="flex flex-col items-center gap-1">
           <button className={`w-12 h-12 ${currentTool==='add-seat'?'bg-blue-400':'bg-[#e7e7eb]'}  rounded-[12px] hover:bg-blue-400 cursor-pointer`} onClick={() => setCurrentTool("add-seat")}>
-            {/* <svg></svg> */}
-            seat
+            <div className='flex items-center justify-center '>
+            <svg className='w-3 h-4'>
+                <use xlinkHref="#icon-seats" />
+            </svg>
+            </div>
           </button>
           <span className="text-black ">
             Add <br /> Seat
@@ -31,18 +38,24 @@ function Toolbar({currentTool,setCurrentTool}:ToolBarProps) {
         </div>
         <div className="flex flex-col items-center gap-1">
           <button className={`w-12 h-12 ${currentTool==='add-zone'?'bg-blue-400':'bg-[#e7e7eb]'}  rounded-[12px] hover:bg-blue-400 cursor-pointer`} onClick={() => setCurrentTool("add-zone")}>
-            {/* <svg></svg> */}
-            zone
+            <div className='flex items-center justify-center '>
+            <svg className='w-3 h-4 '>
+                <use xlinkHref="#icon-zone" />
+            </svg>
+            </div>
           </button>
           <span className="text-black ">
-            Add <br />
-            Zone
+            Add <br /> Zone
           </span>
+           
         </div>
         <div className="flex flex-col items-center gap-1">
           <button className={`w-12 h-12 ${currentTool==='select'?'bg-blue-400':'bg-[#e7e7eb]'}  rounded-[12px] hover:bg-blue-400 cursor-pointer`} onClick={() => setCurrentTool("select")}>
-            {/* <svg></svg> */}
-            select
+             <div className='flex items-center justify-center '>
+            <svg className='w-3 h-4 '>
+                <use xlinkHref="#icon-select" />
+            </svg>
+            </div>
           </button>
           <span className="text-black ">Select</span>
         </div>

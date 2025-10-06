@@ -26,8 +26,8 @@ const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
 const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
-const CANVAS_WIDTH = 1900;
-const CANVAS_HEIGHT = 750;
+const CANVAS_WIDTH = 1436;
+const CANVAS_HEIGHT = 752;
 
 function SeatmapCanvas({
   seats, rows,  zones,setState,
@@ -47,6 +47,31 @@ useKeyboardShortcuts({
   state: { seats, rows, zones }, // или полный state, если есть другие поля
   setState
 });
+const handleSetScale = (newScale: number) => {
+  if (!stageRef.current) return;
+  const stage = stageRef.current;
+
+  // Центр канваса
+  const containerCenter = {
+    x: CANVAS_WIDTH / 2,
+    y: CANVAS_HEIGHT / 2,
+  };
+
+  // Координаты центра сцены перед изменением масштаба
+  const stageCenter = {
+    x: (containerCenter.x - stagePos.x) / scale,
+    y: (containerCenter.y - stagePos.y) / scale,
+  };
+
+  // Вычисляем новый сдвиг Stage, чтобы центр остался на месте
+  const newPos = {
+    x: containerCenter.x - stageCenter.x * newScale,
+    y: containerCenter.y - stageCenter.y * newScale,
+  };
+
+  setScale(newScale);
+  setStagePos(newPos);
+};
 
 
 // --- Заменить старую функцию createRowWithSeats на эту ---
@@ -73,7 +98,7 @@ const createRowWithSeats = (
     x: baseX + c * SEAT_SPACING_X + SEAT_RADIUS,
     y,
     radius: SEAT_RADIUS,
-    fill: "#33DEF1",
+    fill: "#22C55E",
     label: `${c + 1}`,
     category: "standard",
     status: "available",
@@ -239,7 +264,7 @@ setState(prevState => ({
   stagePos={stagePos} 
 />
       </Stage>
-      <ZoomControls scale={scale} setScale={setScale} />
+      <ZoomControls scale={scale} setScale={handleSetScale} />
     </div>
   );
 }

@@ -85,6 +85,27 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
   const selectedZones = zones.filter(z => selectedIds.includes(z.id));
   const selectedRows = rows.filter(r => selectedIds.includes(r.id));
   const selectedIndividualSeats = seats.filter(s => selectedIds.includes(s.id) && !selectedRows.some(r => r.id === s.rowId));
+  {selectedIds.length === 1 && state.zones.some(z => z.id === selectedIds[0]) && (() => {
+  const z = state.zones.find(z => z.id === selectedIds[0])!;
+  return (
+    <div className="mt-4">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Rotation (°)</label>
+      <input
+        type="number"
+        className="w-full border rounded px-2 py-1"
+        value={Math.round(z.rotation ?? 0)}
+        onChange={e => {
+          const value = Number(e.target.value) || 0;
+          setState(prev => ({
+            ...prev,
+            zones: prev.zones.map(zz => zz.id === z.id ? { ...zz, rotation: value } : zz)
+          }));
+        }}
+      />
+    </div>
+  );
+})()}
+
 
   if (selectedIds.length === 0) {
     return (

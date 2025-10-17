@@ -1,8 +1,10 @@
 interface ToolBarProps {
   currentTool: string;
-  setCurrentTool: (tool: "select" | "add-seat" | "add-row" | "add-zone") => void;
+setCurrentTool: (tool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate") => void;
+
   onDelete: () => void;
 }
+
 
 function Toolbar({ currentTool, setCurrentTool, onDelete }: ToolBarProps) {
   return (
@@ -82,6 +84,24 @@ function Toolbar({ currentTool, setCurrentTool, onDelete }: ToolBarProps) {
 
           <span className="text-black text-center">Delete</span>
         </div>
+        {/* ROTATE */}
+<div className="flex flex-col items-center gap-1">
+  <button
+    className={`w-12 h-12 rounded-[12px] ${currentTool === "rotate" ? "bg-blue-400" : "bg-[#e7e7eb]"} hover:bg-blue-400`}
+    onClick={() => setCurrentTool("rotate")}
+    title="Rotate zone"
+  >
+    <div className="flex items-center justify-center">
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+        <path d="M21 12a9 9 0 1 1-3.1-6.8" stroke="currentColor" strokeWidth="2"/>
+        <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    </div>
+  </button>
+  <span className="text-xs">Rotate</span>
+</div>
+
+
       </div>
     </div>
   );

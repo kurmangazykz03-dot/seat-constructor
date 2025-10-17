@@ -1,13 +1,14 @@
-import React, { Dispatch, SetStateAction, useRef, useState } from "react";
-import { Layer, Stage } from "react-konva";
-import { Row, Seat, Zone } from '../../types/types';
-import { useKeyboardShortcuts } from '../seatmap/useKeyboardShortcuts';
-import ZoneComponent from '../seatmap/ZoneComponent';
-import GridLayer from '../seatmap/GridLayer';
-import DrawingZone from '../seatmap/DrawingZone'
-import ZoomControls from '../seatmap/ZoomControls';
+import Konva from "konva";
+import { Dispatch, SetStateAction, useRef, useState } from "react";
+import { Layer, Stage, Transformer } from "react-konva";
+import { Row, Seat, Zone } from "../../types/types";
+import DrawingZone from "../seatmap/DrawingZone";
+import GridLayer from "../seatmap/GridLayer";
+import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts";
+import ZoneComponent from "../seatmap/ZoneComponent";
+import ZoomControls from "../seatmap/ZoomControls";
 
-import { SeatmapState } from '../../pages/EditorPage'; // Импортируем тип
+import { SeatmapState } from "../../pages/EditorPage"; // Импортируем тип
 
 interface SeatmapCanvasProps {
   seats: Seat[];
@@ -18,7 +19,7 @@ interface SeatmapCanvasProps {
 
   selectedIds: string[];
   setSelectedIds: Dispatch<SetStateAction<string[]>>;
-  currentTool: "select" | "add-seat" | "add-row" | "add-zone";
+  currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate"; // ← добавь rotate
 }
 
 // Константы, которые можно вынести в отдельный config файл
@@ -30,8 +31,13 @@ const CANVAS_WIDTH = 1436;
 const CANVAS_HEIGHT = 752;
 
 function SeatmapCanvas({
-  seats, rows,  zones,setState,
-  selectedIds, setSelectedIds, currentTool,
+  seats,
+  rows,
+  zones,
+  setState,
+  selectedIds,
+  setSelectedIds,
+  currentTool,
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -41,133 +47,133 @@ function SeatmapCanvas({
   const [showGrid, setShowGrid] = useState(true);
 
   // Подключаем хук для горячих клавиш
-useKeyboardShortcuts({
-  selectedIds,
-  setSelectedIds,
-  state: { seats, rows, zones }, // или полный state, если есть другие поля
-  setState
-});
-const handleSetScale = (newScale: number) => {
-  if (!stageRef.current) return;
-  const stage = stageRef.current;
+  useKeyboardShortcuts({
+    selectedIds,
+    setSelectedIds,
+    state: { seats, rows, zones }, // или полный state, если есть другие поля
+    setState,
+  });
+  const handleSetScale = (newScale: number) => {
+    if (!stageRef.current) return;
+    const stage = stageRef.current;
 
-  // Центр канваса
-  const containerCenter = {
-    x: CANVAS_WIDTH / 2,
-    y: CANVAS_HEIGHT / 2,
+    // Центр канваса
+    const containerCenter = {
+      x: CANVAS_WIDTH / 2,
+      y: CANVAS_HEIGHT / 2,
+    };
+
+    // Координаты центра сцены перед изменением масштаба
+    const stageCenter = {
+      x: (containerCenter.x - stagePos.x) / scale,
+      y: (containerCenter.y - stagePos.y) / scale,
+    };
+
+    // Вычисляем новый сдвиг Stage, чтобы центр остался на месте
+    const newPos = {
+      x: containerCenter.x - stageCenter.x * newScale,
+      y: containerCenter.y - stageCenter.y * newScale,
+    };
+
+    setScale(newScale);
+    setStagePos(newPos);
   };
 
-  // Координаты центра сцены перед изменением масштаба
-  const stageCenter = {
-    x: (containerCenter.x - stagePos.x) / scale,
-    y: (containerCenter.y - stagePos.y) / scale,
-  };
-
-  // Вычисляем новый сдвиг Stage, чтобы центр остался на месте
-  const newPos = {
-    x: containerCenter.x - stageCenter.x * newScale,
-    y: containerCenter.y - stageCenter.y * newScale,
-  };
-
-  setScale(newScale);
-  setStagePos(newPos);
-};
-
-
-// --- Заменить старую функцию createRowWithSeats на эту ---
-const createRowWithSeats = (
-  zoneId: string,
+  // --- Заменить старую функцию createRowWithSeats на эту ---
+  const createRowWithSeats = (
+      zoneId: string,
   rowIndex: number,
   cols: number,
-  baseX: number, // абсолютная X (zone.x + offsetX)
-  baseY: number  // абсолютная Y (zone.y + offsetY + ...)
-) => {
-  const rowId = `row-${crypto.randomUUID()}`;
-  const y = baseY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2;
-  const row: Row = {
-    id: rowId,
-    zoneId,
-    index: rowIndex,
-    label: `${rowIndex + 1}`,
-    x: baseX,
-    y,
+  offsetX: number,
+  offsetY: number
+  ) => {
+    const rowId = `row-${crypto.randomUUID()}`;
+    const y = offsetY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2;
+    const row: Row = {
+      id: rowId,
+      zoneId,
+      index: rowIndex,
+      label: `${rowIndex + 1}`,
+      x: offsetX,
+      y,
+    };
+
+    const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
+      id: `seat-${crypto.randomUUID()}`,
+      x: offsetX + c * SEAT_SPACING_X + SEAT_RADIUS,
+      y,
+      radius: SEAT_RADIUS,
+      fill: "#22C55E",
+      label: `${c + 1}`,
+      category: "standard",
+      status: "available",
+      zoneId,
+      rowId,
+      colIndex: c + 1,
+    }));
+
+    return { row, seats: newSeats };
   };
-
-  const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
-    id: `seat-${crypto.randomUUID()}`,
-    x: baseX + c * SEAT_SPACING_X + SEAT_RADIUS,
-    y,
-    radius: SEAT_RADIUS,
-    fill: "#22C55E",
-    label: `${c + 1}`,
-    category: "standard",
-    status: "available",
-    zoneId,
-    rowId,
-    colIndex: c + 1,
-  }));
-
-  return { row, seats: newSeats };
-};
-
 
   const handleStageMouseDown = (e: any) => {
     if (currentTool === "select" && e.target === e.target.getStage()) {
       setSelectedIds([]);
     }
     if (currentTool === "add-zone" && e.target === e.target.getStage()) {
-  const stage = e.target.getStage();
-  const pointer = stage.getPointerPosition();
-  if (!pointer) return;
+      const stage = e.target.getStage();
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
 
-  // Преобразуем экранные координаты в координаты канваса (с учётом масштаба и позиции)
-  const transform = stage.getAbsoluteTransform().copy().invert();
-  const realPos = transform.point(pointer);
+      // Преобразуем экранные координаты в координаты канваса (с учётом масштаба и позиции)
+      const transform = stage.getAbsoluteTransform().copy().invert();
+      const realPos = transform.point(pointer);
 
-  // Привязка к сетке
-  const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
-  const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+      // Привязка к сетке
+      const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
 
-  const newZone: Zone = {
-    id: "zone-temp",
-    x: snappedX,
-    y: snappedY,
-    width: 0,
-    height: 0,
-    fill: "#FAFAFA",
-    label: `Zone ${zones.length + 1}`,
-  };
+      const newZone: Zone = {
+        id: "zone-temp",
+        x: snappedX,
+        y: snappedY,
+        width: 0,
+        height: 0,
+        fill: "#FAFAFA",
+        label: `Zone ${zones.length + 1}`,
+      };
 
-  setDrawingZone(newZone);
-}
+      setDrawingZone(newZone);
+    }
   };
 
   const handleStageMouseMove = (e: any) => {
     if (!drawingZone) return;
     const stage = e.target.getStage();
-const pointer = stage.getPointerPosition();
-if (!pointer || !drawingZone) return;
+    const pointer = stage.getPointerPosition();
+    if (!pointer || !drawingZone) return;
 
-// Пересчёт координат с учётом зума и позиции
-const transform = stage.getAbsoluteTransform().copy().invert();
-const realPos = transform.point(pointer);
+    // Пересчёт координат с учётом зума и позиции
+    const transform = stage.getAbsoluteTransform().copy().invert();
+    const realPos = transform.point(pointer);
 
-// Привязка к сетке
-const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
-const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+    // Привязка к сетке
+    const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+    const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
 
-setDrawingZone(prev =>
-  prev ? {
-    ...prev,
-    width: snappedX - prev.x,
-    height: snappedY - prev.y
-  } : null
-);
+    setDrawingZone((prev) =>
+      prev
+        ? {
+            ...prev,
+            width: snappedX - prev.x,
+            height: snappedY - prev.y,
+          }
+        : null
+    );
   };
 
   const handleStageMouseUp = () => {
     if (!drawingZone) return;
-    
+
     const startX = drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
     const startY = drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
     const width = Math.abs(drawingZone.width);
@@ -182,43 +188,47 @@ setDrawingZone(prev =>
     const rowsCount = Math.max(1, Math.floor(height / SEAT_SPACING_Y));
 
     const newZone: Zone = {
-      id: `zone-${crypto.randomUUID()}`, x: startX, y: startY, width, height,
-      fill: "#FAFAFA", label: `Zone ${zones.length + 1}`,
+      id: `zone-${crypto.randomUUID()}`,
+      x: startX,
+      y: startY,
+      width,
+      height,
+      fill: "#FAFAFA",
+      label: `Zone ${zones.length + 1}`,
+      rotation: 0, // ← добавить
     };
-
 
     const offsetX = (width - cols * SEAT_SPACING_X) / 2;
     const offsetY = (height - rowsCount * SEAT_SPACING_Y) / 2;
 
-  const allNewRows: Row[] = [];
-const allNewSeats: Seat[] = [];
+    const allNewRows: Row[] = [];
+    const allNewSeats: Seat[] = [];
 
-for (let r = 0; r < rowsCount; r++) {
-  const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
-  allNewRows.push(row);
-  allNewSeats.push(...rowSeats);
-}
+    for (let r = 0; r < rowsCount; r++) {
+      const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
+      allNewRows.push(row);
+      allNewSeats.push(...rowSeats);
+    }
 
-setState(prevState => ({
-  ...prevState,
-  zones: [...prevState.zones, newZone],
-  rows: [...prevState.rows, ...allNewRows],
-  seats: [...prevState.seats, ...allNewSeats],
-}));
-
-
+    setState((prevState) => ({
+      ...prevState,
+      zones: [...prevState.zones, newZone],
+      rows: [...prevState.rows, ...allNewRows],
+      seats: [...prevState.seats, ...allNewSeats],
+    }));
 
     setDrawingZone(null);
   };
-  
+
   const handleElementClick = (id: string, e: any) => {
     e.cancelBubble = true;
     if (e.evt.shiftKey) {
-      setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+      setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
     } else {
       setSelectedIds([id]);
     }
   };
+  const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
 
   return (
     <div className="rounded-[16px] border border-[#e5e5e5]">
@@ -242,10 +252,14 @@ setState(prevState => ({
               zone={zone}
               seats={seats}
               rows={rows}
+              isSelected={selectedIds.includes(zone.id)}
+              onClick={(e: any) => handleElementClick(zone.id, e)}
+              setGroupRef={(node) => {
+                zoneRefs.current[zone.id] = node;
+              }}
               selectedIds={selectedIds}
               currentTool={currentTool}
               hoveredZoneId={hoveredZoneId}
-              
               setState={setState}
               setSelectedIds={setSelectedIds}
               setHoveredZoneId={setHoveredZoneId}
@@ -253,16 +267,44 @@ setState(prevState => ({
               isViewerMode={false}
             />
           ))}
-          <DrawingZone drawingZone={drawingZone} seatSpacingX={SEAT_SPACING_X} seatSpacingY={SEAT_SPACING_Y} />
+          {/* Transformer: активен только при инструменте rotate и одной выбранной зоне */}
+          {currentTool === "rotate" &&
+            selectedIds.length === 1 &&
+            (() => {
+              const selectedId = selectedIds[0];
+              const node = zoneRefs.current[selectedId];
+              if (!node) return null;
+
+              return (
+                <Transformer
+                  nodes={[node]}
+                  rotateEnabled={true}
+                  enabledAnchors={[]} // убираем масштабирование — только вращение
+                  onTransformEnd={() => {
+                    const rotation = node.rotation();
+                    setState((prev) => ({
+                      ...prev,
+                      zones: prev.zones.map((z) => (z.id === selectedId ? { ...z, rotation } : z)),
+                    }));
+                  }}
+                />
+              );
+            })()}
+
+          <DrawingZone
+            drawingZone={drawingZone}
+            seatSpacingX={SEAT_SPACING_X}
+            seatSpacingY={SEAT_SPACING_Y}
+          />
         </Layer>
-       <GridLayer 
-  width={CANVAS_WIDTH} 
-  height={CANVAS_HEIGHT} 
-  gridSize={GRID_SIZE} 
-  showGrid={showGrid} 
-  scale={scale} 
-  stagePos={stagePos} 
-/>
+        <GridLayer
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          gridSize={GRID_SIZE}
+          showGrid={showGrid}
+          scale={scale}
+          stagePos={stagePos}
+        />
       </Stage>
       <ZoomControls scale={scale} setScale={handleSetScale} />
     </div>

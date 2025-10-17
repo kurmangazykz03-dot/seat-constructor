@@ -17,11 +17,13 @@ export interface Seat {
 	radius: number;
 	 fill?: string; // <-- вот это нужно!
 	label: string;
-	category: "standard" | "vip";
-	status: "available" | "occupied" | "disabled";
 	zoneId: string | null;
 	rowId: string | null;   // ✅ сиденье может быть в ряду или без
 	colIndex: number | null; // ✅ порядковый номер в ряду или null
+	  status?: 'available' | 'occupied' | 'disabled';
+  category?: string;
+
+
 }
 
 
@@ -34,4 +36,6 @@ export interface Zone {
 	fill: string;
 	label: string;
 	color?: string;
+	  rotation?: number;
+
 }

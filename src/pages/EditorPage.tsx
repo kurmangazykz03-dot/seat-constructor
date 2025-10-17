@@ -11,8 +11,12 @@ import { useHistory } from "../hooks/useHistory";
 
 import { Row, Seat, Zone } from "../types/types";
 
+const LS_KEY = "seatmap_schema";
+
 // ------------------ Тип для всего состояния схемы ------------------
 export interface SeatmapState {
+  hallName: string;
+  backgroundImage?: string | null;
   zones: Zone[];
   rows: Row[];
   seats: Seat[];
@@ -25,6 +29,8 @@ export interface SeatmapState {
 
 // ------------------ Начальное (пустое) состояние ------------------
 const INITIAL_STATE: SeatmapState = {
+  hallName: "Зал 1",
+  backgroundImage: null,
   zones: [],
   rows: [],
   seats: [],
@@ -54,17 +60,20 @@ function EditorPage() {
   // Эти состояния не требуют истории (undo/redo) и не сохраняются в JSON.
   // Они отвечают только за интерфейс в текущий момент времени.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [currentTool, setCurrentTool] = useState<"select" | "add-seat" | "add-row" | "add-zone">(
-    "select"
-  );
+const [currentTool, setCurrentTool] = useState<
+  "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
+>("select");
+
+
 
   // ======================= ФУНКЦИИ-ОБРАБОТЧИКИ ДЛЯ TOPBAR =======================
 
   // 💾 Сохранение текущего состояния в localStorage браузера
   const handleSave = () => {
     try {
-      localStorage.setItem("seatmap_schema", JSON.stringify(state));
-      alert("Схема успешно сохранена в локальное хранилище!");
+      const json = exportToV2(state);
+      localStorage.setItem(LS_KEY, JSON.stringify(json));
+      alert("Схема (v2) сохранена в localStorage!");
     } catch (error) {
       console.error("Ошибка при сохранении:", error);
       alert("Не удалось сохранить схему.");
@@ -74,22 +83,13 @@ function EditorPage() {
   // 📥 Загрузка состояния из localStorage
   const handleLoad = () => {
     try {
-      const savedStateJSON = localStorage.getItem("seatmap_schema");
-      if (savedStateJSON) {
-        const parsedState: SeatmapState = JSON.parse(savedStateJSON);
-
-        // ✅ Важно: сохраняем позицию stage
-        setState((prev) => ({
-          ...parsedState,
-          stage: {
-            ...parsedState.stage, // <-- не теряем x/y/scale
-          },
-        }));
-
-        alert("Схема загружена!");
-      } else {
-        alert("Сохраненная схема не найдена.");
-      }
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return alert("Сохраненная схема не найдена.");
+      const data = JSON.parse(raw);
+      const prevStage = state.stage; // сохраняем текущие pan/zoom UI
+      const imported = importFromV2(data);
+      setState(() => ({ ...imported, stage: prevStage }));
+      alert("Схема (v2) загружена!");
     } catch (error) {
       console.error("Ошибка при загрузке:", error);
       alert("Не удалось загрузить схему. Данные могут быть повреждены.");
@@ -103,49 +103,127 @@ function EditorPage() {
         "Вы уверены, что хотите полностью очистить сцену? Это действие нельзя будет отменить."
       )
     ) {
-      clear(); // Используем `clear` из хука useHistory
+      setState(() => ({
+        hallName: "Зал 1",
+        backgroundImage: null,
+        zones: [],
+        rows: [],
+        seats: [],
+        stage: { scale: 1, x: 0, y: 0 },
+      }));
     }
   };
+  function importFromV2(json: any): SeatmapState {
+    const zones: Zone[] = (json.zones || []).map((z: any) => ({
+      id: String(z.id),
+      x: Number(z.x ?? 0),
+      y: Number(z.y ?? 0),
+      width: Number(z.width ?? 200),
+      height: Number(z.height ?? 120),
+      fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+      label: String(z.name ?? z.label ?? ""),
+      color: z.color ?? undefined,
+      rotation: Number(z.rotation ?? 0),
+    }));
 
-  // ექსპორტი Экспорт схемы в JSON-файл
-  const handleExport = () => {
-    // Формируем красивую вложенную структуру для экспорта, как вы и просили
-    const exportData = {
-      version: 1,
-      hallName: "Экспортированный зал",
-      zones: state.zones.map((zone) => ({
+    const rows: Row[] = [];
+    const seats: Seat[] = [];
+
+    (json.zones || []).forEach((z: any) => {
+      (z.rows || []).forEach((r: any, rIdx: number) => {
+        const rowId = String(r.id);
+        rows.push({
+          id: rowId,
+          zoneId: String(z.id),
+          index: Number(rIdx),
+          label: String(r.label ?? ""),
+          x: Number(r.x ?? 0),
+          y: Number(r.y ?? 0),
+        });
+        (r.seats || []).forEach((s: any, cIdx: number) => {
+          seats.push({
+            id: String(s.id),
+            x: Number(s.x ?? 0),
+            y: Number(s.y ?? 0),
+            radius: Number(s.radius ?? 12),
+            fill: String(s.fill ?? "#1f2937"),
+            label: String(s.label ?? ""),
+            zoneId: String(z.id),
+            rowId: rowId,
+            colIndex: Number(cIdx),
+            status: (s.status as any) ?? "available",
+            category: s.category ?? "standard",
+          });
+        });
+      });
+    });
+
+    return {
+      hallName: String(json.hallName ?? "Зал 1"),
+      backgroundImage: json.backgroundImage ?? null,
+      zones,
+      rows,
+      seats,
+      // stage — это UI, в JSON его не храним
+      stage: { scale: 1, x: 0, y: 0 },
+    };
+  }
+
+  function exportToV2(s: SeatmapState) {
+    return {
+      version: 2,
+      hallName: s.hallName,
+      backgroundImage: s.backgroundImage ?? null,
+      zones: s.zones.map((zone) => ({
         id: zone.id,
         name: zone.label,
-        ...zone, // Добавляем остальные свойства зоны (x, y, width, etc.)
-        rows: state.rows
+        color: zone.color ?? zone.fill,
+        rotation: zone.rotation ?? 0,
+        x: zone.x,
+        y: zone.y,
+        width: zone.width,
+        height: zone.height,
+        rows: s.rows
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
             id: row.id,
             label: row.label,
-            ...row, // Добавляем остальные свойства ряда
-            seats: state.seats
+            x: row.x,
+            y: row.y,
+            seats: s.seats
               .filter((seat) => seat.rowId === row.id)
+              .sort((a, b) => (a.colIndex ?? 0) - (b.colIndex ?? 0))
               .map((seat) => ({
                 id: seat.id,
                 label: seat.label,
-                ...seat, // Добавляем остальные свойства места
+                x: seat.x,
+                y: seat.y,
+                fill: seat.fill, // ✅ сохраняем цвет
+                radius: seat.radius, // (опционально) сохраняем радиус
+                status: seat.status ?? "available",
+                category: seat.category ?? "standard",
               })),
           })),
       })),
     };
+  }
 
-    const jsonString = JSON.stringify(exportData, null, 2); // `null, 2` для красивого форматирования
+  // ექსპორტი Экспорт схемы в JSON-файл
+  const handleExport = () => {
+    const exportData = exportToV2(state);
+    const jsonString = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
     link.href = url;
-    link.download = "seatmap-schema.json";
+    link.download = "seatmap_v2.json";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url); // Очищаем память
+    URL.revokeObjectURL(url);
   };
+
   const handleDelete = () => {
     if (selectedIds.length === 0) return;
 

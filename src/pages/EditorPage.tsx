@@ -10,6 +10,7 @@ import TopBar from "../components/editor/TopBar";
 import { useHistory } from "../hooks/useHistory";
 
 import { Row, Seat, Zone } from "../types/types";
+import { alignRows, alignSeats, distributeRows } from '../utils/seatmapCommands';
 
 const LS_KEY = "seatmap_schema";
 
@@ -241,109 +242,30 @@ const [currentTool, setCurrentTool] = useState<
   };
 
 
-// внутренний отступ от краёв секции (можно 0)
 type AlignDirection = 'left' | 'center' | 'right';
 
-// внутренний отступ от краёв секции (можно 0)
-const ALIGN_PADDING = 0;
-
-const handleAlign = (direction: AlignDirection) => {
+const handleAlign = (dir: AlignDirection) => {
   if (selectedIds.length === 0) return;
 
-  setState(prev => {
-    // 1) Собираем набор зон/рядов для выравнивания (приоритет как в seatmap.pro)
-    const selectedZones = prev.zones.filter(z => selectedIds.includes(z.id));
-    const selectedRows  = prev.rows.filter(r => selectedIds.includes(r.id));
-    const selectedSeats = prev.seats.filter(s => selectedIds.includes(s.id));
+  // проверяем состав выделения
+  const hasZones = state.zones.some(z => selectedIds.includes(z.id));
+  const hasRows  = state.rows.some(r => selectedIds.includes(r.id));
+  const selectedSeats = state.seats.filter(s => selectedIds.includes(s.id));
+  const hasSeats = selectedSeats.length > 0;
 
-    // Если выбрана хотя бы одна зона — выравниваем ВСЕ её ряды
-    let rowsByZone = new Map<string, Row[]>();
+  // если выбраны ряды ИЛИ зоны — работаем как alignRows
+  if (hasRows || hasZones) {
+    setState(prev => alignRows(prev, selectedIds, dir));
+    return;
+  }
 
-    if (selectedZones.length > 0) {
-      for (const z of selectedZones) {
-        const rowsInZone = prev.rows.filter(r => r.zoneId === z.id);
-        if (rowsInZone.length) rowsByZone.set(z.id, rowsInZone);
-      }
-    } else if (selectedRows.length > 0) {
-      // Если выбраны ряды — выравниваем только их (по своим секциям)
-      for (const r of selectedRows) {
-        const arr = rowsByZone.get(r.zoneId) ?? [];
-        arr.push(r);
-        rowsByZone.set(r.zoneId, arr);
-      }
-    } else if (selectedSeats.length > 0) {
-      // Если выбраны только сиденья — выравниваем РЯДЫ, которым они принадлежат
-      // (как в seatmap.pro, выравнивание — операция уровня ряда)
-      const rowIds = new Set(selectedSeats.map(s => s.rowId).filter(Boolean) as string[]);
-      for (const rowId of rowIds) {
-        const r = prev.rows.find(rr => rr.id === rowId);
-        if (!r) continue;
-        const arr = rowsByZone.get(r.zoneId) ?? [];
-        if (!arr.some(x => x.id === r.id)) arr.push(r);
-        rowsByZone.set(r.zoneId, arr);
-      }
-    } else {
-      // Ничего подходящего не выделено
-      return prev;
-    }
-
-    if (rowsByZone.size === 0) return prev;
-
-    // 2) Готовим новые массивы
-    const nextRows  = [...prev.rows];
-    const nextSeats = [...prev.seats];
-
-    // 3) Для каждой зоны выравниваем её целевые ряды
-    for (const [zoneId, rowsInZone] of rowsByZone) {
-      const zone = prev.zones.find(z => z.id === zoneId);
-      if (!zone) continue;
-
-      // Границы секции (локальная система координат секции)
-      const sectionLeft   = ALIGN_PADDING;
-      const sectionRight  = zone.width - ALIGN_PADDING;
-      const sectionCenter = zone.width / 2;
-
-      for (const row of rowsInZone) {
-        // Берём ВСЕ сиденья ряда
-        const seatsInRow = prev.seats.filter(s => s.rowId === row.id);
-        if (seatsInRow.length === 0) continue;
-
-        // Ширина ряда по сиденьям (локальные координаты секции)
-        const minX = Math.min(...seatsInRow.map(s => s.x));
-        const maxX = Math.max(...seatsInRow.map(s => s.x));
-        const centerX = (minX + maxX) / 2;
-
-        // Куда «поставить» ряд внутри секции
-        let dx = 0;
-        if (direction === 'left') {
-          dx = sectionLeft - minX;
-        } else if (direction === 'right') {
-          dx = sectionRight - maxX;
-        } else {
-          // center: совмещаем центр ряда с центром секции
-          dx = sectionCenter - centerX;
-        }
-
-        if (dx === 0) continue;
-
-        // Двигаем именно РЯД (как блок), а не отдельные стулья к одному X:
-        // — сдвигаем row.x
-        const rowIdx = nextRows.findIndex(r => r.id === row.id);
-        if (rowIdx >= 0) {
-          nextRows[rowIdx] = { ...nextRows[rowIdx], x: nextRows[rowIdx].x + dx };
-        }
-
-        // — сдвигаем все кресла ряда на тот же dx, чтобы сохранить геометрию ряда
-        for (const s of seatsInRow) {
-          const si = nextSeats.findIndex(ss => ss.id === s.id);
-          if (si >= 0) nextSeats[si] = { ...nextSeats[si], x: nextSeats[si].x + dx };
-        }
-      }
-    }
-
-    return { ...prev, rows: nextRows, seats: nextSeats };
-  });
+  // если только сиденья — выровнять сами сиденья
+  if (hasSeats) {
+    setState(prev => alignSeats(prev, selectedIds, dir));
+    return;
+  }
 };
+
 
   // ======================= РЕНДЕР КОМПОНЕНТА =======================
   return (
@@ -360,12 +282,15 @@ const handleAlign = (direction: AlignDirection) => {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <Toolbar
-          currentTool={currentTool}
-          setCurrentTool={setCurrentTool}
-          onDelete={handleDelete}
-          onAlign={handleAlign}
-        />
+   <Toolbar
+  currentTool={currentTool}
+  setCurrentTool={setCurrentTool}
+  onDelete={handleDelete}
+  onAlign={handleAlign}
+/>
+
+
+
 
         <main className="flex-1 bg-gray-50 p-4">
           <SeatmapCanvas

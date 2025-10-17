@@ -2,16 +2,18 @@ import React from "react";
 
 type AlignDirection = 'left' | 'center' | 'right';
 
+
+
 interface ToolbarProps {
   currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate";
   setCurrentTool: (t: ToolbarProps["currentTool"]) => void;
   onDelete: () => void;
-  onAlign?: (dir: AlignDirection) => void;
+  onAlign: (dir: AlignDirection) => void;  // ← один обработчик
 }
 
-
-
-function Toolbar({ currentTool, setCurrentTool, onDelete,onAlign }: ToolbarProps) {
+function Toolbar({
+  currentTool, setCurrentTool, onDelete, onAlign,
+}: ToolbarProps) {
   return (
     <div className="w-[80px] bg-white border-r border-[#E5E5E5]  flex flex-col items-center py-4 px-4 gap-4 shadow-sm">
       <div className="flex flex-col gap-4 items-center ">
@@ -105,56 +107,19 @@ function Toolbar({ currentTool, setCurrentTool, onDelete,onAlign }: ToolbarProps
   </button>
   <span className="text-xs">Rotate</span>
 </div>
-{/* Align Left */}
-<div className="flex flex-col items-center gap-1">
-  <button
-    className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-    onClick={() => onAlign?.('left')}
-    title="Align left"
-  >
-    <div className="flex items-center justify-center">
-      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-        <path d="M3 4v16M6 7h12v3H6zM6 14h8v3H6z" stroke="currentColor" strokeWidth="2"/>
-      </svg>
-    </div>
-  </button>
-  <span className="text-xs">Left</span>
-</div>
-
-{/* Align Center */}
-<div className="flex flex-col items-center gap-1">
-  <button
-    className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-    onClick={() => onAlign?.('center')}
-    title="Align center"
-  >
-    <div className="flex items-center justify-center">
-      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-        <path d="M12 4v16M5 7h14v3H5zM7 14h10v3H7z" stroke="currentColor" strokeWidth="2"/>
-      </svg>
-    </div>
-  </button>
-  <span className="text-xs">Center</span>
-</div>
-
-{/* Align Right */}
-<div className="flex flex-col items-center gap-1">
-  <button
-    className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-    onClick={() => onAlign?.('right')}
-    title="Align right"
-  >
-    <div className="flex items-center justify-center">
-      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-        <path d="M21 4v16M6 7h12v3H6zM10 14h8v3h-8z" stroke="currentColor" strokeWidth="2"/>
-      </svg>
-    </div>
-  </button>
-  <span className="text-xs">Right</span>
-</div>
-
-
-
+  {/* Единственный блок Align */}
+      <div className="flex flex-col items-center gap-1">
+        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+                onClick={() => onAlign('left')}
+                title="Align left">L</button>
+        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+                onClick={() => onAlign('center')}
+                title="Align center">C</button>
+        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+                onClick={() => onAlign('right')}
+                title="Align right">R</button>
+        <span className="text-[10px] mt-1 opacity-70">Align</span>
+      </div>
       </div>
     </div>
   );

@@ -230,6 +230,8 @@ function SeatmapCanvas({
   };
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
 
+ 
+
   return (
     <div className="rounded-[16px] border border-[#e5e5e5]">
       <Stage

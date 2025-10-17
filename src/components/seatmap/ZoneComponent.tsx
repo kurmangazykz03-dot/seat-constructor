@@ -22,6 +22,7 @@ interface ZoneComponentProps {
   handleElementClick: (id: string, e: any) => void;
   setGroupRef?: (node: Konva.Group | null) => void;
   isViewerMode?: boolean;
+  isSelected?: boolean;
 }
 
 

@@ -37,22 +37,26 @@ const RowComponent: React.FC<RowComponentProps> = ({
   const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.y)) : row.y + seatRadius;
 
   // Обработчик перетаскивания отдельного места
-  const handleSeatDragEnd = (e: any, seat: Seat) => {
-    const newX = e.target.x() + row.x;
-    const newY = e.target.y() + row.y;
+ // RowComponent.tsx
+const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
+  // seatAfterDrag.x / y — уже локальные для зоны координаты (НЕ надо добавлять row.x/y)
+  const newX = seatAfterDrag.x;
+  const newY = seatAfterDrag.y;
 
-    const rowTop = row.y - seatSpacingY / 2;
-    const rowBottom = row.y + seatSpacingY / 2;
+  // границы текущего ряда (локальные для зоны)
+  const rowTop = row.y - seatSpacingY / 2;
+  const rowBottom = row.y + seatSpacingY / 2;
 
-    const newRowId = newY < rowTop || newY > rowBottom ? null : row.id;
+  const newRowId = newY < rowTop || newY > rowBottom ? null : row.id;
 
-    setState(prev => ({
-      ...prev,
-      seats: prev.seats.map(s =>
-        s.id === seat.id ? { ...s, x: newX, y: newY, rowId: newRowId } : s
-      )
-    }));
-  };
+  setState(prev => ({
+    ...prev,
+    seats: prev.seats.map(s =>
+      s.id === seatAfterDrag.id ? { ...s, x: newX, y: newY, rowId: newRowId } : s
+    ),
+  }));
+};
+
 
   // Перетаскивание ряда целиком (движение всех выбранных)
   const handleRowDragMove = (e: any) => {

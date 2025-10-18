@@ -6,8 +6,8 @@ export type AlignDirection = 'left' | 'center' | 'right';
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 const SNAP_Y_THRESHOLD = 14; // для автопривязки сиденья к ряду по Y
-const ALIGN_SOFT_MAX_STEP = 20; // px — максимум, на который можно сдвинуться за одно выравнивание
-const ALIGN_SNAP_EPS     = 6;   // px — если ближе этого порога к цели, то дотягиваем точно
+const ALIGN_SOFT_MAX_STEP = 12; // px — максимум, на который можно сдвинуться за одно выравнивание
+const ALIGN_SNAP_EPS     = 5;   // px — если ближе этого порога к цели, то дотягиваем точно
 
 // ===== helpers =====
 function rowExtents(state: SeatmapState, rowId: string) {
@@ -116,14 +116,29 @@ export function alignRows(state: SeatmapState, selectedIds: string[], dir: Align
 }
 
 /** ВЫРАВНИВАНИЕ СИДЕНИЙ — по своему ряду. Сиденья без rowId — автопривязка к ближайшему ряду по Y (порог SNAP_Y_THRESHOLD). */
-export function alignSeats(state: SeatmapState, selectedIds: string[], dir: AlignDirection): SeatmapState {
+// src/utils/seatmapCommands.ts
+/** ВЫРАВНИВАНИЕ СИДЕНИЙ — по своему ряду.
+ *  - Все выбранные сиденья жёстко привязываем по Y к ближайшему ряду (rowId, y=row.y).
+ *  - По X:
+ *      * dir==='center' — жёстко ставим группу в центр (без «подползания»).
+ *      * dir==='left'|'right' — мягкий шаг (невелик за одно нажатие), со снапом когда уже почти у цели.
+ *  - «Первое сиденье» не уезжает левее текущего левого края ряда (стабильность).
+ *  - После сдвига перенумеровываем colIndex в затронутых рядах.
+ */
+export function alignSeats(
+  state: SeatmapState,
+  selectedIds: string[],
+  dir: AlignDirection
+): SeatmapState {
   const selected = state.seats.filter(s => selectedIds.includes(s.id));
   if (selected.length === 0) return state;
 
-  const plan = new Map<string, number>();
+  const planX   = new Map<string, number>();
+  const planY   = new Map<string, number>();
+  const planRow = new Map<string, string>(); // seatId -> rowId
   const touchedRowIds = new Set<string>();
 
-  // сгруппировать выбранные по зоне
+  // 0) сгруппировать выбранные по зоне
   const byZone = new Map<string, Seat[]>();
   for (const s of selected) {
     const arr = byZone.get(s.zoneId) ?? [];
@@ -136,103 +151,110 @@ export function alignSeats(state: SeatmapState, selectedIds: string[], dir: Alig
     if (!zone) continue;
 
     const zoneRows = state.rows.filter(r => r.zoneId === zoneId);
+    if (zoneRows.length === 0) continue;
 
-    // автопривязка без rowId
-    const autoAttached: Record<string,string> = {}; // seatId -> rowId
+    // 1) ЖЁСТКАЯ привязка всех выбранных к ближайшему ряду по Y
     for (const s of seatsInZoneSelected) {
-      if (s.rowId) continue;
-      const { row: closest, dy } = findClosestRow(zoneRows, s.y);
-      if (closest && dy <= SNAP_Y_THRESHOLD) {
-        autoAttached[s.id] = closest.id;
-        touchedRowIds.add(closest.id);
+      let best: Row = zoneRows[0];
+      let bestDy = Math.abs(s.y - best.y);
+      for (let i = 1; i < zoneRows.length; i++) {
+        const cand = zoneRows[i];
+        const d = Math.abs(s.y - cand.y);
+        if (d < bestDy) { best = cand; bestDy = d; }
       }
+      planRow.set(s.id, best.id);
+      planY.set(s.id, best.y);
+      touchedRowIds.add(best.id);
     }
 
-    // группы по rowId
+    // 2) Группы по результирующему rowId
     const groups = new Map<string, Seat[]>();
     for (const s of seatsInZoneSelected) {
-      const rowId = s.rowId ?? autoAttached[s.id] ?? null;
-      const key = rowId ?? '__no-row__';
-      const arr = groups.get(key) ?? [];
+      const rowId = planRow.get(s.id) ?? s.rowId;
+      if (!rowId) continue;
+      const arr = groups.get(rowId) ?? [];
       arr.push(s);
-      groups.set(key, arr);
+      groups.set(rowId, arr);
     }
 
-    for (const [key, group] of groups) {
-      if (key === '__no-row__' || group.length === 0) continue;
-      const rowId = key;
-      const row = state.rows.find(r => r.id === rowId);
-      if (!row) continue;
+    // 3) По каждой группе (внутри ряда) — выравнивание по X
+    for (const [rowId, group] of groups) {
+      // экстенты всего ряда (по всем сиденьям ряда, а не только выбранным)
+      const rowSeatsAll = state.seats.filter(ss => ss.rowId === rowId);
+      const xsAll = rowSeatsAll.length ? rowSeatsAll.map(ss => ss.x) : group.map(ss => ss.x);
+      const rowMin = Math.min(...xsAll);
+      const rowMax = Math.max(...xsAll);
+      const rowCenter = (rowMin + rowMax) / 2;
 
-      const { minX: rowMin, maxX: rowMax, centerX: rowCenter } = rowExtents(state, rowId);
-
-      const xs = group.map(s => s.x);
-      const selMin = Math.min(...xs);
-      const selMax = Math.max(...xs);
+      // экстенты выбранной подгруппы
+      const xsSel = group.map(s => s.x);
+      let selMin = Math.min(...xsSel);
+      const selMax = Math.max(...xsSel);
       const selCenter = (selMin + selMax) / 2;
 
+      // «первое сиденье» не уезжает левее левого края ряда
+      selMin = Math.max(selMin, rowMin);
+
+      // якорь выбранной группы и целевая точка
       const anchor = dir === 'left' ? selMin : dir === 'right' ? selMax : selCenter;
-const target = dir === 'left' ? rowMin : dir === 'right' ? rowMax : rowCenter;
 
-// 1) "мягкий" шаг — двигаемся не дальше cap, но если уже почти дошли — дотягиваем
-const fullDx = target - anchor;
-let dx = fullDx;
-const abs = Math.abs(fullDx);
+      // Центрируем относительно центра ЗОНЫ — стабильная рамка (можно заменить на rowCenter при желании)
+     const target = dir === 'left' ? rowMin : dir === 'right' ? rowMax : rowCenter;
 
-if (abs <= ALIGN_SNAP_EPS) {
-  // почти на месте — дотягиваем до цели
-  dx = fullDx;
-} else if (abs > ALIGN_SOFT_MAX_STEP) {
-  // ограничиваем максимум шага
-  dx = (fullDx / abs) * ALIGN_SOFT_MAX_STEP;
-}
-
-// 2) затем стандартная проверка границ зоны
-const maxRadius = Math.max(...group.map(s => s.radius ?? 0));
-const newMin = selMin + dx;
-const newMax = selMax + dx;
-if (newMin < maxRadius)              dx += (maxRadius - newMin);
-if (newMax > zone.width - maxRadius) dx -= (newMax - (zone.width - maxRadius));
-
-if (dx === 0) continue;
-
-      
-
-      if (dx !== 0) {
-        for (const s of group) {
-          const r = s.radius ?? 0;
-          plan.set(s.id, clamp(s.x + dx, r, zone.width - r));
+      // расчёт dx: центр — жёстко; лев/прав — мягкий шаг со снапом
+      const fullDx = target - anchor;
+      let dx: number;
+      if (dir === 'center') {
+        // Жёсткий снап к центру
+        dx = fullDx;
+      } else {
+        // Мягкое «подползание» к краю
+        const abs = Math.abs(fullDx);
+        const snapEps = ALIGN_SNAP_EPS; // ~5px — если почти дошли, дотягиваем
+        if (abs <= snapEps) {
+          dx = fullDx;
+        } else {
+          // База шага растёт с расстоянием, но ограничена
+          const base = Math.min(10 + abs * 0.18, 32);
+          // Чуть уменьшаем шаг для больших групп
+          const scale = Math.max(0.6, 1 - (group.length - 1) * 0.08);
+          dx = Math.sign(fullDx) * base * scale;
         }
       }
 
-      touchedRowIds.add(rowId);
+      // 4) Границы зоны с учётом радиусов
+      const maxRadius = Math.max(...group.map(s => s.radius ?? 0));
+      const newMin = selMin + dx;
+      const newMax = selMax + dx;
+      let adjust = 0;
+      if (newMin < maxRadius)              adjust += (maxRadius - newMin);
+      if (newMax > zone.width - maxRadius) adjust -= (newMax - (zone.width - maxRadius));
+      dx += adjust;
+
+      if (dx === 0) continue;
+
+      // 5) Записываем план X
+      for (const s of group) {
+        const r = s.radius ?? 0;
+        planX.set(s.id, clamp(s.x + dx, r, zone.width - r));
+      }
     }
   }
 
-  if (plan.size === 0 && touchedRowIds.size === 0) return state;
+  if (planX.size === 0 && planY.size === 0) return state;
 
-  // применяем plan + выставляем Y на row.y, если сиденье в ряду (или автопривязано)
+  // 6) Применяем X и Y, проставляем rowId
   let nextSeats = state.seats.map(s => {
-    if (!plan.has(s.id)) return s;
-
-    const newX = plan.get(s.id)!;
-    // реальный/авто rowId
-    const rowId = s.rowId ?? (() => {
-      const zoneRows = state.rows.filter(r => r.zoneId === s.zoneId);
-      const { row: closest, dy } = findClosestRow(zoneRows, s.y);
-      return closest && dy <= SNAP_Y_THRESHOLD ? closest.id : null;
-    })();
-
-    if (rowId) {
-      const row = state.rows.find(r => r.id === rowId)!;
-      return { ...s, x: newX, y: row.y, rowId };
-    }
-    return { ...s, x: newX };
+    if (!selectedIds.includes(s.id)) return s;
+    const nx = planX.has(s.id) ? planX.get(s.id)! : s.x;
+    const ny = planY.has(s.id) ? planY.get(s.id)! : s.y;
+    const rid = planRow.get(s.id) ?? s.rowId ?? null;
+    return { ...s, x: nx, y: ny, rowId: rid };
   });
 
-  // перенумеровка
+  // 7) Перенумеровка столбцов в затронутых рядах
   for (const rowId of touchedRowIds) {
-    nextSeats = renumberSeatsInRow(nextSeats, rowId, false);
+    nextSeats = renumberSeatsInRow(nextSeats, rowId, /*updateLabel*/ false);
   }
 
   return { ...state, seats: nextSeats };

@@ -1,3 +1,4 @@
+// src/components/editor/RowComponent.tsx
 import React from 'react';
 import { Group, Rect, Text } from 'react-konva';
 import { Row, Seat } from '../../types/types';
@@ -12,10 +13,11 @@ interface RowComponentProps {
   handleElementClick: (id: string, e: any) => void;
   currentTool: string;
   isViewerMode?: boolean;
+
+  // ✅ добавили единый внешний обработчик
+  onSeatDragEnd?: (seatAfterDrag: Seat) => void;
 }
 
-const seatSpacingX = 30;
-const seatSpacingY = 30;
 const seatRadius = 12;
 
 const RowComponent: React.FC<RowComponentProps> = ({
@@ -26,39 +28,16 @@ const RowComponent: React.FC<RowComponentProps> = ({
   handleElementClick,
   currentTool,
   isViewerMode = false,
+  onSeatDragEnd,
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
   const padding = 8;
 
-  // Безопасные min/max если мест нет
   const minX = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.x)) : row.x - seatRadius;
   const maxX = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.x)) : row.x + seatRadius;
   const minY = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.y)) : row.y - seatRadius;
   const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.y)) : row.y + seatRadius;
 
-  // Обработчик перетаскивания отдельного места
- // RowComponent.tsx
-const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
-  // seatAfterDrag.x / y — уже локальные для зоны координаты (НЕ надо добавлять row.x/y)
-  const newX = seatAfterDrag.x;
-  const newY = seatAfterDrag.y;
-
-  // границы текущего ряда (локальные для зоны)
-  const rowTop = row.y - seatSpacingY / 2;
-  const rowBottom = row.y + seatSpacingY / 2;
-
-  const newRowId = newY < rowTop || newY > rowBottom ? null : row.id;
-
-  setState(prev => ({
-    ...prev,
-    seats: prev.seats.map(s =>
-      s.id === seatAfterDrag.id ? { ...s, x: newX, y: newY, rowId: newRowId } : s
-    ),
-  }));
-};
-
-
-  // Перетаскивание ряда целиком (движение всех выбранных)
   const handleRowDragMove = (e: any) => {
     if (!isRowSelected) return;
     const dx = e.target.x() - row.x;
@@ -75,7 +54,6 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
     }));
   };
 
-  // Позиции для фонового rect и метки (локальные координаты внутри Group)
   const localMinX = minX - row.x;
   const localMaxX = maxX - row.x;
   const localMinY = minY - row.y;
@@ -86,31 +64,51 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
   const bboxW = (localMaxX - localMinX) + seatRadius * 2 + padding * 2;
   const bboxH = (localMaxY - localMinY) + seatRadius * 2 + padding * 2;
 
-  // Позиция метки слева, по центру по вертикали
   const labelWidth = Math.max(24, row.label.length * 8 + 12);
   const labelGap = 8;
   const labelX = bboxX - labelWidth - labelGap;
-  const labelY = bboxY + bboxH / 2 - 10; // rect height 20 -> -10 для центрирования
+  const labelY = bboxY + bboxH / 2 - 10;
 
   return (
     <Group
-        key={row.id}
-  x={row.x}
-  y={row.y}
-  draggable={!isViewerMode && isRowSelected && currentTool === "select"}
-  onDragStart={(e) => {
-    e.cancelBubble = true; // 🧠 не даём всплыть в зону
-  }}
-  onDragMove={(e) => {
-    e.cancelBubble = true; // 🧠 блокируем всплытие
-    handleRowDragMove(e);
-  }}
-  onDragEnd={(e) => {
-    e.cancelBubble = true; // 🧠 чтобы зона не получила dragEnd
-    e.target.position({ x: row.x, y: row.y }); // возвращаем визуально назад
-  }}
+      key={row.id}
+      x={row.x}
+      y={row.y}
+      draggable={!isViewerMode && isRowSelected && currentTool === "select"}
+      onDragStart={(e) => { e.cancelBubble = true; }}
+      // src/components/editor/RowComponent.tsx
+
+// ...
+onDragMove={(e) => {
+  e.cancelBubble = true;
+
+  // считаем сдвиг ОДИН раз — на основании текущего положения ноды и текущего row.x/y
+  const dx = e.target.x() - row.x;
+  const dy = e.target.y() - row.y;
+
+  // двигаем реальные данные в стейте
+  setState(prev => ({
+    ...prev,
+    rows: prev.rows.map(r =>
+      selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
+    ),
+    seats: prev.seats.map(s =>
+      selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
+    )
+  }));
+
+  // ❗️сброс визуального положения ноды в ту же точку, что и в стейте,
+  // чтобы Konva не добавлял своё смещение поверх нашего
+  e.target.position({ x: row.x, y: row.y });
+}}
+
+// onDragEnd можно оставить как есть (тоже сбрасывает), либо просто:
+onDragEnd={(e) => {
+  e.cancelBubble = true;
+  e.target.position({ x: row.x, y: row.y });
+}}
+
     >
-      {/* Прозрачный фон — ловит клики по пустой области ряда */}
       <Rect
         x={bboxX}
         y={bboxY}
@@ -128,7 +126,6 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
         }}
       />
 
-      {/* Рисуем рамку выделения поверх фона, но под сиденьями */}
       {isRowSelected && (
         <Rect
           x={bboxX}
@@ -142,7 +139,6 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
         />
       )}
 
-      {/* Метка ряда — теперь кликабельна */}
       <Rect
         x={labelX}
         y={labelY}
@@ -174,7 +170,6 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
         }}
       />
 
-      {/* Сами сиденья — рендерим поверх фоновой зоны */}
       {rowSeats.map(seat => (
         <SeatComponent
           key={seat.id}
@@ -182,7 +177,8 @@ const handleSeatDragEnd = (_e: any, seatAfterDrag: Seat) => {
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={isRowSelected}
           onClick={handleElementClick}
-          onDragEnd={handleSeatDragEnd}
+          // ✅ единый snap: отдаём наружу уже локальные координаты seatAfterDrag
+          onDragEnd={(_e, seatAfterDrag) => onSeatDragEnd?.(seatAfterDrag)}
           offsetX={row.x}
           offsetY={row.y}
           isViewerMode={isViewerMode}

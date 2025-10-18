@@ -244,27 +244,23 @@ const [currentTool, setCurrentTool] = useState<
 
 type AlignDirection = 'left' | 'center' | 'right';
 
+// внутри EditorPage
 const handleAlign = (dir: AlignDirection) => {
   if (selectedIds.length === 0) return;
 
-  // проверяем состав выделения
   const hasZones = state.zones.some(z => selectedIds.includes(z.id));
   const hasRows  = state.rows.some(r => selectedIds.includes(r.id));
-  const selectedSeats = state.seats.filter(s => selectedIds.includes(s.id));
-  const hasSeats = selectedSeats.length > 0;
+  const hasSeats = state.seats.some(s => selectedIds.includes(s.id));
 
-  // если выбраны ряды ИЛИ зоны — работаем как alignRows
-  if (hasRows || hasZones) {
-    setState(prev => alignRows(prev, selectedIds, dir));
-    return;
-  }
-
-  // если только сиденья — выровнять сами сиденья
   if (hasSeats) {
     setState(prev => alignSeats(prev, selectedIds, dir));
     return;
   }
+  if (hasRows || hasZones) {
+    setState(prev => alignRows(prev, selectedIds, dir));
+  }
 };
+
 
 
   // ======================= РЕНДЕР КОМПОНЕНТА =======================

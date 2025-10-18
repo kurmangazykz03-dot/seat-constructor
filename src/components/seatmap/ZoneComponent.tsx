@@ -6,6 +6,8 @@ import RowComponent from './RowComponent';
 import SeatComponent from './SeatComponent';
 import { SeatmapState } from '../../pages/EditorPage';
 import Konva from "konva";
+import { applySeatDrop } from "../../utils/seatSnap";
+
 
 
 
@@ -178,17 +180,7 @@ return;
   };
 
   // Перетаскивание места: e.target.x/y — локальные координаты внутри группы (relative to zone)
-  const handleSeatDragEnd = (e: any, seat: Seat) => {
-  const newX = e.target.x();
-  const newY = e.target.y();
-
-  setState(prev => ({
-    ...prev,
-    seats: prev.seats.map(s =>
-      s.id === seat.id ? { ...s, x: newX, y: newY } : s
-    ),
-  }));
-};
+ 
 
   // Перетаскивание зоны: обновляем только координаты зоны (не трогаем rows/seats!)
   const handleZoneDragEnd = (e: any) => {
@@ -206,6 +198,14 @@ const groupRef = useRef<Konva.Group | null>(null);
 const handleGroupRef = (node: Konva.Group | null) => {
   groupRef.current = node;
   setGroupRef?.(node);
+};
+const onSeatDragEnd = (seatAfterDrag: Seat) => {
+  setState(prev => {
+    const z = prev.zones.find(zz => zz.id === zone.id);
+    if (!z) return prev;
+    // snapThreshold=12, renumberLabels=false
+    return applySeatDrop(prev, z, seatAfterDrag.id, seatAfterDrag.x, seatAfterDrag.y, 12, false);
+  });
 };
   return (
     <Group
@@ -239,7 +239,7 @@ const handleGroupRef = (node: Konva.Group | null) => {
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={false}
           onClick={handleElementClick}
-          onDragEnd={handleSeatDragEnd}
+          onDragEnd={(_e, s) => onSeatDragEnd(s)}
           isViewerMode={isViewerMode}
         />
       ))}
@@ -255,6 +255,7 @@ const handleGroupRef = (node: Konva.Group | null) => {
           handleElementClick={handleElementClick}
           currentTool={currentTool}
           isViewerMode={isViewerMode}
+          onSeatDragEnd={onSeatDragEnd}
         />
       ))}
     </Group>

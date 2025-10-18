@@ -8,8 +8,9 @@ interface ToolbarProps {
   currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate";
   setCurrentTool: (t: ToolbarProps["currentTool"]) => void;
   onDelete: () => void;
-  onAlign: (dir: AlignDirection) => void;  // ← один обработчик
+  onAlign: (dir: AlignDirection) => void; // один аргумент
 }
+
 
 function Toolbar({
   currentTool, setCurrentTool, onDelete, onAlign,
@@ -108,18 +109,23 @@ function Toolbar({
   <span className="text-xs">Rotate</span>
 </div>
   {/* Единственный блок Align */}
-      <div className="flex flex-col items-center gap-1">
-        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-                onClick={() => onAlign('left')}
-                title="Align left">L</button>
-        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-                onClick={() => onAlign('center')}
-                title="Align center">C</button>
-        <button className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
-                onClick={() => onAlign('right')}
-                title="Align right">R</button>
-        <span className="text-[10px] mt-1 opacity-70">Align</span>
-      </div>
+     <button
+  className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+  onClick={(e) => onAlign('left', e.shiftKey || e.altKey)}
+  title="Align left (Shift/Alt – только сиденья)"
+>L</button>
+
+<button
+  className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+  onClick={(e) => onAlign('center', e.shiftKey || e.altKey)}
+  title="Align center (Shift/Alt – только сиденья)"
+>C</button>
+
+<button
+  className="w-12 h-12 rounded-[12px] bg-[#e7e7eb] hover:bg-blue-400"
+  onClick={(e) => onAlign('right', e.shiftKey || e.altKey)}
+  title="Align right (Shift/Alt – только сиденья)"
+>R</button>
       </div>
     </div>
   );

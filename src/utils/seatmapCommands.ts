@@ -1,128 +1,131 @@
+// src/utils/seatmapCommands.ts
+import { SeatmapState } from '../pages/EditorPage';
+import type { Row, Seat } from '../types/types';
 
 export type AlignDirection = 'left' | 'center' | 'right';
 
-
-// — возьми эти типы из твоего общего types-файла, если он уже есть;
-//   либо оставь локально как ниже (минимально достаточные поля):
-type Zone = { id: string; width: number; height: number; x: number; y: number; rotation?: number };
-type Row  = { id: string; zoneId: string; x: number; y: number; label?: string };
-type Seat = { id: string; zoneId: string; rowId: string | null; x: number; y: number; radius?: number };
-
-type State = {
-  zones: Zone[];
-  rows: Row[];
-  seats: Seat[];
-  // остальные поля состояния нам здесь не нужны
-};
-
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const SNAP_Y_THRESHOLD = 14; // для автопривязки сиденья к ряду по Y
+const ALIGN_SOFT_MAX_STEP = 20; // px — максимум, на который можно сдвинуться за одно выравнивание
+const ALIGN_SNAP_EPS     = 6;   // px — если ближе этого порога к цели, то дотягиваем точно
 
-function indexMaps(state: State) {
-  const seatIndex = new Map<string, number>();
-  state.seats.forEach((s, i) => seatIndex.set(s.id, i));
-
-  const rowIndex = new Map<string, number>();
-  state.rows.forEach((r, i) => rowIndex.set(r.id, i));
-
-  return { seatIndex, rowIndex };
+// ===== helpers =====
+function rowExtents(state: SeatmapState, rowId: string) {
+  const seats = state.seats.filter(s => s.rowId === rowId);
+  if (seats.length === 0) {
+    const row = state.rows.find(r => r.id === rowId);
+    const cx = row ? row.x : 0;
+    return { minX: cx - 1, maxX: cx + 1, centerX: cx };
+  }
+  const xs = seats.map(s => s.x);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  return { minX, maxX, centerX: (minX + maxX) / 2 };
 }
 
-/** Align ROWS — выравниваем ряды как блоки внутри своей зоны */
-export function alignRows(state: State, selectedIds: string[], dir: AlignDirection): State {
+function renumberSeatsInRow(seats: Seat[], rowId: string, updateLabel = false): Seat[] {
+  const rowSeats = seats.filter(s => s.rowId === rowId).sort((a, b) => a.x - b.x);
+  return seats.map(s => {
+    if (s.rowId !== rowId) return s;
+    const idx = rowSeats.findIndex(x => x.id === s.id);
+    const colIndex = idx + 1;
+    return { ...s, colIndex, label: updateLabel ? String(colIndex) : s.label };
+  });
+}
+
+function findClosestRow(rowsInZone: Row[], y: number): { row: Row | null; dy: number } {
+  if (!rowsInZone.length) return { row: null, dy: Infinity };
+  let best: Row = rowsInZone[0];
+  let bestDy = Math.abs(y - best.y);
+  for (let i = 1; i < rowsInZone.length; i++) {
+    const cand = rowsInZone[i];
+    const d = Math.abs(y - cand.y);
+    if (d < bestDy) { best = cand; bestDy = d; }
+  }
+  return { row: best, dy: bestDy };
+}
+// ====================
+
+/** ВЫРАВНИВАНИЕ РЯДОВ (и их сидений) внутри своих зон по left/center/right. */
+export function alignRows(state: SeatmapState, selectedIds: string[], dir: AlignDirection): SeatmapState {
   if (selectedIds.length === 0) return state;
 
-  const { seatIndex, rowIndex } = indexMaps(state);
+  // какие ряды трогаем: выбранные ряды, ряды зон, где выбрана зона, либо ряды сидений
+  const selectedZones = state.zones.filter(z => selectedIds.includes(z.id)).map(z => z.id);
+  const selectedRows  = new Set(state.rows.filter(r => selectedIds.includes(r.id)).map(r => r.id));
+  state.seats.forEach(s => {
+    if (selectedIds.includes(s.id) && s.rowId) selectedRows.add(s.rowId);
+  });
+  if (selectedZones.length === 0 && selectedRows.size === 0) return state;
 
-  // Собираем целевые ряды
-  const selectedZones = state.zones.filter(z => selectedIds.includes(z.id));
-  const selectedRows  = state.rows.filter(r => selectedIds.includes(r.id));
-  const selectedSeats = state.seats.filter(s => selectedIds.includes(s.id));
+  const next: SeatmapState = { ...state, rows: [...state.rows], seats: [...state.seats] };
 
+  // сгруппируем ряды по зоне
   const rowsByZone = new Map<string, Row[]>();
-
-  if (selectedZones.length > 0) {
-    for (const z of selectedZones) {
-      const rowsInZone = state.rows.filter(r => r.zoneId === z.id);
-      if (rowsInZone.length) rowsByZone.set(z.id, rowsInZone);
-    }
-  } else if (selectedRows.length > 0) {
-    for (const r of selectedRows) {
+  for (const r of state.rows) {
+    if (selectedZones.includes(r.zoneId) || selectedRows.has(r.id)) {
       const arr = rowsByZone.get(r.zoneId) ?? [];
       arr.push(r);
       rowsByZone.set(r.zoneId, arr);
     }
-  } else if (selectedSeats.length > 0) {
-    const rowIds = new Set(selectedSeats.map(s => s.rowId).filter(Boolean) as string[]);
-    for (const rowId of rowIds) {
-      const r = state.rows.find(rr => rr.id === rowId);
-      if (!r) continue;
-      const arr = rowsByZone.get(r.zoneId) ?? [];
-      if (!arr.some(x => x.id === r.id)) arr.push(r);
-      rowsByZone.set(r.zoneId, arr);
-    }
-  } else {
-    return state;
   }
-
-  if (rowsByZone.size === 0) return state;
-
-  const next = { ...state, rows: [...state.rows], seats: [...state.seats] };
 
   for (const [zoneId, rowsInZone] of rowsByZone) {
     const zone = state.zones.find(z => z.id === zoneId);
     if (!zone) continue;
 
-    const sectionLeft   = 0;
-    const sectionRight  = zone.width;
-    const sectionCenter = zone.width / 2;
-
     for (const row of rowsInZone) {
       const seatsInRow = state.seats.filter(s => s.rowId === row.id);
       if (seatsInRow.length === 0) continue;
 
-      // внутри цикла по rowsInZone
-const minX = Math.min(...seatsInRow.map(s => s.x));
-const maxX = Math.max(...seatsInRow.map(s => s.x));
-const centerX = (minX + maxX) / 2;
+      const xs = seatsInRow.map(s => s.x);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const centerX = (minX + maxX) / 2;
 
-let dx = 0;
-if (dir === 'left')   dx = sectionLeft - minX;
-if (dir === 'right')  dx = sectionRight - maxX;
-if (dir === 'center') dx = sectionCenter - centerX;
+      const sectionLeft   = 0;
+      const sectionRight  = zone.width;
+      const sectionCenter = zone.width / 2;
 
-if (dx === 0) continue;
+      let targetAnchor = centerX;
+      if (dir === 'left')   targetAnchor = minX;
+      if (dir === 'right')  targetAnchor = maxX;
 
-// --- безопасная поправка, чтобы рамка ряда осталась в зоне:
-let safeDx = dx;
-const newMin = minX + dx;
-const newMax = maxX + dx;
-if (newMin < sectionLeft)  safeDx += (sectionLeft - newMin);
-if (newMax > sectionRight) safeDx -= (newMax - sectionRight);
+      const targetRow = dir === 'left' ? sectionLeft : dir === 'right' ? sectionRight : sectionCenter;
+      let dx = targetRow - targetAnchor;
 
-// применяем safeDx вместо dx
-const ri = rowIndex.get(row.id);
-if (ri != null) next.rows[ri] = { ...next.rows[ri], x: next.rows[ri].x + safeDx };
+      // безопасно в границах зоны
+      const newMin = minX + dx;
+      const newMax = maxX + dx;
+      if (newMin < 0)             dx += -newMin;
+      if (newMax > zone.width)    dx -= (newMax - zone.width);
+      if (dx === 0) continue;
 
-for (const s of seatsInRow) {
-  const si = seatIndex.get(s.id);
-  if (si != null) next.seats[si] = { ...next.seats[si], x: next.seats[si].x + safeDx };
-}
-
+      // сдвигаем ряд (коорд. row.x) и все его сиденья по X
+      const ri = next.rows.findIndex(r => r.id === row.id);
+      if (ri >= 0) next.rows[ri] = { ...next.rows[ri], x: next.rows[ri].x + dx };
+      for (let i = 0; i < next.seats.length; i++) {
+        if (next.seats[i].rowId === row.id) {
+          next.seats[i] = { ...next.seats[i], x: next.seats[i].x + dx };
+        }
+      }
     }
   }
 
   return next;
 }
 
-/** Align SEATS — выравниваем ТОЛЬКО выбранные сиденья, не схлопывая их в одну точку */export function alignSeats(state: State, selectedIds: string[], dir: AlignDirection): State {
-  const chosen = state.seats.filter(s => selectedIds.includes(s.id));
-  if (chosen.length < 2) return state;
+/** ВЫРАВНИВАНИЕ СИДЕНИЙ — по своему ряду. Сиденья без rowId — автопривязка к ближайшему ряду по Y (порог SNAP_Y_THRESHOLD). */
+export function alignSeats(state: SeatmapState, selectedIds: string[], dir: AlignDirection): SeatmapState {
+  const selected = state.seats.filter(s => selectedIds.includes(s.id));
+  if (selected.length === 0) return state;
 
   const plan = new Map<string, number>();
+  const touchedRowIds = new Set<string>();
 
-  // 1) группируем выбранные по zoneId
+  // сгруппировать выбранные по зоне
   const byZone = new Map<string, Seat[]>();
-  for (const s of chosen) {
+  for (const s of selected) {
     const arr = byZone.get(s.zoneId) ?? [];
     arr.push(s);
     byZone.set(s.zoneId, arr);
@@ -132,68 +135,111 @@ for (const s of seatsInRow) {
     const zone = state.zones.find(z => z.id === zoneId);
     if (!zone) continue;
 
-    // 2) общий targetX для зоны — по всем выбранным в этой зоне
-    const xs = seatsInZoneSelected.map(s => s.x);
-    const globalMin = Math.min(...xs);
-    const globalMax = Math.max(...xs);
-    const globalCenter = (globalMin + globalMax) / 2;
-    const targetX =
-      dir === 'left'   ? globalMin :
-      dir === 'right'  ? globalMax :
-                         globalCenter;
+    const zoneRows = state.rows.filter(r => r.zoneId === zoneId);
 
-    // 3) внутри зоны — группы по rowId (включая 'no-row')
+    // автопривязка без rowId
+    const autoAttached: Record<string,string> = {}; // seatId -> rowId
+    for (const s of seatsInZoneSelected) {
+      if (s.rowId) continue;
+      const { row: closest, dy } = findClosestRow(zoneRows, s.y);
+      if (closest && dy <= SNAP_Y_THRESHOLD) {
+        autoAttached[s.id] = closest.id;
+        touchedRowIds.add(closest.id);
+      }
+    }
+
+    // группы по rowId
     const groups = new Map<string, Seat[]>();
     for (const s of seatsInZoneSelected) {
-      const key = s.rowId ?? 'no-row';
+      const rowId = s.rowId ?? autoAttached[s.id] ?? null;
+      const key = rowId ?? '__no-row__';
       const arr = groups.get(key) ?? [];
       arr.push(s);
       groups.set(key, arr);
     }
 
-    // 4) для каждой группы считаем якорь и сдвигаем выбранные сиденья к общему targetX
-    for (const [, group] of groups) {
-      if (group.length === 0) continue;
+    for (const [key, group] of groups) {
+      if (key === '__no-row__' || group.length === 0) continue;
+      const rowId = key;
+      const row = state.rows.find(r => r.id === rowId);
+      if (!row) continue;
 
-      const gxs = group.map(s => s.x);
-      const minG = Math.min(...gxs);
-      const maxG = Math.max(...gxs);
-      const centerG = (minG + maxG) / 2;
+      const { minX: rowMin, maxX: rowMax, centerX: rowCenter } = rowExtents(state, rowId);
 
-      // Опорная точка группы (левый/центр/правый край группы)
-      const anchor =
-        dir === 'left'   ? minG :
-        dir === 'right'  ? maxG :
-                           centerG;
+      const xs = group.map(s => s.x);
+      const selMin = Math.min(...xs);
+      const selMax = Math.max(...xs);
+      const selCenter = (selMin + selMax) / 2;
 
-      let dx = targetX - anchor;
+      const anchor = dir === 'left' ? selMin : dir === 'right' ? selMax : selCenter;
+const target = dir === 'left' ? rowMin : dir === 'right' ? rowMax : rowCenter;
 
-      // ограничение по границам секции с учётом радиусов
-      const maxRadius = Math.max(...group.map(s => s.radius ?? 0));
-      const newMin = minG + dx;
-      const newMax = maxG + dx;
-      if (newMin < maxRadius)              dx += (maxRadius - newMin);
-      if (newMax > zone.width - maxRadius) dx -= (newMax - (zone.width - maxRadius));
+// 1) "мягкий" шаг — двигаемся не дальше cap, но если уже почти дошли — дотягиваем
+const fullDx = target - anchor;
+let dx = fullDx;
+const abs = Math.abs(fullDx);
 
-      if (dx === 0) continue;
+if (abs <= ALIGN_SNAP_EPS) {
+  // почти на месте — дотягиваем до цели
+  dx = fullDx;
+} else if (abs > ALIGN_SOFT_MAX_STEP) {
+  // ограничиваем максимум шага
+  dx = (fullDx / abs) * ALIGN_SOFT_MAX_STEP;
+}
 
-      for (const s of group) {
-        const radius = s.radius ?? 0;
-        const low  = radius;
-        const high = zone.width - radius;
-        plan.set(s.id, Math.max(low, Math.min(high, s.x + dx)));
+// 2) затем стандартная проверка границ зоны
+const maxRadius = Math.max(...group.map(s => s.radius ?? 0));
+const newMin = selMin + dx;
+const newMax = selMax + dx;
+if (newMin < maxRadius)              dx += (maxRadius - newMin);
+if (newMax > zone.width - maxRadius) dx -= (newMax - (zone.width - maxRadius));
+
+if (dx === 0) continue;
+
+      
+
+      if (dx !== 0) {
+        for (const s of group) {
+          const r = s.radius ?? 0;
+          plan.set(s.id, clamp(s.x + dx, r, zone.width - r));
+        }
       }
+
+      touchedRowIds.add(rowId);
     }
   }
 
-  if (plan.size === 0) return state;
-  const nextSeats = state.seats.map(s => plan.has(s.id) ? { ...s, x: plan.get(s.id)! } : s);
+  if (plan.size === 0 && touchedRowIds.size === 0) return state;
+
+  // применяем plan + выставляем Y на row.y, если сиденье в ряду (или автопривязано)
+  let nextSeats = state.seats.map(s => {
+    if (!plan.has(s.id)) return s;
+
+    const newX = plan.get(s.id)!;
+    // реальный/авто rowId
+    const rowId = s.rowId ?? (() => {
+      const zoneRows = state.rows.filter(r => r.zoneId === s.zoneId);
+      const { row: closest, dy } = findClosestRow(zoneRows, s.y);
+      return closest && dy <= SNAP_Y_THRESHOLD ? closest.id : null;
+    })();
+
+    if (rowId) {
+      const row = state.rows.find(r => r.id === rowId)!;
+      return { ...s, x: newX, y: row.y, rowId };
+    }
+    return { ...s, x: newX };
+  });
+
+  // перенумеровка
+  for (const rowId of touchedRowIds) {
+    nextSeats = renumberSeatsInRow(nextSeats, rowId, false);
+  }
+
   return { ...state, seats: nextSeats };
 }
 
-/** Distribute ROWS — равномерно распределяем ряды по X между крайними (внутри зоны) */
-export function distributeRows(state: State, selectedIds: string[]): State {
-  // рядов должно быть ≥3
+/** РАВНОМЕРНО РАСПРЕДЕЛИТЬ РЯДЫ по X между крайними (двигает и сиденья ряда). */
+export function distributeRows(state: SeatmapState, selectedIds: string[]): SeatmapState {
   const rowIds = new Set<string>();
   for (const id of selectedIds) {
     const r = state.rows.find(rr => rr.id === id);
@@ -204,9 +250,9 @@ export function distributeRows(state: State, selectedIds: string[]): State {
   const rowsSel = state.rows.filter(r => rowIds.has(r.id));
   if (rowsSel.length < 3) return state;
 
-  const { rowIndex } = indexMaps(state);
-  const next = { ...state, rows: [...state.rows], seats: [...state.seats] };
+  const next: SeatmapState = { ...state, rows: [...state.rows], seats: [...state.seats] };
 
+  // по зонам
   const byZone = new Map<string, Row[]>();
   for (const r of rowsSel) {
     const arr = byZone.get(r.zoneId) ?? [];
@@ -225,8 +271,8 @@ export function distributeRows(state: State, selectedIds: string[]): State {
       const newX = first.x + (span * i) / (sorted.length - 1);
       const dx = newX - r.x;
 
-      const ri = rowIndex.get(r.id);
-      if (ri != null) next.rows[ri] = { ...next.rows[ri], x: newX };
+      const ri = next.rows.findIndex(rr => rr.id === r.id);
+      if (ri >= 0) next.rows[ri] = { ...next.rows[ri], x: newX };
 
       for (let si = 0; si < next.seats.length; si++) {
         if (next.seats[si].rowId === r.id) {

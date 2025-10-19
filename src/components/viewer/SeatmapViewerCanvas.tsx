@@ -1,12 +1,15 @@
-import React, { useRef, useState } from "react";
+// src/components/viewer/SeatmapViewerCanvas.tsx
+import React, { useRef, useState, useMemo } from "react";
 import { Stage, Layer } from "react-konva";
 import ZoneComponent from "../seatmap/ZoneComponent";
 import ZoomControls from "../seatmap/ZoomControls";
 import { SeatmapState } from "../../pages/EditorPage";
+import BackgroundImageLayer from '../seatmap/BackgroundImageLayer'
+
 
 interface ViewerCanvasProps {
   state: SeatmapState;
-  onSeatSelect: (seat: any) => void;
+  onSeatSelect: (seat: any | null) => void;
   selectedSeatId: string | null;
   width: number;
   height: number;
@@ -38,54 +41,73 @@ const SeatmapViewerCanvas: React.FC<ViewerCanvasProps> = ({
     setPosition(newPos);
   };
 
+  // ⚙️ принимаем (id, e?) — Zone/Seat/Row отдают (id, e)
   const handleElementClick = (id: string) => {
-    const seat = state.seats.find((s) => s.id === id);
-    if (seat) onSeatSelect(seat);
+    const seat = state.seats.find((s) => s.id === id) || null;
+    onSeatSelect(seat);
   };
 
+  // Подготавливаем selectedIds: в viewer выделяем только кресло
+  const selectedIds = useMemo(
+    () => (selectedSeatId ? [selectedSeatId] : []),
+    [selectedSeatId]
+  );
+
   return (
-    <div className="rounded-[16px] border border-[#e5e5e5] bg-white">
+    <div className="relative rounded-[16px] border border-[#e5e5e5] bg-white">
       <Stage
-  width={width - 4}
-  height={height - 4}
-  draggable
-  scaleX={scale}
-  scaleY={scale}
-  x={position.x}
-  y={position.y}
-  ref={stageRef}
-  onMouseDown={(e) => {
-    // Если кликнули по пустому месту (не по группе/сиду)
-    const clickedOnEmpty = e.target === e.target.getStage();
-    if (clickedOnEmpty) {
-      onSeatSelect(null); // снимаем выделение
-    }
-  }}
->
-        <Layer>
+        width={width}
+        height={height}
+        draggable
+        scaleX={scale}
+        scaleY={scale}
+        x={position.x}
+        y={position.y}
+        ref={stageRef}
+        onMouseDown={(e) => {
+          // клик по пустому месту снимет выделение
+          const clickedOnEmpty = e.target === e.target.getStage();
+          if (clickedOnEmpty) onSeatSelect(null);
+        }}
+      >
+        {/* Фон (если задали) — РЕНДЕРИМ НИЖЕ ВСЕГО */}
+        {!!state.backgroundImage && (
+          <BackgroundImageLayer
+            dataUrl={state.backgroundImage}
+            canvasW={width}
+            canvasH={height}
+            // «contain» — чтобы влезало целиком и не мешало сетке
+            fit="contain"
+            opacity={0.25}
+          />
+        )}
+
+        {/* Основной слой */}
+        <Layer listening>
           {state.zones.map((zone) => (
             <ZoneComponent
               key={zone.id}
               zone={zone}
               seats={state.seats}
               rows={state.rows}
-              setState={() => {}}
-              selectedIds={selectedSeatId ? [selectedSeatId] : []}
-              setSelectedIds={() => {}}
+              setState={() => { /* viewer readonly */ }}
+              selectedIds={selectedIds}
+              setSelectedIds={() => { /* viewer: noop */ }}
               currentTool="select"
-              handleElementClick={handleElementClick}
+              handleElementClick={(_id: string) => handleElementClick(_id)} // ⚙️
               hoveredZoneId={null}
               setHoveredZoneId={() => {}}
               isViewerMode={true}
+              isSelected={false}
             />
           ))}
         </Layer>
       </Stage>
 
-      {/* Кнопки зума */}
-       <div className="absolute top-[-80px] left-[-100px] z-50">
-    <ZoomControls scale={scale} setScale={handleSetScale} />
-  </div>
+      {/* Кнопки зума — прижмём в правый-низ */}
+      <div className="absolute right-3 bottom-3 z-10">
+        <ZoomControls scale={scale} setScale={handleSetScale} />
+      </div>
     </div>
   );
 };

@@ -1,9 +1,7 @@
-import React from 'react';
-import { Seat, Zone, Row } from "../../types/types";
-import { SeatmapState } from '../../pages/EditorPage';
-
-// Расширенный интерфейс Seat (предполагаем, что в types/types.ts он будет выглядеть так)
-// type Seat = { id: string; rowId?: string; label: string; status: 'available' | 'occupied' | 'disabled'; fill: string; category: 'Standard' | 'VIP' | 'Discount' | string; };
+// src/components/editor/PropertiesPanel.tsx
+import React from "react";
+import type { Seat, Zone, Row } from "../../types/types";
+import type { SeatmapState } from "../../pages/EditorPage";
 
 interface PropertiesPanelProps {
   selectedIds: string[];
@@ -11,107 +9,121 @@ interface PropertiesPanelProps {
   setState: (updater: (prev: SeatmapState) => SeatmapState) => void;
 }
 
-// Утилитарный компонент для Input
-const PropertyInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, className = '', ...props }) => (
+const CATEGORIES = ["Standard", "VIP", "Discount"];
+const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
+const SNAP_Y_THRESHOLD = 12;
+
+const Field: React.FC<{
+  label: string;
+  children: React.ReactNode;
+}> = ({ label, children }) => (
   <div className="mb-2">
-    <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-    <input
-      {...props}
-      className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white focus:ring-blue-500 focus:border-blue-500 transition-colors ${className}`}
-    />
+    <label className="block text-xs font-medium text-gray-700 mb-1">
+      {label}
+    </label>
+    {children}
   </div>
 );
 
-// Утилитарный компонент для Select
-const PropertySelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { label: string }> = ({ label, className = '', children, ...props }) => (
-  <div className="mb-2">
-    <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-    <select
-      {...props}
-      className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white appearance-none focus:ring-blue-500 focus:border-blue-500 transition-colors ${className}`}
-    >
-      {children}
-    </select>
-  </div>
+const TextInput: React.FC<
+  React.InputHTMLAttributes<HTMLInputElement>
+> = (props) => (
+  <input
+    {...props}
+    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""
+      }`}
+  />
 );
 
+const Select: React.FC<
+  React.SelectHTMLAttributes<HTMLSelectElement>
+> = ({ children, ...props }) => (
+  <select
+    {...props}
+    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white appearance-none focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""
+      }`}
+  >
+    {children}
+  </select>
+);
 
-function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps) {
+export default function PropertiesPanel({
+  selectedIds,
+  state,
+  setState,
+}: PropertiesPanelProps) {
   const { seats, rows, zones } = state;
 
-  const CATEGORIES = ["Standard", "VIP", "Discount"];
-  const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
+  const selectedZones = zones.filter((z) => selectedIds.includes(z.id));
+  const selectedRows = rows.filter((r) => selectedIds.includes(r.id));
+  const selectedSeats = seats.filter((s) => selectedIds.includes(s.id));
 
-  // --- Обновление одного сиденья ---
-  const updateSeat = (field: keyof Seat, value: string | number, seatId?: string) => {
-    setState(prev => ({
+  // ---------- helpers ----------
+  const updateZone = (zoneId: string, patch: Partial<Zone>) => {
+    setState((prev) => ({
       ...prev,
-      seats: prev.seats.map(s => {
-        // 1. Обновление по явному seatId
-        if (seatId && s.id === seatId) return { ...s, [field]: value };
-        // 2. Обновление индивидуально выбранных сидений
-        if (!seatId && selectedIds.includes(s.id)) return { ...s, [field]: value };
-        return s;
-      })
+      zones: prev.zones.map((z) => (z.id === zoneId ? { ...z, ...patch } : z)),
     }));
   };
 
-  // --- Групповое обновление всех сидений выбранных рядов (Статус, Цвет или Категория) ---
-  const updateRowSeats = (field: keyof Seat, value: string | number) => {
-    const selectedRowIds = rows.filter(r => selectedIds.includes(r.id)).map(r => r.id);
-    setState(prev => ({
+  const updateRowAndSeats = (
+    rowId: string,
+    patch: Partial<Row> & { x?: number; y?: number }
+  ) => {
+    setState((prev) => {
+      const row = prev.rows.find((r) => r.id === rowId);
+      if (!row) return prev;
+      const dx = patch.x != null ? patch.x - row.x : 0;
+      const dy = patch.y != null ? patch.y - row.y : 0;
+
+      return {
+        ...prev,
+        rows: prev.rows.map((r) =>
+          r.id === rowId ? { ...r, ...patch } : r
+        ),
+        seats: prev.seats.map((s) =>
+          s.rowId === rowId ? { ...s, x: s.x + dx, y: s.y + dy } : s
+        ),
+      };
+    });
+  };
+
+  const updateSeat = (seatId: string, patch: Partial<Seat>) => {
+    setState((prev) => ({
       ...prev,
-      seats: prev.seats.map(s => (s.rowId && selectedRowIds.includes(s.rowId) ? { ...s, [field]: value } : s))
+      seats: prev.seats.map((s) => (s.id === seatId ? { ...s, ...patch } : s)),
     }));
   };
 
-  // --- Обновление ряда ---
-  const updateRow = (field: keyof Row, value: string | number) => {
-    setState(prev => ({
+  const updateAllSeatsOfSelectedRows = (patch: Partial<Seat>) => {
+    const rowIds = new Set(selectedRows.map((r) => r.id));
+    if (rowIds.size === 0) return;
+    setState((prev) => ({
       ...prev,
-      rows: prev.rows.map(r => selectedIds.includes(r.id) ? { ...r, [field]: value } : r)
+      seats: prev.seats.map((s) =>
+        s.rowId && rowIds.has(s.rowId) ? { ...s, ...patch } : s
+      ),
     }));
   };
 
-  // --- Обновление зоны ---
-  const updateZone = (field: keyof Zone, value: string | number) => {
-    setState(prev => ({
-      ...prev,
-      zones: prev.zones.map(z => selectedIds.includes(z.id) ? { ...z, [field]: value } : z)
-    }));
+  // safe clamp degrees for rotation
+  const clampDeg = (v: number) => {
+    let x = Math.round(v);
+    if (x < 0) x = 0;
+    if (x > 359) x = 359;
+    return x;
   };
 
-  // Определяем выбранные объекты
-  const selectedZones = zones.filter(z => selectedIds.includes(z.id));
-  const selectedRows = rows.filter(r => selectedIds.includes(r.id));
-  const selectedIndividualSeats = seats.filter(s => selectedIds.includes(s.id) && !selectedRows.some(r => r.id === s.rowId));
-  {selectedIds.length === 1 && state.zones.some(z => z.id === selectedIds[0]) && (() => {
-  const z = state.zones.find(z => z.id === selectedIds[0])!;
-  return (
-    <div className="mt-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Rotation (°)</label>
-      <input
-        type="number"
-        className="w-full border rounded px-2 py-1"
-        value={Math.round(z.rotation ?? 0)}
-        onChange={e => {
-          const value = Number(e.target.value) || 0;
-          setState(prev => ({
-            ...prev,
-            zones: prev.zones.map(zz => zz.id === z.id ? { ...zz, rotation: value } : zz)
-          }));
-        }}
-      />
-    </div>
-  );
-})()}
-
-
+  // ---------- UI ----------
   if (selectedIds.length === 0) {
     return (
       <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Properties</h2>
-        <p className="text-sm text-gray-500">Select an object in the diagram to edit its properties.</p>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          Properties
+        </h2>
+        <p className="text-sm text-gray-500">
+          Выберите зону, ряд или место, чтобы редактировать свойства.
+        </p>
       </div>
     );
   }
@@ -120,177 +132,298 @@ function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps)
     <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Properties</h2>
 
-      {/* Zones */}
-      {selectedZones.map(zone => (
-        <div key={zone.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-base font-semibold text-blue-700 mb-3">Zone: {zone.label}</h3>
-          
-          <PropertyInput
-            label="Zone Name"
-            type="text"
-            value={zone.label}
-            onChange={e => updateZone("label", e.target.value)}
-          />
+      {/* --------- ZONES --------- */}
+      {selectedZones.map((zone) => (
+        <div
+          key={zone.id}
+          className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+        >
+          <h3 className="text-base font-semibold text-blue-700 mb-3">
+            Zone: {zone.label}
+          </h3>
+
+          <Field label="Zone Label">
+            <TextInput
+              type="text"
+              value={zone.label}
+              onChange={(e) => updateZone(zone.id, { label: e.target.value })}
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="X">
+              <TextInput
+                type="number"
+                value={Math.round(zone.x)}
+                onChange={(e) => updateZone(zone.id, { x: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Y">
+              <TextInput
+                type="number"
+                value={Math.round(zone.y)}
+                onChange={(e) => updateZone(zone.id, { y: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Width">
+              <TextInput
+                type="number"
+                value={Math.round(zone.width)}
+                onChange={(e) => updateZone(zone.id, { width: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Height">
+              <TextInput
+                type="number"
+                value={Math.round(zone.height)}
+                onChange={(e) => updateZone(zone.id, { height: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+
+          <Field label="Rotation (° 0–359)">
+            <TextInput
+              type="number"
+              value={Math.round(zone.rotation ?? 0)}
+              onChange={(e) =>
+                updateZone(zone.id, { rotation: clampDeg(Number(e.target.value) || 0) })
+              }
+            />
+          </Field>
+
+          <Field label="Color">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={zone.color ?? zone.fill ?? "#ffffff"}
+                onChange={(e) => updateZone(zone.id, { color: e.target.value, fill: e.target.value })}
+                className="w-10 h-10 rounded-lg border"
+              />
+              <div className="flex gap-2">
+                {COLOR_OPTIONS.map((c) => (
+                  <button
+                    key={c}
+                    className={`w-6 h-6 rounded-full border ${c === (zone.color ?? zone.fill) ? "ring-2 ring-blue-500" : ""
+                      }`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => updateZone(zone.id, { color: c, fill: c })}
+                    title={c}
+                  />
+                ))}
+              </div>
+            </div>
+          </Field>
         </div>
       ))}
 
-      {/* Rows */}
-      {selectedRows.map(row => {
-        const rowSeats = seats.filter(seat => seat.rowId === row.id);
+      {/* --------- ROWS --------- */}
+      {selectedRows.map((row) => {
+        const rowSeats = seats.filter((s) => s.rowId === row.id);
 
         return (
-          <div key={row.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-            <h3 className="text-base font-semibold text-green-700 mb-3">Row: {row.label}</h3>
-            
-            <PropertyInput
-              label="Label"
-              type="text"
-              value={row.label}
-              onChange={e => updateRow("label", e.target.value)}
-            />
+          <div
+            key={row.id}
+            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+          >
+            <h3 className="text-base font-semibold text-green-700 mb-3">
+              Row: {row.label}
+            </h3>
 
-           
+            <Field label="Row Label">
+              <TextInput
+                type="text"
+                value={row.label}
+                onChange={(e) =>
+                  setState((prev) => ({
+                    ...prev,
+                    rows: prev.rows.map((r) =>
+                      r.id === row.id ? { ...r, label: e.target.value } : r
+                    ),
+                  }))
+                }
+              />
+            </Field>
 
-            {/* Seats in row */}
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="X">
+                <TextInput
+                  type="number"
+                  value={Math.round(row.x)}
+                  onChange={(e) =>
+                    updateRowAndSeats(row.id, { x: Number(e.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Y">
+                <TextInput
+                  type="number"
+                  value={Math.round(row.y)}
+                  onChange={(e) =>
+                    updateRowAndSeats(row.id, { y: Number(e.target.value) })
+                  }
+                />
+              </Field>
+            </div>
+
+            {/* Групповые действия по сиденьям ряда */}
             {rowSeats.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-semibold text-gray-800 mb-3">Seat Management</h4>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">
+                  Apply to all seats in row
+                </h4>
 
-                {/* Group Seat Actions */}
-                <div className="bg-blue-50 p-3 rounded-lg mb-4 flex flex-col gap-3">
-                    <label className="text-sm font-bold text-gray-700">Apply to ALL Seats:</label>
-                    
-                    {/* Group Status */}
-                    <PropertySelect
-                        label="Set Status"
-                        onChange={e => updateRowSeats("status", e.target.value)}
-                        className="!p-1 !text-sm"
-                    >
-                        <option value="">-- Change Status --</option>
-                        <option value="available">Available</option>
-                        <option value="occupied">Occupied</option>
-                        <option value="disabled">Disabled</option>
-                    </PropertySelect>
+                <Field label="Status">
+                  <Select
+                    onChange={(e) =>
+                      updateAllSeatsOfSelectedRows({ status: e.target.value as Seat["status"] })
+                    }
+                  >
+                    <option value="">— Change status —</option>
+                    <option value="available">Available</option>
+                    <option value="occupied">Occupied</option>
+                    <option value="disabled">Disabled</option>
+                  </Select>
+                </Field>
 
-                    {/* Group Category (NEW) */}
-                    <PropertySelect
-                        label="Set Category"
-                        onChange={e => updateRowSeats("category", e.target.value)}
-                        className="!p-1 !text-sm"
-                    >
-                        <option value="">-- Change Category --</option>
-                        {CATEGORIES.map(cat => (
-                           <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                    </PropertySelect>
+                <Field label="Category">
+                  <Select
+                    onChange={(e) =>
+                      updateAllSeatsOfSelectedRows({ category: e.target.value })
+                    }
+                  >
+                    <option value="">— Change category —</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-                    {/* Group Color */}
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Set Color</label>
-                        <div className="flex gap-2">
-                            {COLOR_OPTIONS.map(color => (
-                                <button
-                                    key={color}
-                                    style={{ backgroundColor: color }}
-                                    className="w-8 h-8 rounded-lg shadow-md transition-transform hover:scale-105"
-                                    onClick={() => updateRowSeats("fill", color)}
-                                    title={`Set all seats to ${color}`}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Individual Seat Editing within Row */}
-                <div className="max-h-[200px] overflow-y-auto pr-2">
-                  <h5 className="text-xs font-semibold text-gray-600 mb-2">Individual Seat Status:</h5>
-                  {rowSeats.map(seat => (
-                    <div key={seat.id} className="flex items-center justify-between gap-2 mb-2 p-1 border-b border-gray-100 last:border-b-0">
-                      <span className="w-8 text-sm font-medium text-gray-600">{seat.label}</span>
-                      
-                      {/* Individual Category Select */}
-                      <select
-                        value={seat.category || "Standard"} // Используем Standard по умолчанию, если пусто
-                        onChange={e => updateSeat("category", e.target.value, seat.id)}
-                        className="text-black text-xs border border-gray-300 rounded-md p-1 bg-white"
-                      >
-                         {CATEGORIES.map(cat => (
-                           <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                      
-                      {/* Individual Color Buttons */}
-                      <div className="flex gap-1">
-                        {COLOR_OPTIONS.map(color => (
-                          <button
-                            key={color}
-                            style={{ backgroundColor: color }}
-                            className={`w-5 h-5 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === color ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
-                            onClick={() => updateSeat("fill", color, seat.id)}
-                            title={`Set color to ${color}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <Field label="Color">
+                  <div className="flex gap-2">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        style={{ backgroundColor: c }}
+                        className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition"
+                        onClick={() => updateAllSeatsOfSelectedRows({ fill: c })}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                </Field>
               </div>
             )}
           </div>
         );
       })}
 
-      {/* Individual seats (not part of selected 
-      s) */}
-      {selectedIndividualSeats.map(seat => (
-        <div key={seat.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-base font-semibold text-purple-700 mb-3">Seat: {seat.label} (Selected)</h3>
-          
-          <PropertyInput
-            label="Seat Label"
-            type="text"
-            value={seat.label}
-            onChange={e => updateSeat("label", e.target.value, seat.id)}
-          />
-          
-          {/* Individual Status */}
-          <PropertySelect
-            label="Status"
-            value={seat.status}
-            onChange={e => updateSeat("status", e.target.value, seat.id)}
+      {/* --------- SEATS (индивидуально) --------- */}
+      {selectedSeats.map((seat) => {
+        const row = seat.rowId ? rows.find((r) => r.id === seat.rowId) : undefined;
+        return (
+          <div
+            key={seat.id}
+            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
           >
-            <option value="available">Available</option>
-            <option value="occupied">Occupied</option>
-            <option value="disabled">Disabled</option>
-          </PropertySelect>
+            <h3 className="text-base font-semibold text-purple-700 mb-3">
+              Seat: {seat.label}
+            </h3>
 
-          {/* Individual Category */}
-          <PropertySelect
-            label="Category"
-            value={seat.category || "Standard"}
-            onChange={e => updateSeat("category", e.target.value, seat.id)}
-          >
-            {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </PropertySelect>
-          
-          <div className="flex gap-2 mt-3">
-            <label className="text-xs font-medium text-gray-700">Color:</label>
-            {COLOR_OPTIONS.map(color => (
-              <button
-                key={color}
-                style={{ backgroundColor: color }}
-                className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === color ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
-                onClick={() => updateSeat("fill", color, seat.id)}
-                aria-label='color'
+            <Field label="Seat Label">
+              <TextInput
+                type="text"
+                value={seat.label}
+                onChange={(e) => updateSeat(seat.id, { label: e.target.value })}
               />
-            ))}
+            </Field>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="X">
+                <TextInput
+                  type="number"
+                  value={Math.round(seat.x)}
+                  onChange={(e) => updateSeat(seat.id, { x: Number(e.target.value) })}
+                />
+              </Field>
+
+              <Field label="Y">
+                <TextInput
+                  type="number"
+                  value={Math.round(seat.y)}
+                  onChange={(e) => {
+                    const ny = Number(e.target.value);
+                    // если сиденье «рядовое» — решаем, прилипать к ряду или отлепляться
+                    if (row) {
+                      const dy = Math.abs(ny - row.y);
+                      if (dy <= SNAP_Y_THRESHOLD) {
+                        // держим в ряду
+                        updateSeat(seat.id, { y: row.y });
+                      } else {
+                        // отлипает от ряда
+                        updateSeat(seat.id, { y: ny, rowId: null });
+                      }
+                    } else {
+                      updateSeat(seat.id, { y: ny });
+                    }
+                  }}
+                />
+              </Field>
+            </div>
+
+            <Field label="Status">
+              <Select
+                value={seat.status}
+                onChange={(e) => updateSeat(seat.id, { status: e.target.value as Seat["status"] })}
+              >
+                <option value="available">Available</option>
+                <option value="occupied">Occupied</option>
+                <option value="disabled">Disabled</option>
+              </Select>
+            </Field>
+
+            <Field label="Category">
+              <Select
+                value={seat.category || "Standard"}
+                onChange={(e) => updateSeat(seat.id, { category: e.target.value })}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Color">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={seat.fill}
+                  onChange={(e) => updateSeat(seat.id, { fill: e.target.value })}
+                  className="w-10 h-10 rounded-lg border"
+                />
+                <div className="flex gap-2">
+                  {COLOR_OPTIONS.map((c) => (
+                    <button
+                      key={c}
+                      style={{ backgroundColor: c }}
+                      className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === c ? "ring-2 ring-offset-1 ring-blue-500" : ""
+                        }`}
+                      onClick={() => updateSeat(seat.id, { fill: c })}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              </div>
+            </Field>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
-
-export default PropertiesPanel;

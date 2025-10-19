@@ -1,12 +1,14 @@
+// src/components/seatmap/useKeyboardShortcuts.ts
 import { useEffect } from 'react';
-import { Seat, Row, Zone } from '../../types/types';
-import { SeatmapState } from '../../pages/EditorPage';
+import type { Seat, Row, Zone } from '../../types/types';
+import type { SeatmapState } from '../../pages/EditorPage';
 
 interface UseKeyboardShortcutsProps {
   selectedIds: string[];
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   state: SeatmapState;
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
+  onDuplicate?: () => void;
 }
 
 export const useKeyboardShortcuts = ({
@@ -14,18 +16,31 @@ export const useKeyboardShortcuts = ({
   setSelectedIds,
   state,
   setState,
+  onDuplicate,
 }: UseKeyboardShortcutsProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const activeEl = document.activeElement;
-      const isInput =
-        activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
-      if (isInput) return;
+      // не перехватываем ввод, если сфокусирован инпут/текстэрия/с селектом
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) {
+        return;
+      }
+
+      // ===== Duplicate (Ctrl/⌘ + D) =====
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        if (onDuplicate) {
+          e.preventDefault();
+          onDuplicate();
+          return;
+        }
+      }
 
       const { seats, rows, zones } = state;
 
-      // 🗑 УДАЛЕНИЕ
-      if (selectedIds.length > 0 && (e.key === "Delete" || e.key === "Backspace")) {
+      // ===== Delete / Backspace =====
+      if (selectedIds.length > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
         setState(prev => ({
           ...prev,
           seats: prev.seats.filter(s => !selectedIds.includes(s.id)),
@@ -36,71 +51,126 @@ export const useKeyboardShortcuts = ({
         return;
       }
 
-      // 📋 КОПИРОВАНИЕ
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      // ===== Copy (Ctrl/⌘ + C) =====
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+
+        // копируем 3 «уровня»: индивидуальные места, ряды (со своими местами), зоны (со своими рядами и местами)
         const copiedSeats = seats.filter(s => selectedIds.includes(s.id));
+
         const copiedRows = rows
           .filter(r => selectedIds.includes(r.id))
-          .map(r => ({ ...r, seats: seats.filter(s => s.rowId === r.id) }));
+          .map(r => ({
+            ...r,
+            seats: seats.filter(s => s.rowId === r.id),
+          }));
+
         const copiedZones = zones
           .filter(z => selectedIds.includes(z.id))
           .map(z => ({
             ...z,
             rows: rows
               .filter(r => r.zoneId === z.id)
-              .map(r => ({ ...r, seats: seats.filter(s => s.rowId === r.id) })),
+              .map(r => ({
+                ...r,
+                seats: seats.filter(s => s.rowId === r.id),
+              })),
           }));
 
         const clipboard = { seats: copiedSeats, rows: copiedRows, zones: copiedZones };
-        localStorage.setItem("seatmap_clipboard", JSON.stringify(clipboard));
+        localStorage.setItem('seatmap_clipboard', JSON.stringify(clipboard));
         return;
       }
 
-      // 📥 ВСТАВКА
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
-        const data = localStorage.getItem("seatmap_clipboard");
+      // ===== Paste (Ctrl/⌘ + V) =====
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        const data = localStorage.getItem('seatmap_clipboard');
         if (!data) return;
 
         const parsed = JSON.parse(data);
         const offset = 40;
+
         const newSeats: Seat[] = [];
         const newRows: Row[] = [];
         const newZones: Zone[] = [];
+        const newSelected: string[] = [];
 
-        (parsed.zones || []).forEach((z: any) => {
+        // 1) зоны целиком
+        (parsed.zones || []).forEach((z: Zone & { rows?: (Row & { seats?: Seat[] })[] }) => {
           const newZoneId = `zone-${crypto.randomUUID()}`;
-          const zoneRows: Row[] = (z.rows || []).map((r: any) => {
+          newZones.push({
+            ...z,
+            id: newZoneId,
+            x: z.x + offset,
+            y: z.y + offset,
+            // в зону в стейте не кладём вложенные массивы
+            // @ts-expect-error: drop embedded
+            rows: undefined,
+          });
+          newSelected.push(newZoneId);
+
+          // скопировать ряды зоны
+          (z.rows || []).forEach(r => {
             const newRowId = `row-${crypto.randomUUID()}`;
-            const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
+            newRows.push({
+              ...r,
+              id: newRowId,
+              zoneId: newZoneId,
+              x: r.x + offset,
+              y: r.y + offset,
+              // @ts-expect-error: drop embedded
+              seats: undefined,
+            });
+
+            // скопировать места ряда
+            (r.seats || []).forEach((s: Seat) => {
+              newSeats.push({
+                ...s,
+                id: `seat-${crypto.randomUUID()}`,
+                rowId: newRowId,
+                zoneId: newZoneId,
+                x: s.x + offset,
+                y: s.y + offset,
+              });
+            });
+          });
+        });
+
+        // 2) одиночные ряды (без зон)
+        (parsed.rows || []).forEach((r: Row & { seats?: Seat[] }) => {
+          const newRowId = `row-${crypto.randomUUID()}`;
+          newRows.push({
+            ...r,
+            id: newRowId,
+            x: r.x + offset,
+            y: r.y + offset,
+            // @ts-expect-error: drop embedded
+            seats: undefined,
+          });
+          newSelected.push(newRowId);
+
+          (r.seats || []).forEach((s: Seat) => {
+            newSeats.push({
               ...s,
               id: `seat-${crypto.randomUUID()}`,
               rowId: newRowId,
-              zoneId: newZoneId,
               x: s.x + offset,
               y: s.y + offset,
-            }));
-            newSeats.push(...rowSeats);
-            return { ...r, id: newRowId, zoneId: newZoneId, x: r.x + offset, y: r.y + offset };
+            });
           });
-          newRows.push(...zoneRows);
-          newZones.push({ ...z, id: newZoneId, rows: [], x: z.x + offset, y: z.y + offset });
         });
 
-        (parsed.rows || []).forEach((r: any) => {
-          const newRowId = `row-${crypto.randomUUID()}`;
-          const rowSeats: Seat[] = (r.seats || []).map((s: Seat) => ({
+        // 3) одиночные места
+        (parsed.seats || []).forEach((s: Seat) => {
+          const nsId = `seat-${crypto.randomUUID()}`;
+          newSeats.push({
             ...s,
-            id: `seat-${crypto.randomUUID()}`,
-            rowId: newRowId,
+            id: nsId,
             x: s.x + offset,
             y: s.y + offset,
-          }));
-          newSeats.push(...rowSeats);
-          newRows.push({ ...r, id: newRowId, seats: [], x: r.x + offset, y: r.y + offset });
-        });
-
-        (parsed.seats || []).forEach((s: Seat) => {
-          newSeats.push({ ...s, id: `seat-${crypto.randomUUID()}`, x: s.x + offset, y: s.y + offset });
+          });
+          newSelected.push(nsId);
         });
 
         setState(prev => ({
@@ -110,11 +180,11 @@ export const useKeyboardShortcuts = ({
           zones: [...prev.zones, ...newZones],
         }));
 
-        setSelectedIds([...newSeats.map(s => s.id), ...newRows.map(r => r.id), ...newZones.map(z => z.id)]);
+        if (newSelected.length) setSelectedIds(newSelected);
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIds, state, setState, setSelectedIds]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, state, setState, setSelectedIds, onDuplicate]);
 };

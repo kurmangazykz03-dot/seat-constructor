@@ -11,6 +11,7 @@ import { useHistory } from "../hooks/useHistory";
 
 import { Row, Seat, Zone } from "../types/types";
 import { alignRows, alignSeats, distributeRows } from '../utils/seatmapCommands';
+import { duplicateSelected } from '../utils/duplicate'
 
 const LS_KEY = "seatmap_schema";
 
@@ -64,7 +65,7 @@ function EditorPage() {
 const [currentTool, setCurrentTool] = useState<
   "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
 >("select");
-
+const [showGrid, setShowGrid] = useState(true);
 
 
   // ======================= ФУНКЦИИ-ОБРАБОТЧИКИ ДЛЯ TOPBAR =======================
@@ -262,7 +263,15 @@ const handleAlign = (dir: AlignDirection) => {
 };
 
 
+const handleUploadBackground = (dataUrl: string | null) => {
+    setState(prev => ({ ...prev, backgroundImage: dataUrl ?? null }));
+  };
 
+  const handleDuplicate = () => {
+  const { next, newSelectedIds } = duplicateSelected(state, selectedIds, 24);
+  setState(() => next);
+  if (newSelectedIds.length) setSelectedIds(newSelectedIds);
+};
   // ======================= РЕНДЕР КОМПОНЕНТА =======================
   return (
     <div className="flex flex-col w-full h-screen bg-gray-100">
@@ -279,10 +288,14 @@ const handleAlign = (dir: AlignDirection) => {
 
       <div className="flex flex-1 overflow-hidden">
    <Toolbar
+     onDuplicate={handleDuplicate}     // 🆕
   currentTool={currentTool}
   setCurrentTool={setCurrentTool}
   onDelete={handleDelete}
   onAlign={handleAlign}
+  onUploadBackground={handleUploadBackground} // 🆕
+  showGrid={showGrid}                        // 🆕
+  onToggleGrid={() => setShowGrid(s => !s)}  // 🆕
 />
 
 
@@ -300,6 +313,10 @@ const handleAlign = (dir: AlignDirection) => {
             selectedIds={selectedIds}
             setSelectedIds={setSelectedIds}
             currentTool={currentTool}
+            backgroundImage={state.backgroundImage ?? null} // 🆕
+            showGrid={showGrid}                        // 🆕
+  setShowGrid={setShowGrid}       
+  onDuplicate={handleDuplicate}           // 🆕
           />
         </main>
 

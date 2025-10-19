@@ -1,6 +1,6 @@
 import Konva from "konva";
-import { Dispatch, SetStateAction, useRef, useState } from "react";
-import { Layer, Stage, Transformer } from "react-konva";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Layer, Stage, Transformer,Image as KonvaImage } from "react-konva";
 import { Row, Seat, Zone } from "../../types/types";
 import DrawingZone from "../seatmap/DrawingZone";
 import GridLayer from "../seatmap/GridLayer";
@@ -10,18 +10,33 @@ import ZoomControls from "../seatmap/ZoomControls";
 
 import { SeatmapState } from "../../pages/EditorPage"; // Импортируем тип
 
+function useHTMLImage(src: string | null) {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (!src) { setImg(null); return; }
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => setImg(image);
+    image.src = src;
+    return () => { setImg(null); };
+  }, [src]);
+  return img;
+}
 interface SeatmapCanvasProps {
   seats: Seat[];
   rows: Row[];
   zones: Zone[];
-  // Вместо отдельных сеттеров
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
 
   selectedIds: string[];
   setSelectedIds: Dispatch<SetStateAction<string[]>>;
-  currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate"; // ← добавь rotate
+  currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate";
+  backgroundImage: string | null;
+   // 🆕
+   showGrid: boolean;                          // 🆕
+  setShowGrid: React.Dispatch<React.SetStateAction<boolean>>; // 🆕
+  onDuplicate: () => void;
 }
-
 // Константы, которые можно вынести в отдельный config файл
 const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
@@ -29,6 +44,22 @@ const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
 const CANVAS_WIDTH = 1436;
 const CANVAS_HEIGHT = 752;
+function containRect(
+  imgW: number,
+  imgH: number,
+  boxW: number,
+  boxH: number
+) {
+  if (imgW === 0 || imgH === 0) {
+    return { x: 0, y: 0, width: boxW, height: boxH };
+  }
+  const scale = Math.min(boxW / imgW, boxH / imgH);
+  const width = imgW * scale;
+  const height = imgH * scale;
+  const x = (boxW - width) / 2;
+  const y = (boxH - height) / 2;
+  return { x, y, width, height };
+}
 
 function SeatmapCanvas({
   seats,
@@ -38,6 +69,8 @@ function SeatmapCanvas({
   selectedIds,
   setSelectedIds,
   currentTool,
+  backgroundImage,
+  onDuplicate
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -45,13 +78,23 @@ function SeatmapCanvas({
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [showGrid, setShowGrid] = useState(true);
+  useEffect(() => {
+  if (backgroundImage && showGrid) {
+    setShowGrid(false);
+  }
+}, [backgroundImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+const bgImg = useHTMLImage(backgroundImage);
+const fitted = bgImg
+  ? containRect(bgImg.width, bgImg.height, CANVAS_WIDTH, CANVAS_HEIGHT)
+  : null;
   // Подключаем хук для горячих клавиш
   useKeyboardShortcuts({
     selectedIds,
     setSelectedIds,
     state: { seats, rows, zones }, // или полный state, если есть другие поля
     setState,
+    onDuplicate
   });
   const handleSetScale = (newScale: number) => {
     if (!stageRef.current) return;
@@ -247,6 +290,19 @@ function SeatmapCanvas({
         onMouseUp={handleStageMouseUp}
         draggable={currentTool === "select"}
       >
+         {bgImg && (
+  <Layer listening={false}>
+    <KonvaImage
+      image={bgImg}
+      x={fitted!.x}
+      y={fitted!.y}
+      width={fitted!.width}
+      height={fitted!.height}
+      opacity={0.6}          // 👈 полупрозрачный фон
+    />
+  </Layer>
+)}
+
         <Layer>
           {zones.map((zone) => (
             <ZoneComponent

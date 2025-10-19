@@ -56,6 +56,11 @@ export const SeatInfoPanel: React.FC<SeatInfoPanelProps> = ({ seat }) => {
               {seat.status}
             </span>
           </div>
+// внутри блока с выбранным seat, добавь после статуса:
+<div className="mb-3">
+  <label className="block text-xs font-medium text-gray-500 mb-1">Color</label>
+  <div className="w-5 h-5 rounded-full border border-gray-300" style={{ backgroundColor: seat.fill }} />
+</div>
 
           
         </div>

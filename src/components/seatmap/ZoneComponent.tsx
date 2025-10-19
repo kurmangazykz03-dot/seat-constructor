@@ -32,6 +32,7 @@ const seatRadius = 12;
 const seatSpacingX = 30;
 const seatSpacingY = 30;
 
+
 // ЛОКАЛЬНАЯ версия
 const createRowWithSeats = (
   zoneId: string,
@@ -82,9 +83,11 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   setGroupRef
 }) => {
   // Интерпретируем state как локальные координаты.
-  const zoneSeats = seats.filter((s) => s.zoneId === zone.id);
-  const zoneRows = rows.filter((r) => r.zoneId === zone.id);
-  const seatsWithoutRow = zoneSeats.filter((s) => !s.rowId);
+  // внутри ZoneComponent перед фильтрами:
+const zoneSeats = (seats ?? []).filter(s => s.zoneId === zone.id);
+const zoneRows  = (rows  ?? []).filter(r => r.zoneId === zone.id);
+const seatsWithoutRow = zoneSeats.filter(s => !s.rowId);
+
 
   const handleZoneClick = (e: any) => {
     e.cancelBubble = true;

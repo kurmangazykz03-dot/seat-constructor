@@ -9,43 +9,51 @@ interface PropertiesPanelProps {
   setState: (updater: (prev: SeatmapState) => SeatmapState) => void;
 }
 
-const CATEGORIES = ["Standard", "VIP", "Discount"];
+// Единый список значений в СТЕЙТЕ (строчные), а в UI — красивые лейблы
+const CATEGORY_OPTIONS = [
+  { value: "standard", label: "Standard" },
+  { value: "vip",      label: "VIP" },
+  { value: "discount", label: "Discount" },
+] as const;
+
+const STATUS_OPTIONS = [
+  { value: "available", label: "Available" },
+  { value: "occupied",  label: "Occupied" },
+  { value: "disabled",  label: "Disabled" },
+] as const;
+
 const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
 const SNAP_Y_THRESHOLD = 12;
 
-const Field: React.FC<{
-  label: string;
-  children: React.ReactNode;
-}> = ({ label, children }) => (
+// ────────── UI helpers ──────────
+const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="mb-2">
-    <label className="block text-xs font-medium text-gray-700 mb-1">
-      {label}
-    </label>
+    <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
     {children}
   </div>
 );
 
-const TextInput: React.FC<
-  React.InputHTMLAttributes<HTMLInputElement>
-> = (props) => (
+const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
   <input
     {...props}
-    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""
-      }`}
+    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""}`}
   />
 );
 
-const Select: React.FC<
-  React.SelectHTMLAttributes<HTMLSelectElement>
-> = ({ children, ...props }) => (
+const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ children, ...props }) => (
   <select
     {...props}
-    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white appearance-none focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""
-      }`}
+    className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white appearance-none focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""}`}
   >
     {children}
   </select>
 );
+
+// ────────── utils ──────────
+const normDeg = (v: number) => {
+  if (!Number.isFinite(v)) return 0;
+  return ((Math.round(v) % 360) + 360) % 360; // 0..359
+};
 
 export default function PropertiesPanel({
   selectedIds,
@@ -58,7 +66,7 @@ export default function PropertiesPanel({
   const selectedRows = rows.filter((r) => selectedIds.includes(r.id));
   const selectedSeats = seats.filter((s) => selectedIds.includes(s.id));
 
-  // ---------- helpers ----------
+  // ---------- update helpers ----------
   const updateZone = (zoneId: string, patch: Partial<Zone>) => {
     setState((prev) => ({
       ...prev,
@@ -78,9 +86,7 @@ export default function PropertiesPanel({
 
       return {
         ...prev,
-        rows: prev.rows.map((r) =>
-          r.id === rowId ? { ...r, ...patch } : r
-        ),
+        rows: prev.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
         seats: prev.seats.map((s) =>
           s.rowId === rowId ? { ...s, x: s.x + dx, y: s.y + dy } : s
         ),
@@ -106,21 +112,11 @@ export default function PropertiesPanel({
     }));
   };
 
-  // safe clamp degrees for rotation
-  const clampDeg = (v: number) => {
-    let x = Math.round(v);
-    if (x < 0) x = 0;
-    if (x > 359) x = 359;
-    return x;
-  };
-
-  // ---------- UI ----------
+  // ---------- layout ----------
   if (selectedIds.length === 0) {
     return (
       <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          Properties
-        </h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Properties</h2>
         <p className="text-sm text-gray-500">
           Выберите зону, ряд или место, чтобы редактировать свойства.
         </p>
@@ -134,13 +130,8 @@ export default function PropertiesPanel({
 
       {/* --------- ZONES --------- */}
       {selectedZones.map((zone) => (
-        <div
-          key={zone.id}
-          className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
-        >
-          <h3 className="text-base font-semibold text-blue-700 mb-3">
-            Zone: {zone.label}
-          </h3>
+        <div key={zone.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+          <h3 className="text-base font-semibold text-blue-700 mb-3">Zone: {zone.label}</h3>
 
           <Field label="Zone Label">
             <TextInput
@@ -155,14 +146,14 @@ export default function PropertiesPanel({
               <TextInput
                 type="number"
                 value={Math.round(zone.x)}
-                onChange={(e) => updateZone(zone.id, { x: Number(e.target.value) })}
+                onChange={(e) => updateZone(zone.id, { x: Number(e.target.value) || 0 })}
               />
             </Field>
             <Field label="Y">
               <TextInput
                 type="number"
                 value={Math.round(zone.y)}
-                onChange={(e) => updateZone(zone.id, { y: Number(e.target.value) })}
+                onChange={(e) => updateZone(zone.id, { y: Number(e.target.value) || 0 })}
               />
             </Field>
           </div>
@@ -172,14 +163,20 @@ export default function PropertiesPanel({
               <TextInput
                 type="number"
                 value={Math.round(zone.width)}
-                onChange={(e) => updateZone(zone.id, { width: Number(e.target.value) })}
+                onChange={(e) => {
+                  const w = Math.max(10, Number(e.target.value) || 0);
+                  updateZone(zone.id, { width: w });
+                }}
               />
             </Field>
             <Field label="Height">
               <TextInput
                 type="number"
                 value={Math.round(zone.height)}
-                onChange={(e) => updateZone(zone.id, { height: Number(e.target.value) })}
+                onChange={(e) => {
+                  const h = Math.max(10, Number(e.target.value) || 0);
+                  updateZone(zone.id, { height: h });
+                }}
               />
             </Field>
           </div>
@@ -187,10 +184,12 @@ export default function PropertiesPanel({
           <Field label="Rotation (° 0–359)">
             <TextInput
               type="number"
+              inputMode="numeric"
               value={Math.round(zone.rotation ?? 0)}
-              onChange={(e) =>
-                updateZone(zone.id, { rotation: clampDeg(Number(e.target.value) || 0) })
-              }
+              onChange={(e) => {
+                const raw = Number(e.target.value);
+                updateZone(zone.id, { rotation: normDeg(raw) });
+              }}
             />
           </Field>
 
@@ -206,8 +205,7 @@ export default function PropertiesPanel({
                 {COLOR_OPTIONS.map((c) => (
                   <button
                     key={c}
-                    className={`w-6 h-6 rounded-full border ${c === (zone.color ?? zone.fill) ? "ring-2 ring-blue-500" : ""
-                      }`}
+                    className={`w-6 h-6 rounded-full border ${c === (zone.color ?? zone.fill) ? "ring-2 ring-blue-500" : ""}`}
                     style={{ backgroundColor: c }}
                     onClick={() => updateZone(zone.id, { color: c, fill: c })}
                     title={c}
@@ -224,13 +222,8 @@ export default function PropertiesPanel({
         const rowSeats = seats.filter((s) => s.rowId === row.id);
 
         return (
-          <div
-            key={row.id}
-            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
-          >
-            <h3 className="text-base font-semibold text-green-700 mb-3">
-              Row: {row.label}
-            </h3>
+          <div key={row.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+            <h3 className="text-base font-semibold text-green-700 mb-3">Row: {row.label}</h3>
 
             <Field label="Row Label">
               <TextInput
@@ -239,9 +232,7 @@ export default function PropertiesPanel({
                 onChange={(e) =>
                   setState((prev) => ({
                     ...prev,
-                    rows: prev.rows.map((r) =>
-                      r.id === row.id ? { ...r, label: e.target.value } : r
-                    ),
+                    rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)),
                   }))
                 }
               />
@@ -252,18 +243,14 @@ export default function PropertiesPanel({
                 <TextInput
                   type="number"
                   value={Math.round(row.x)}
-                  onChange={(e) =>
-                    updateRowAndSeats(row.id, { x: Number(e.target.value) })
-                  }
+                  onChange={(e) => updateRowAndSeats(row.id, { x: Number(e.target.value) || 0 })}
                 />
               </Field>
               <Field label="Y">
                 <TextInput
                   type="number"
                   value={Math.round(row.y)}
-                  onChange={(e) =>
-                    updateRowAndSeats(row.id, { y: Number(e.target.value) })
-                  }
+                  onChange={(e) => updateRowAndSeats(row.id, { y: Number(e.target.value) || 0 })}
                 />
               </Field>
             </div>
@@ -271,33 +258,37 @@ export default function PropertiesPanel({
             {/* Групповые действия по сиденьям ряда */}
             {rowSeats.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-semibold text-gray-800 mb-3">
-                  Apply to all seats in row
-                </h4>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">Apply to all seats in row</h4>
 
                 <Field label="Status">
                   <Select
-                    onChange={(e) =>
-                      updateAllSeatsOfSelectedRows({ status: e.target.value as Seat["status"] })
-                    }
+                    defaultValue=""
+                    onChange={(e) => {
+                      const val = e.target.value as Seat["status"] | "";
+                      if (val) updateAllSeatsOfSelectedRows({ status: val });
+                    }}
                   >
                     <option value="">— Change status —</option>
-                    <option value="available">Available</option>
-                    <option value="occupied">Occupied</option>
-                    <option value="disabled">Disabled</option>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                   </Select>
                 </Field>
 
                 <Field label="Category">
                   <Select
-                    onChange={(e) =>
-                      updateAllSeatsOfSelectedRows({ category: e.target.value })
-                    }
+                    defaultValue=""
+                    onChange={(e) => {
+                      const val = e.target.value as Seat["category"] | "";
+                      if (val) updateAllSeatsOfSelectedRows({ category: val });
+                    }}
                   >
                     <option value="">— Change category —</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {CATEGORY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </Select>
@@ -326,13 +317,8 @@ export default function PropertiesPanel({
       {selectedSeats.map((seat) => {
         const row = seat.rowId ? rows.find((r) => r.id === seat.rowId) : undefined;
         return (
-          <div
-            key={seat.id}
-            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
-          >
-            <h3 className="text-base font-semibold text-purple-700 mb-3">
-              Seat: {seat.label}
-            </h3>
+          <div key={seat.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+            <h3 className="text-base font-semibold text-purple-700 mb-3">Seat: {seat.label}</h3>
 
             <Field label="Seat Label">
               <TextInput
@@ -347,7 +333,7 @@ export default function PropertiesPanel({
                 <TextInput
                   type="number"
                   value={Math.round(seat.x)}
-                  onChange={(e) => updateSeat(seat.id, { x: Number(e.target.value) })}
+                  onChange={(e) => updateSeat(seat.id, { x: Number(e.target.value) || 0 })}
                 />
               </Field>
 
@@ -356,7 +342,7 @@ export default function PropertiesPanel({
                   type="number"
                   value={Math.round(seat.y)}
                   onChange={(e) => {
-                    const ny = Number(e.target.value);
+                    const ny = Number(e.target.value) || 0;
                     // если сиденье «рядовое» — решаем, прилипать к ряду или отлепляться
                     if (row) {
                       const dy = Math.abs(ny - row.y);
@@ -380,20 +366,22 @@ export default function PropertiesPanel({
                 value={seat.status}
                 onChange={(e) => updateSeat(seat.id, { status: e.target.value as Seat["status"] })}
               >
-                <option value="available">Available</option>
-                <option value="occupied">Occupied</option>
-                <option value="disabled">Disabled</option>
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
               </Select>
             </Field>
 
             <Field label="Category">
               <Select
-                value={seat.category || "Standard"}
+                value={(seat.category as string) || "standard"}
                 onChange={(e) => updateSeat(seat.id, { category: e.target.value })}
               >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                {CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </Select>
@@ -412,8 +400,9 @@ export default function PropertiesPanel({
                     <button
                       key={c}
                       style={{ backgroundColor: c }}
-                      className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === c ? "ring-2 ring-offset-1 ring-blue-500" : ""
-                        }`}
+                      className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${
+                        seat.fill === c ? "ring-2 ring-offset-1 ring-blue-500" : ""
+                      }`}
                       onClick={() => updateSeat(seat.id, { fill: c })}
                       title={c}
                     />

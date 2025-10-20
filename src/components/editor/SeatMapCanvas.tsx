@@ -70,19 +70,22 @@ function SeatmapCanvas({
   setSelectedIds,
   currentTool,
   backgroundImage,
-  onDuplicate
+  onDuplicate,
+    showGrid,            // ✅ берём из пропсов
+  setShowGrid,         // ✅ берём из пропсов
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
   const stageRef = useRef<any>(null);
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const [showGrid, setShowGrid] = useState(true);
-  useEffect(() => {
-  if (backgroundImage && showGrid) {
-    setShowGrid(false);
-  }
-}, [backgroundImage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+ useEffect(() => {
+    if (backgroundImage && showGrid) {
+      setShowGrid(false);   // ✅ дергаем проп-сеттер
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundImage, showGrid]);
 
 const bgImg = useHTMLImage(backgroundImage);
 const fitted = bgImg
@@ -302,6 +305,14 @@ const fitted = bgImg
     />
   </Layer>
 )}
+ <GridLayer
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          gridSize={GRID_SIZE}
+          showGrid={showGrid}
+          scale={scale}
+          stagePos={stagePos}
+        />
 
         <Layer>
           {zones.map((zone) => (
@@ -355,14 +366,7 @@ const fitted = bgImg
             seatSpacingY={SEAT_SPACING_Y}
           />
         </Layer>
-        <GridLayer
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          gridSize={GRID_SIZE}
-          showGrid={showGrid}
-          scale={scale}
-          stagePos={stagePos}
-        />
+        
       </Stage>
       <ZoomControls scale={scale} setScale={handleSetScale} />
     </div>

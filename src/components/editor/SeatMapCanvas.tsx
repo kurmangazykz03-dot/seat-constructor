@@ -80,12 +80,6 @@ function SeatmapCanvas({
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
- useEffect(() => {
-    if (backgroundImage && showGrid) {
-      setShowGrid(false);   // ✅ дергаем проп-сеттер
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backgroundImage, showGrid]);
 
 const bgImg = useHTMLImage(backgroundImage);
 const fitted = bgImg
@@ -292,6 +286,7 @@ const fitted = bgImg
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         draggable={currentTool === "select"}
+       
       >
          {bgImg && (
   <Layer listening={false}>
@@ -305,14 +300,7 @@ const fitted = bgImg
     />
   </Layer>
 )}
- <GridLayer
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          gridSize={GRID_SIZE}
-          showGrid={showGrid}
-          scale={scale}
-          stagePos={stagePos}
-        />
+
 
         <Layer>
           {zones.map((zone) => (
@@ -366,7 +354,14 @@ const fitted = bgImg
             seatSpacingY={SEAT_SPACING_Y}
           />
         </Layer>
-        
+         <GridLayer
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          gridSize={GRID_SIZE}
+          showGrid={showGrid}
+          scale={scale}
+          stagePos={stagePos}
+        />
       </Stage>
       <ZoomControls scale={scale} setScale={handleSetScale} />
     </div>

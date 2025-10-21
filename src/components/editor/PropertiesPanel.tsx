@@ -25,6 +25,7 @@ const STATUS_OPTIONS = [
 const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
 const SNAP_Y_THRESHOLD = 12;
 
+
 // ────────── UI helpers ──────────
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="mb-2">
@@ -123,6 +124,7 @@ export default function PropertiesPanel({
       </div>
     );
   }
+  const [rotDraft, setRotDraft] = React.useState<Record<string, string>>({});
 
   return (
     <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
@@ -181,17 +183,35 @@ export default function PropertiesPanel({
             </Field>
           </div>
 
-          <Field label="Rotation (° 0–359)">
-            <TextInput
-              type="number"
-              inputMode="numeric"
-              value={Math.round(zone.rotation ?? 0)}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                updateZone(zone.id, { rotation: normDeg(raw) });
-              }}
-            />
-          </Field>
+          <Field label="Rotation (°)">
+  <TextInput
+    type="text"                     // текст, чтобы спокойно вводить "-" и очищать
+    inputMode="numeric"             // мобильным подскажет цифры
+    value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
+    onChange={(e) => {
+      setRotDraft(prev => ({ ...prev, [zone.id]: e.target.value }));
+    }}
+    onBlur={() => {
+      const raw = rotDraft[zone.id] ?? String(zone.rotation ?? 0);
+      const n = Number(raw.trim());
+      // Разрешаем любые градусы (в т.ч. отрицательные). Если хочешь ограничить — раскомментируй:
+      // const clamped = Math.max(-359, Math.min(359, Math.round(n)));
+      const finalVal = Number.isFinite(n) ? Math.round(n) : (zone.rotation ?? 0);
+
+      updateZone(zone.id, { rotation: finalVal });
+      setRotDraft(prev => {
+        const copy = { ...prev };
+        delete copy[zone.id];
+        return copy;
+      });
+    }}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
+    }}
+    placeholder="e.g. -45"
+  />
+</Field>
+
 
           <Field label="Color">
             <div className="flex items-center gap-2">

@@ -33,6 +33,7 @@ function ToolButton({
   const idleCls = "bg-[#e7e7eb] hover:bg-blue-400 hover:text-white";
   const disabledCls = "bg-gray-200 text-gray-400 cursor-not-allowed";
 
+
   return (
     <button
       type="button"
@@ -152,8 +153,8 @@ export default function Toolbar({
           onClick={setTool("add-seat")}
         >
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-            <circle cx="12" cy="9" r="3" stroke="currentColor" strokeWidth="2" />
-            <path d="M5 20a7 7 0 0 1 14 0" stroke="currentColor" strokeWidth="2" />
+
+       <use xlinkHref="#icon-seats" />
           </svg>
         </ToolButton>
 
@@ -244,24 +245,7 @@ export default function Toolbar({
         </ToolButton>
       </div>
 
-      {/* Низ */}
-      <div className="mt-auto flex flex-col items-center gap-2">
-        <div className="text-[10px] text-gray-500 px-2 py-1 rounded bg-gray-100">{toolLabel}</div>
-
-        <button
-          type="button"
-          className={`w-full flex items-center justify-center gap-1 text-[11px] rounded-lg px-2 py-1
-            ${compact ? "bg-gray-100" : "bg-[#e7e7eb] hover:bg-gray-200"}
-          `}
-          onClick={() => setCompact((v) => !v)}
-          title="Toggle compact mode"
-        >
-          <span>Compact</span>
-          <svg viewBox="0 0 24 24" className={`w-4 h-4 transition-transform ${compact ? "" : "rotate-180"}`} fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        </button>
-      </div>
+     
 
       {/* скрытый инпут для загрузки */}
       <input

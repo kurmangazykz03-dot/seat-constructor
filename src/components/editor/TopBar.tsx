@@ -14,7 +14,6 @@ interface TopBarProps {
 }
 
 function TopBar({ onSave, onLoad, onClear, onExport, onUndo, onRedo, canUndo, canRedo }: TopBarProps) {
-  // Стили для неактивных кнопок
   const disabledStyle = "bg-gray-200 text-gray-400 cursor-not-allowed hover:bg-gray-200";
   const buttonBaseStyle = "px-4 py-2 text-sm font-medium text-black rounded-[8px] transition-colors";
 
@@ -29,7 +28,6 @@ function TopBar({ onSave, onLoad, onClear, onExport, onUndo, onRedo, canUndo, ca
       </span>
       </div>
       <div className="flex items-center gap-2">
-        {/* Undo/Redo Buttons */}
         <button 
           onClick={onUndo} 
           disabled={!canUndo}
@@ -47,9 +45,7 @@ function TopBar({ onSave, onLoad, onClear, onExport, onUndo, onRedo, canUndo, ca
           <Redo size={16} />
         </button>
         
-        <div className="w-[1px] h-6 bg-gray-200 mx-2"></div> {/* Разделитель */}
-
-        {/* Action Buttons */}
+        <div className="w-[1px] h-6 bg-gray-200 mx-2"></div> 
         <button onClick={onSave} className="px-4 py-2 text-sm font-medium bg-[#525252] text-white rounded-[8px] hover:bg-black transition-colors">
           Save
         </button>

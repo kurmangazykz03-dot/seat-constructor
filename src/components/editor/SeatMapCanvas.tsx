@@ -71,8 +71,7 @@ function SeatmapCanvas({
   currentTool,
   backgroundImage,
   onDuplicate,
-    showGrid,            // ✅ берём из пропсов
-  setShowGrid,         // ✅ берём из пропсов
+    showGrid,            
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -85,31 +84,23 @@ const bgImg = useHTMLImage(backgroundImage);
 const fitted = bgImg
   ? containRect(bgImg.width, bgImg.height, CANVAS_WIDTH, CANVAS_HEIGHT)
   : null;
-  // Подключаем хук для горячих клавиш
   useKeyboardShortcuts({
     selectedIds,
     setSelectedIds,
-    state: { seats, rows, zones }, // или полный state, если есть другие поля
+    state: { seats, rows, zones }, 
     setState,
     onDuplicate
   });
   const handleSetScale = (newScale: number) => {
     if (!stageRef.current) return;
-    const stage = stageRef.current;
-
-    // Центр канваса
     const containerCenter = {
       x: CANVAS_WIDTH / 2,
       y: CANVAS_HEIGHT / 2,
     };
-
-    // Координаты центра сцены перед изменением масштаба
     const stageCenter = {
       x: (containerCenter.x - stagePos.x) / scale,
       y: (containerCenter.y - stagePos.y) / scale,
     };
-
-    // Вычисляем новый сдвиг Stage, чтобы центр остался на месте
     const newPos = {
       x: containerCenter.x - stageCenter.x * newScale,
       y: containerCenter.y - stageCenter.y * newScale,
@@ -119,7 +110,6 @@ const fitted = bgImg
     setStagePos(newPos);
   };
 
-  // --- Заменить старую функцию createRowWithSeats на эту ---
   const createRowWithSeats = (
       zoneId: string,
   rowIndex: number,
@@ -163,12 +153,9 @@ const fitted = bgImg
       const stage = e.target.getStage();
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
-
-      // Преобразуем экранные координаты в координаты канваса (с учётом масштаба и позиции)
       const transform = stage.getAbsoluteTransform().copy().invert();
       const realPos = transform.point(pointer);
 
-      // Привязка к сетке
       const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
       const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
 
@@ -192,11 +179,9 @@ const fitted = bgImg
     const pointer = stage.getPointerPosition();
     if (!pointer || !drawingZone) return;
 
-    // Пересчёт координат с учётом зума и позиции
     const transform = stage.getAbsoluteTransform().copy().invert();
     const realPos = transform.point(pointer);
 
-    // Привязка к сетке
     const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
     const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
 
@@ -235,7 +220,7 @@ const fitted = bgImg
       height,
       fill: "#FAFAFA",
       label: `Zone ${zones.length + 1}`,
-      rotation: 0, // ← добавить
+      rotation: 0, 
     };
 
     const offsetX = (width - cols * SEAT_SPACING_X) / 2;
@@ -296,7 +281,7 @@ const fitted = bgImg
       y={fitted!.y}
       width={fitted!.width}
       height={fitted!.height}
-      opacity={0.6}          // 👈 полупрозрачный фон
+      opacity={0.95}          
     />
   </Layer>
 )}
@@ -324,7 +309,7 @@ const fitted = bgImg
               isViewerMode={false}
             />
           ))}
-          {/* Transformer: активен только при инструменте rotate и одной выбранной зоне */}
+
           {currentTool === "rotate" &&
             selectedIds.length === 1 &&
             (() => {
@@ -336,7 +321,7 @@ const fitted = bgImg
                 <Transformer
                   nodes={[node]}
                   rotateEnabled={true}
-                  enabledAnchors={[]} // убираем масштабирование — только вращение
+                  enabledAnchors={[]} 
                   onTransformEnd={() => {
                     const rotation = node.rotation();
                     setState((prev) => ({

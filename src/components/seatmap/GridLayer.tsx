@@ -22,10 +22,10 @@ const GridLayer: React.FC<GridLayerProps> = ({
 
   const lines = [];
 
-  // 🔹 Добавляем запас, чтобы сетка выходила за границы экрана
-  const padding = 2000; // можешь увеличить при желании
 
-  // Вычисляем видимую область с запасом
+  const padding = 2000; 
+
+
   const viewRect = {
     x1: (-stagePos.x - padding) / scale,
     y1: (-stagePos.y - padding) / scale,
@@ -33,13 +33,13 @@ const GridLayer: React.FC<GridLayerProps> = ({
     y2: (-stagePos.y + height + padding) / scale,
   };
 
-  // Находим кратные координаты для линий
+
   const startX = Math.floor(viewRect.x1 / gridSize) * gridSize;
   const endX = Math.ceil(viewRect.x2 / gridSize) * gridSize;
   const startY = Math.floor(viewRect.y1 / gridSize) * gridSize;
   const endY = Math.ceil(viewRect.y2 / gridSize) * gridSize;
 
-  // Вертикальные линии
+
   for (let x = startX; x <= endX; x += gridSize) {
     lines.push(
       <Line
@@ -51,7 +51,7 @@ const GridLayer: React.FC<GridLayerProps> = ({
     );
   }
 
-  // Горизонтальные линии
+
   for (let y = startY; y <= endY; y += gridSize) {
     lines.push(
       <Line

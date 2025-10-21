@@ -1,8 +1,7 @@
 // src/components/seatmap/BackgroundImageLayer.tsx
 import React, { useMemo } from "react";
-import { Layer, Image as KonvaImage, Rect } from "react-konva";
-import useImage from 'use-image'
-
+import { Image as KonvaImage, Layer, Rect } from "react-konva";
+import useImage from "use-image";
 
 type Fit = "contain" | "cover" | "stretch" | "none";
 
@@ -12,16 +11,10 @@ interface BackgroundImageLayerProps {
   canvasH: number;
   fit?: Fit;
   opacity?: number;
-  blur?: number; // 0..8 условно
+  blur?: number;
 }
 
-function fitRect(
-  imgW: number,
-  imgH: number,
-  boxW: number,
-  boxH: number,
-  mode: Fit
-) {
+function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, mode: Fit) {
   if (mode === "stretch") return { w: boxW, h: boxH, x: 0, y: 0 };
   if (mode === "none") return { w: imgW, h: imgH, x: 0, y: 0 };
 
@@ -40,7 +33,6 @@ function fitRect(
     }
   }
 
-  // cover
   if (rImg > rBox) {
     const h = boxH;
     const w = h * rImg;
@@ -69,7 +61,6 @@ const BackgroundImageLayer: React.FC<BackgroundImageLayerProps> = ({
 
   return (
     <Layer listening={false}>
-      {/* белая подложка, чтобы фон выглядел аккуратнее */}
       <Rect x={0} y={0} width={canvasW} height={canvasH} fill="#ffffff" />
       {img && (
         <KonvaImage

@@ -1,21 +1,18 @@
 import { useState } from "react";
 
-// Компоненты UI
 import PropertiesPanel from "../components/editor/PropertiesPanel";
 import SeatmapCanvas from "../components/editor/SeatMapCanvas";
 import Toolbar from "../components/editor/ToolBar";
 import TopBar from "../components/editor/TopBar";
 
-// Хук для Undo/Redo и типы данных
 import { useHistory } from "../hooks/useHistory";
 
 import { Row, Seat, Zone } from "../types/types";
-import { alignRows, alignSeats, distributeRows } from '../utils/seatmapCommands';
-import { duplicateSelected } from '../utils/duplicate'
+import { duplicateSelected } from "../utils/duplicate";
+import { alignRows, alignSeats } from "../utils/seatmapCommands";
 
 const LS_KEY = "seatmap_schema";
 
-// ------------------ Тип для всего состояния схемы ------------------
 export interface SeatmapState {
   hallName: string;
   backgroundImage?: string | null;
@@ -29,7 +26,6 @@ export interface SeatmapState {
   };
 }
 
-// ------------------ Начальное (пустое) состояние ------------------
 const INITIAL_STATE: SeatmapState = {
   hallName: "Зал 1",
   backgroundImage: null,
@@ -43,34 +39,16 @@ const INITIAL_STATE: SeatmapState = {
   },
 };
 
-// ======================= ОСНОВНОЙ КОМПОНЕНТ СТРАНИЦЫ =======================
 function EditorPage() {
-  // ------------------ УПРАВЛЕНИЕ ОСНОВНЫМ СОСТОЯНИЕМ (ДАННЫМИ) ------------------
-  // Используем наш кастомный хук для управления состоянием схемы и историей изменений.
-  // Все, что связано с местами, рядами и зонами, теперь живет здесь.
-  const {
-    state, // Текущее состояние (state.seats, state.rows, state.zones)
-    setState, // Функция для обновления состояния (создает запись в истории)
-    undo, // Функция отмены
-    redo, // Функция возврата
-    clear, // Функция полной очистки с сбросом истории
-    canUndo, // Флаг, можно ли отменить действие
-    canRedo, // Флаг, можно ли вернуть действие
-  } = useHistory<SeatmapState>(INITIAL_STATE);
+  const { state, setState, undo, redo, clear, canUndo, canRedo } =
+    useHistory<SeatmapState>(INITIAL_STATE);
 
-  // ------------------ УПРАВЛЕНИЕ UI-СОСТОЯНИЕМ ------------------
-  // Эти состояния не требуют истории (undo/redo) и не сохраняются в JSON.
-  // Они отвечают только за интерфейс в текущий момент времени.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-const [currentTool, setCurrentTool] = useState<
-  "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
->("select");
-const [showGrid, setShowGrid] = useState(true);
+  const [currentTool, setCurrentTool] = useState<
+    "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
+  >("select");
+  const [showGrid, setShowGrid] = useState(true);
 
-
-  // ======================= ФУНКЦИИ-ОБРАБОТЧИКИ ДЛЯ TOPBAR =======================
-
-  // 💾 Сохранение текущего состояния в localStorage браузера
   const handleSave = () => {
     try {
       const json = exportToV2(state);
@@ -82,13 +60,12 @@ const [showGrid, setShowGrid] = useState(true);
     }
   };
 
-  // 📥 Загрузка состояния из localStorage
   const handleLoad = () => {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return alert("Сохраненная схема не найдена.");
       const data = JSON.parse(raw);
-      const prevStage = state.stage; // сохраняем текущие pan/zoom UI
+      const prevStage = state.stage;
       const imported = importFromV2(data);
       setState(() => ({ ...imported, stage: prevStage }));
       alert("Схема (v2) загружена!");
@@ -98,7 +75,6 @@ const [showGrid, setShowGrid] = useState(true);
     }
   };
 
-  // 🗑️ Полная очистка холста и истории
   const handleClear = () => {
     if (
       window.confirm(
@@ -166,7 +142,6 @@ const [showGrid, setShowGrid] = useState(true);
       zones,
       rows,
       seats,
-      // stage — это UI, в JSON его не храним
       stage: { scale: 1, x: 0, y: 0 },
     };
   }
@@ -200,8 +175,8 @@ const [showGrid, setShowGrid] = useState(true);
                 label: seat.label,
                 x: seat.x,
                 y: seat.y,
-                fill: seat.fill, // ✅ сохраняем цвет
-                radius: seat.radius, // (опционально) сохраняем радиус
+                fill: seat.fill,
+                radius: seat.radius,
                 status: seat.status ?? "available",
                 category: seat.category ?? "standard",
               })),
@@ -210,7 +185,6 @@ const [showGrid, setShowGrid] = useState(true);
     };
   }
 
-  // ექსპორტი Экспорт схемы в JSON-файл
   const handleExport = () => {
     const exportData = exportToV2(state);
     const jsonString = JSON.stringify(exportData, null, 2);
@@ -242,37 +216,34 @@ const [showGrid, setShowGrid] = useState(true);
     setSelectedIds([]);
   };
 
+  type AlignDirection = "left" | "center" | "right";
 
-type AlignDirection = 'left' | 'center' | 'right';
+  const handleAlign = (dir: AlignDirection) => {
+    if (selectedIds.length === 0) return;
 
-// внутри EditorPage
-const handleAlign = (dir: AlignDirection) => {
-  if (selectedIds.length === 0) return;
+    const hasZones = state.zones.some((z) => selectedIds.includes(z.id));
+    const hasRows = state.rows.some((r) => selectedIds.includes(r.id));
+    const hasSeats = state.seats.some((s) => selectedIds.includes(s.id));
 
-  const hasZones = state.zones.some(z => selectedIds.includes(z.id));
-  const hasRows  = state.rows.some(r => selectedIds.includes(r.id));
-  const hasSeats = state.seats.some(s => selectedIds.includes(s.id));
+    if (hasSeats) {
+      setState((prev) => alignSeats(prev, selectedIds, dir));
+      return;
+    }
+    if (hasRows || hasZones) {
+      setState((prev) => alignRows(prev, selectedIds, dir));
+    }
+  };
 
-  if (hasSeats) {
-    setState(prev => alignSeats(prev, selectedIds, dir));
-    return;
-  }
-  if (hasRows || hasZones) {
-    setState(prev => alignRows(prev, selectedIds, dir));
-  }
-};
-
-
-const handleUploadBackground = (dataUrl: string | null) => {
-    setState(prev => ({ ...prev, backgroundImage: dataUrl ?? null }));
+  const handleUploadBackground = (dataUrl: string | null) => {
+    setState((prev) => ({ ...prev, backgroundImage: dataUrl ?? null }));
   };
 
   const handleDuplicate = () => {
-  const { next, newSelectedIds } = duplicateSelected(state, selectedIds, 24);
-  setState(() => next);
-  if (newSelectedIds.length) setSelectedIds(newSelectedIds);
-};
-  // ======================= РЕНДЕР КОМПОНЕНТА =======================
+    const { next, newSelectedIds } = duplicateSelected(state, selectedIds, 24);
+    setState(() => next);
+    if (newSelectedIds.length) setSelectedIds(newSelectedIds);
+  };
+
   return (
     <div className="flex flex-col w-full h-screen bg-gray-100">
       <TopBar
@@ -287,44 +258,34 @@ const handleUploadBackground = (dataUrl: string | null) => {
       />
 
       <div className="flex flex-1 overflow-hidden">
-   <Toolbar
-     onDuplicate={handleDuplicate}     // 🆕
-  currentTool={currentTool}
-  setCurrentTool={setCurrentTool}
-  onDelete={handleDelete}
-  onAlign={handleAlign}
-  onUploadBackground={handleUploadBackground} // 🆕
-  showGrid={showGrid}                        // 🆕
-  onToggleGrid={() => setShowGrid(s => !s)}  // 🆕
-/>
-
-
-
+        <Toolbar
+          onDuplicate={handleDuplicate}
+          currentTool={currentTool}
+          setCurrentTool={setCurrentTool}
+          onDelete={handleDelete}
+          onAlign={handleAlign}
+          onUploadBackground={handleUploadBackground}
+          showGrid={showGrid}
+          onToggleGrid={() => setShowGrid((s) => !s)}
+        />
 
         <main className="flex-1 bg-gray-50 p-4">
           <SeatmapCanvas
-            // Передаем все данные из нашего единого `state`
             seats={state.seats}
             rows={state.rows}
             zones={state.zones}
-            // ❗ Самое важное: передаем единую функцию для обновления ВСЕГО состояния
             setState={setState}
-            // UI-состояние передаем как и раньше
             selectedIds={selectedIds}
             setSelectedIds={setSelectedIds}
             currentTool={currentTool}
-            backgroundImage={state.backgroundImage ?? null} // 🆕
-            showGrid={showGrid}                        // 🆕
-  setShowGrid={setShowGrid}       
-  onDuplicate={handleDuplicate}           // 🆕
+            backgroundImage={state.backgroundImage ?? null}
+            showGrid={showGrid}
+            setShowGrid={setShowGrid}
+            onDuplicate={handleDuplicate}
           />
         </main>
 
-        <PropertiesPanel
-          selectedIds={selectedIds}
-          state={state} // весь state сразу
-          setState={setState} // метод обновления всего state
-        />
+        <PropertiesPanel selectedIds={selectedIds} state={state} setState={setState} />
       </div>
     </div>
   );

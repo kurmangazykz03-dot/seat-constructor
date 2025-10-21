@@ -1,19 +1,17 @@
 // src/pages/ViewerPage.tsx
-import React, { useEffect, useState } from "react";
-import { SeatmapState } from "./EditorPage";
+import { useEffect, useState } from "react";
 import type { Row, Seat, Zone } from "../types/types";
+import { SeatmapState } from "./EditorPage";
 
+import { AlertTriangle } from "lucide-react";
 import { SeatInfoPanel } from "../components/viewer/SeatInfoPanel";
 import SeatmapViewerCanvas from "../components/viewer/SeatmapViewerCanvas";
-import { AlertTriangle } from "lucide-react";
 import { ViewerTopBar } from "../components/viewer/ViewerTopBar";
 
-// Пустой Toolbar для Viewer
 const ToolbarPlaceholder = () => (
   <div className="w-[60px] bg-gray-50 border-r border-gray-200 flex-shrink-0"></div>
 );
 
-// 🔧 конвертер v2 → плоская модель (тот же, что в EditorPage)
 function importFromV2(json: any): SeatmapState {
   const zones: Zone[] = (json.zones || []).map((z: any) => ({
     id: String(z.id),
@@ -65,7 +63,7 @@ function importFromV2(json: any): SeatmapState {
     zones,
     rows,
     seats,
-    stage: { scale: 1, x: 0, y: 0 }, // UI часть не важна во viewer
+    stage: { scale: 1, x: 0, y: 0 },
   };
 }
 
@@ -83,7 +81,6 @@ function ViewerPage() {
       }
       const data = JSON.parse(saved);
 
-      // если это v2-структура → конвертим
       const isV2 = data?.version === 2 || Array.isArray(data?.zones);
       const flatState: SeatmapState = isV2 ? importFromV2(data) : data;
 
@@ -98,7 +95,6 @@ function ViewerPage() {
       <ViewerTopBar />
 
       <div className="flex flex-1 overflow-hidden gap-3 p-4">
-        {/* Пустой Toolbar слева */}
         <ToolbarPlaceholder />
 
         <main className="flex-1 relative">
@@ -116,7 +112,7 @@ function ViewerPage() {
             <SeatmapViewerCanvas
               state={state}
               selectedSeatId={selectedSeat?.id || null}
-              onSeatSelect={setSelectedSeat} // принимает seat | null
+              onSeatSelect={setSelectedSeat}
               width={1436}
               height={752}
             />

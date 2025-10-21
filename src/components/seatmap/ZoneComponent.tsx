@@ -1,20 +1,17 @@
 // ZoneComponent.tsx
-import React, { useRef } from 'react';
-import { Group, Rect, Text } from 'react-konva';
-import { Zone, Row, Seat } from '../../types/types';
-import RowComponent from './RowComponent';
-import SeatComponent from './SeatComponent';
-import { SeatmapState } from '../../pages/EditorPage';
 import Konva from "konva";
+import React, { useRef } from "react";
+import { Group, Rect, Text } from "react-konva";
+import { SeatmapState } from "../../pages/EditorPage";
+import { Row, Seat, Zone } from "../../types/types";
 import { applySeatDrop } from "../../utils/seatSnap";
-
-
-
+import RowComponent from "./RowComponent";
+import SeatComponent from "./SeatComponent";
 
 interface ZoneComponentProps {
   zone: Zone;
-  seats: Seat[]; // seats.x/y => локальные (относительно зоны)
-  rows: Row[];   // rows.x/y => локальные (относительно зоны)
+  seats: Seat[];
+  rows: Row[];
   selectedIds: string[];
   currentTool: string;
   hoveredZoneId: string | null;
@@ -27,19 +24,16 @@ interface ZoneComponentProps {
   isSelected?: boolean;
 }
 
-
 const seatRadius = 12;
 const seatSpacingX = 30;
 const seatSpacingY = 30;
 
-
-// ЛОКАЛЬНАЯ версия
 const createRowWithSeats = (
   zoneId: string,
   rowIndex: number,
   cols: number,
-  offsetX: number, // ← смещение внутри зоны
-  offsetY: number  // ← смещение внутри зоны
+  offsetX: number,
+  offsetY: number
 ) => {
   const rowId = `row-${crypto.randomUUID()}`;
   const y = offsetY + rowIndex * seatSpacingY + seatSpacingY / 2;
@@ -48,13 +42,13 @@ const createRowWithSeats = (
     zoneId,
     index: rowIndex,
     label: `${rowIndex + 1}`,
-    x: offsetX,   // локально!
-    y,            // локально!
+    x: offsetX,
+    y,
   };
   const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
     id: `seat-${crypto.randomUUID()}`,
     x: offsetX + c * seatSpacingX + seatRadius,
-y,
+    y,
     radius: seatRadius,
     fill: "#22C55E",
     label: `${c + 1}`,
@@ -66,7 +60,6 @@ y,
   }));
   return { row, seats: newSeats };
 };
-
 
 const ZoneComponent: React.FC<ZoneComponentProps> = ({
   zone,
@@ -80,63 +73,55 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   setSelectedIds,
   setHoveredZoneId,
   handleElementClick,
-  setGroupRef
+  setGroupRef,
 }) => {
-  // Интерпретируем state как локальные координаты.
-  // внутри ZoneComponent перед фильтрами:
-const zoneSeats = (seats ?? []).filter(s => s.zoneId === zone.id);
-const zoneRows  = (rows  ?? []).filter(r => r.zoneId === zone.id);
-const seatsWithoutRow = zoneSeats.filter(s => !s.rowId);
-
+  const zoneSeats = (seats ?? []).filter((s) => s.zoneId === zone.id);
+  const zoneRows = (rows ?? []).filter((r) => r.zoneId === zone.id);
+  const seatsWithoutRow = zoneSeats.filter((s) => !s.rowId);
 
   const handleZoneClick = (e: any) => {
     e.cancelBubble = true;
 
-    // add-seat: pointer абсолютный — пересчитываем в локальные (pointer - zone)
-    if (currentTool === 'add-seat') {
-const stage = e.target.getStage();
-const pointer = stage.getPointerPosition();
-if (!pointer || !groupRef.current) return;
+    if (currentTool === "add-seat") {
+      const stage = e.target.getStage();
+      const pointer = stage.getPointerPosition();
+      if (!pointer || !groupRef.current) return;
 
-// pointer (глобальные) → ЛОКАЛЬНЫЕ координаты группы зоны (корректно при rotation)
-const transform = groupRef.current.getAbsoluteTransform().copy().invert();
-const { x: localX, y: localY } = transform.point(pointer);
+      const transform = groupRef.current.getAbsoluteTransform().copy().invert();
+      const { x: localX, y: localY } = transform.point(pointer);
 
-// ищем родительский ряд в локальных координатах
-const parentRow = rows.find(
-  r =>
-    r.zoneId === zone.id &&
-    localY >= r.y - seatSpacingY / 2 &&
-    localY <= r.y + seatSpacingY / 2
-);
+      const parentRow = rows.find(
+        (r) =>
+          r.zoneId === zone.id &&
+          localY >= r.y - seatSpacingY / 2 &&
+          localY <= r.y + seatSpacingY / 2
+      );
 
-// считаем номер для лейбла и colIndex в рамках ряда/зоны
-const countInRow = parentRow
-  ? seats.filter(s => s.rowId === parentRow.id).length
-  : zoneSeats.length;
+      const countInRow = parentRow
+        ? seats.filter((s) => s.rowId === parentRow.id).length
+        : zoneSeats.length;
 
-const newSeat: Seat = {
-  id: `seat-${crypto.randomUUID()}`,
-  x: localX,
-  y: parentRow ? parentRow.y : localY,
-  radius: seatRadius,
-  fill: '#22C55E',
-  label: `${countInRow + 1}`,
-  category: 'standard',
-  status: 'available',
-  zoneId: zone.id,
-  rowId: parentRow ? parentRow.id : null,
-  colIndex: parentRow ? countInRow + 1 : null,
-};
+      const newSeat: Seat = {
+        id: `seat-${crypto.randomUUID()}`,
+        x: localX,
+        y: parentRow ? parentRow.y : localY,
+        radius: seatRadius,
+        fill: "#22C55E",
+        label: `${countInRow + 1}`,
+        category: "standard",
+        status: "available",
+        zoneId: zone.id,
+        rowId: parentRow ? parentRow.id : null,
+        colIndex: parentRow ? countInRow + 1 : null,
+      };
 
-setState(prev => ({ ...prev, seats: [...prev.seats, newSeat] }));
-setSelectedIds([newSeat.id]);
-return;
-
-}
+      setState((prev) => ({ ...prev, seats: [...prev.seats, newSeat] }));
+      setSelectedIds([newSeat.id]);
+      return;
+    }
 
     // add-row: создаём row и seats в локальных координатах
-    if (currentTool === 'add-row') {
+    if (currentTool === "add-row") {
       const cols = zoneSeats.length > 0 ? Math.max(...zoneSeats.map((s) => s.colIndex || 1)) : 5;
       const newRowIndex = zoneRows.length;
 
@@ -144,7 +129,6 @@ return;
       const localY = zone.height + seatSpacingY / 2;
 
       const { row: newRow, seats: newSeats } = createRowWithSeats(zone.id, newRowIndex, cols, 0, 0);
-
 
       const adjustedRow: Row = {
         ...newRow,
@@ -154,11 +138,13 @@ return;
       };
 
       // newSeats уже локальные; нужно только выставить y = localY
-      const adjustedSeats: Seat[] = newSeats.map(s => ({ ...s, y: localY }));
+      const adjustedSeats: Seat[] = newSeats.map((s) => ({ ...s, y: localY }));
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
-        zones: prev.zones.map(z => z.id === zone.id ? { ...z, height: z.height + seatSpacingY } : z),
+        zones: prev.zones.map((z) =>
+          z.id === zone.id ? { ...z, height: z.height + seatSpacingY } : z
+        ),
         rows: [...prev.rows, adjustedRow],
         seats: [...prev.seats, ...adjustedSeats],
       }));
@@ -168,7 +154,9 @@ return;
 
     // Выделение
     if (e.evt.shiftKey) {
-      setSelectedIds(prev => prev.includes(zone.id) ? prev.filter(i => i !== zone.id) : [...prev, zone.id]);
+      setSelectedIds((prev) =>
+        prev.includes(zone.id) ? prev.filter((i) => i !== zone.id) : [...prev, zone.id]
+      );
     } else {
       setSelectedIds([zone.id]);
     }
@@ -182,60 +170,66 @@ return;
     handleZoneClick(e);
   };
 
-  // Перетаскивание места: e.target.x/y — локальные координаты внутри группы (relative to zone)
- 
-
-  // Перетаскивание зоны: обновляем только координаты зоны (не трогаем rows/seats!)
   const handleZoneDragEnd = (e: any) => {
     e.cancelBubble = true;
     const node = e.target as any;
     const newX = node.x();
     const newY = node.y();
 
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
-      zones: prev.zones.map(z => z.id === zone.id ? { ...z, x: newX, y: newY } : z),
+      zones: prev.zones.map((z) => (z.id === zone.id ? { ...z, x: newX, y: newY } : z)),
     }));
   };
-const groupRef = useRef<Konva.Group | null>(null);
-const handleGroupRef = (node: Konva.Group | null) => {
-  groupRef.current = node;
-  setGroupRef?.(node);
-};
-const onSeatDragEnd = (seatAfterDrag: Seat) => {
-  setState(prev => {
-    const z = prev.zones.find(zz => zz.id === zone.id);
-    if (!z) return prev;
-    // snapThreshold=12, renumberLabels=false
-    return applySeatDrop(prev, z, seatAfterDrag.id, seatAfterDrag.x, seatAfterDrag.y, 12, false);
-  });
-};
+  const groupRef = useRef<Konva.Group | null>(null);
+  const handleGroupRef = (node: Konva.Group | null) => {
+    groupRef.current = node;
+    setGroupRef?.(node);
+  };
+  const onSeatDragEnd = (seatAfterDrag: Seat) => {
+    setState((prev) => {
+      const z = prev.zones.find((zz) => zz.id === zone.id);
+      if (!z) return prev;
+      return applySeatDrop(prev, z, seatAfterDrag.id, seatAfterDrag.x, seatAfterDrag.y, 12, false);
+    });
+  };
   return (
     <Group
-  ref={handleGroupRef}
-  x={zone.x}
-  y={zone.y}
-  rotation={zone.rotation ?? 0}
-
+      ref={handleGroupRef}
+      x={zone.x}
+      y={zone.y}
+      rotation={zone.rotation ?? 0}
       onMouseEnter={() => setHoveredZoneId(zone.id)}
       onMouseLeave={() => setHoveredZoneId(null)}
       draggable={!isViewerMode}
       onClick={handleZoneClickLocal}
       onDragEnd={handleZoneDragEnd}
-      
     >
       <Rect
         width={zone.width}
         height={zone.height}
         fill={zone.fill}
-        stroke={selectedIds.includes(zone.id) ? "blue" : hoveredZoneId === zone.id && currentTool === "add-row" ? "orange" : ""}
+        stroke={
+          selectedIds.includes(zone.id)
+            ? "blue"
+            : hoveredZoneId === zone.id && currentTool === "add-row"
+              ? "orange"
+              : ""
+        }
         strokeWidth={selectedIds.includes(zone.id) || hoveredZoneId === zone.id ? 2 : 0}
         fillOpacity={0.2}
       />
-      <Text text={zone.label} x={zone.width / 2} y={-18} fontSize={14} fill="black" align="center" offsetX={(zone.label.length * 7) / 2} />
+      <Text
+        text={zone.label}
+        x={zone.width / 2}
+        y={-18}
+        fontSize={14}
+        fill="black"
+        align="center"
+        offsetX={(zone.label.length * 7) / 2}
+      />
 
-      {/* Места без ряда — координаты локальные, передаём как есть */}
-      {seatsWithoutRow.map(seat => (
+      {seatsWithoutRow.map((seat) => (
         <SeatComponent
           key={seat.id}
           seat={seat}
@@ -247,12 +241,11 @@ const onSeatDragEnd = (seatAfterDrag: Seat) => {
         />
       ))}
 
-      {/* Ряды — row.x/y локальные, rowSeats — локальные */}
-      {zoneRows.map(row => (
+      {zoneRows.map((row) => (
         <RowComponent
           key={row.id}
           row={row}
-          rowSeats={zoneSeats.filter(s => s.rowId === row.id)}
+          rowSeats={zoneSeats.filter((s) => s.rowId === row.id)}
           selectedIds={selectedIds}
           setState={setState}
           handleElementClick={handleElementClick}

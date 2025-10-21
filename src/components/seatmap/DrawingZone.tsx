@@ -1,6 +1,6 @@
-import React from 'react';
-import { Group, Rect, Text } from 'react-konva';
-import { Zone } from   '../../types/types';
+import React from "react";
+import { Group, Rect, Text } from "react-konva";
+import { Zone } from "../../types/types";
 
 interface DrawingZoneProps {
   drawingZone: Zone | null;

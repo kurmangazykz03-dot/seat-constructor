@@ -16,7 +16,7 @@ export function duplicateSelected(
   const selectedRows  = state.rows.filter(r => selectedIds.includes(r.id));
   const selectedSeats = state.seats.filter(s => selectedIds.includes(s.id));
 
-  // если выбрана хотя бы одна зона — дублируем зоны (и всё внутри них), игнорируя остальное чтобы не было дублей
+
   if (selectedZones.length > 0) {
     const newZones: Zone[] = [];
     const newRows: Row[]   = [];
@@ -33,7 +33,7 @@ export function duplicateSelected(
       });
       newSel.push(nzId);
 
-      // все ряды этой зоны
+
       const rowsInZone = state.rows.filter(r => r.zoneId === z.id);
       const rowIdMap = new Map<string, string>();
 
@@ -44,11 +44,11 @@ export function duplicateSelected(
           ...r,
           id: nrId,
           zoneId: nzId,
-          // x/y — локальные для зоны => оставляем те же (зона уже сдвинута сама)
+
         });
       }
 
-      // все места этой зоны (и «рядовые», и вне ряда)
+
       const seatsInZone = state.seats.filter(s => s.zoneId === z.id);
       for (const s of seatsInZone) {
         newSeats.push({
@@ -56,7 +56,7 @@ export function duplicateSelected(
           id: newId(),
           zoneId: nzId,
           rowId: s.rowId ? rowIdMap.get(s.rowId) ?? null : null,
-          // x/y — локальные для зоны => оставляем те же
+
         });
       }
     }
@@ -70,7 +70,7 @@ export function duplicateSelected(
     return { next, newSelectedIds: newSel };
   }
 
-  // если зон нет, но есть ряды — дублируем каждый ряд со всеми его местами
+
   if (selectedRows.length > 0) {
     const newRows: Row[]   = [];
     const newSeats: Seat[] = [];
@@ -81,7 +81,7 @@ export function duplicateSelected(
       newRows.push({
         ...r,
         id: nrId,
-        x: r.x + offset, // локальное смещение в зоне
+        x: r.x + offset, 
         y: r.y + offset,
       });
       newSel.push(nrId);
@@ -106,7 +106,7 @@ export function duplicateSelected(
     return { next, newSelectedIds: newSel };
   }
 
-  // иначе — только отдельные места
+
   if (selectedSeats.length > 0) {
     const newSeats: Seat[] = [];
     const newSel: string[] = [];
@@ -124,6 +124,6 @@ export function duplicateSelected(
     return { next, newSelectedIds: newSel };
   }
 
-  // ничего не выбрано
+
   return { next: state, newSelectedIds: [] };
 }

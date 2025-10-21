@@ -5,7 +5,7 @@ import SeatmapViewerCanvas from '../viewer/SeatmapViewerCanvas';
 
 interface SeatmapViewerProps {
   state: SeatmapState;
-  onSeatSelect: (seatId: string) => void;     // ← если нужно оставить как id
+  onSeatSelect: (seatId: string) => void;     
   selectedSeatId: string | null;
 }
 
@@ -19,7 +19,7 @@ const SeatmapViewer: React.FC<SeatmapViewerProps> = ({
       <SeatmapViewerCanvas
         state={state}
         selectedSeatId={selectedSeatId}
-        onSeatSelect={(seat) => onSeatSelect(seat?.id ?? "")} // адаптация
+        onSeatSelect={(seat) => onSeatSelect(seat?.id ?? "")} 
         width={1436}
         height={752}
       />

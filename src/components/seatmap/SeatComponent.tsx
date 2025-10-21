@@ -32,7 +32,6 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
     : 'transparent';
   const strokeWidth = isSelected ? 2 : isRowSelected ? 1 : 0;
 
-  // Округляем координаты для четкости
   const x = Math.round(seat.x - offsetX);
   const y = Math.round(seat.y - offsetY);
 
@@ -72,17 +71,17 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
         fill={seat.fill}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
-        perfectDrawEnabled={true} // оставляем true для четкого круга
+        perfectDrawEnabled={true} 
       />
 
       <Text
         text={seat.label}
-        fontSize={12} // немного увеличим для читаемости
+        fontSize={12} 
         fill="white"
         x={0}
         y={0}
-        offsetX={Math.round((seat.label.length * 6) / 2)} // округляем смещение
-        offsetY={6} // округляем смещение по Y
+        offsetX={Math.round((seat.label.length * 6) / 2)} 
+        offsetY={6} 
         listening={false}
       />
     </Group>

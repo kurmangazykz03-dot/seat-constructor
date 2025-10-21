@@ -1,7 +1,7 @@
 // src/components/seatmap/useKeyboardShortcuts.ts
-import { useEffect } from 'react';
-import type { Seat, Row, Zone } from '../../types/types';
-import type { SeatmapState } from '../../pages/EditorPage';
+import { useEffect } from "react";
+import type { SeatmapState } from "../../pages/EditorPage";
+import type { Row, Seat, Zone } from "../../types/types";
 
 interface UseKeyboardShortcutsProps {
   selectedIds: string[];
@@ -20,15 +20,14 @@ export const useKeyboardShortcuts = ({
 }: UseKeyboardShortcutsProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // не перехватываем ввод, если сфокусирован инпут/текстэрия/с селектом
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) {
+      if (tag === "input" || tag === "textarea" || tag === "select" || el?.isContentEditable) {
         return;
       }
 
       // ===== Duplicate (Ctrl/⌘ + D) =====
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
         if (onDuplicate) {
           e.preventDefault();
           onDuplicate();
@@ -39,53 +38,52 @@ export const useKeyboardShortcuts = ({
       const { seats, rows, zones } = state;
 
       // ===== Delete / Backspace =====
-      if (selectedIds.length > 0 && (e.key === 'Delete' || e.key === 'Backspace')) {
+      if (selectedIds.length > 0 && (e.key === "Delete" || e.key === "Backspace")) {
         e.preventDefault();
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
-          seats: prev.seats.filter(s => !selectedIds.includes(s.id)),
-          rows: prev.rows.filter(r => !selectedIds.includes(r.id)),
-          zones: prev.zones.filter(z => !selectedIds.includes(z.id)),
+          seats: prev.seats.filter((s) => !selectedIds.includes(s.id)),
+          rows: prev.rows.filter((r) => !selectedIds.includes(r.id)),
+          zones: prev.zones.filter((z) => !selectedIds.includes(z.id)),
         }));
         setSelectedIds([]);
         return;
       }
 
       // ===== Copy (Ctrl/⌘ + C) =====
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
         e.preventDefault();
 
-        // копируем 3 «уровня»: индивидуальные места, ряды (со своими местами), зоны (со своими рядами и местами)
-        const copiedSeats = seats.filter(s => selectedIds.includes(s.id));
+        const copiedSeats = seats.filter((s) => selectedIds.includes(s.id));
 
         const copiedRows = rows
-          .filter(r => selectedIds.includes(r.id))
-          .map(r => ({
+          .filter((r) => selectedIds.includes(r.id))
+          .map((r) => ({
             ...r,
-            seats: seats.filter(s => s.rowId === r.id),
+            seats: seats.filter((s) => s.rowId === r.id),
           }));
 
         const copiedZones = zones
-          .filter(z => selectedIds.includes(z.id))
-          .map(z => ({
+          .filter((z) => selectedIds.includes(z.id))
+          .map((z) => ({
             ...z,
             rows: rows
-              .filter(r => r.zoneId === z.id)
-              .map(r => ({
+              .filter((r) => r.zoneId === z.id)
+              .map((r) => ({
                 ...r,
-                seats: seats.filter(s => s.rowId === r.id),
+                seats: seats.filter((s) => s.rowId === r.id),
               })),
           }));
 
         const clipboard = { seats: copiedSeats, rows: copiedRows, zones: copiedZones };
-        localStorage.setItem('seatmap_clipboard', JSON.stringify(clipboard));
+        localStorage.setItem("seatmap_clipboard", JSON.stringify(clipboard));
         return;
       }
 
       // ===== Paste (Ctrl/⌘ + V) =====
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
         e.preventDefault();
-        const data = localStorage.getItem('seatmap_clipboard');
+        const data = localStorage.getItem("seatmap_clipboard");
         if (!data) return;
 
         const parsed = JSON.parse(data);
@@ -104,14 +102,13 @@ export const useKeyboardShortcuts = ({
             id: newZoneId,
             x: z.x + offset,
             y: z.y + offset,
-            // в зону в стейте не кладём вложенные массивы
-            // @ts-expect-error: drop embedded
+
             rows: undefined,
           });
           newSelected.push(newZoneId);
 
           // скопировать ряды зоны
-          (z.rows || []).forEach(r => {
+          (z.rows || []).forEach((r) => {
             const newRowId = `row-${crypto.randomUUID()}`;
             newRows.push({
               ...r,
@@ -119,7 +116,6 @@ export const useKeyboardShortcuts = ({
               zoneId: newZoneId,
               x: r.x + offset,
               y: r.y + offset,
-              // @ts-expect-error: drop embedded
               seats: undefined,
             });
 
@@ -145,7 +141,6 @@ export const useKeyboardShortcuts = ({
             id: newRowId,
             x: r.x + offset,
             y: r.y + offset,
-            // @ts-expect-error: drop embedded
             seats: undefined,
           });
           newSelected.push(newRowId);
@@ -173,7 +168,7 @@ export const useKeyboardShortcuts = ({
           newSelected.push(nsId);
         });
 
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           seats: [...prev.seats, ...newSeats],
           rows: [...prev.rows, ...newRows],
@@ -184,7 +179,7 @@ export const useKeyboardShortcuts = ({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedIds, state, setState, setSelectedIds, onDuplicate]);
 };

@@ -3,9 +3,9 @@ import { Seat } from '../../types/types';
 import { Info } from 'lucide-react';
 
 const STATUS_COLORS: { [key: string]: string } = {
-  available: '#22c55e', // зеленый
-  occupied: '#ef4444',  // красный
-  disabled: '#9ca3af',  // серый
+  available: '#22c55e', 
+  occupied: '#ef4444',  
+  disabled: '#9ca3af',  
 };
 
 interface SeatInfoPanelProps {
@@ -32,7 +32,6 @@ export const SeatInfoPanel: React.FC<SeatInfoPanelProps> = ({ seat }) => {
         <LegendItem color={STATUS_COLORS.disabled} label="Disabled" />
       </div>
 
-      {/* Информация о выбранном месте */}
       {seat ? (
         <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-base font-semibold text-gray-700 mb-3">Selected Seat</h3>

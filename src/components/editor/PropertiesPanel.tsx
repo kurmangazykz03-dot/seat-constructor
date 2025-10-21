@@ -1,7 +1,7 @@
 // src/components/editor/PropertiesPanel.tsx
 import React from "react";
-import type { Seat, Zone, Row } from "../../types/types";
 import type { SeatmapState } from "../../pages/EditorPage";
+import type { Row, Seat, Zone } from "../../types/types";
 
 interface PropertiesPanelProps {
   selectedIds: string[];
@@ -9,24 +9,21 @@ interface PropertiesPanelProps {
   setState: (updater: (prev: SeatmapState) => SeatmapState) => void;
 }
 
-// Единый список значений в СТЕЙТЕ (строчные), а в UI — красивые лейблы
 const CATEGORY_OPTIONS = [
   { value: "standard", label: "Standard" },
-  { value: "vip",      label: "VIP" },
+  { value: "vip", label: "VIP" },
   { value: "discount", label: "Discount" },
 ] as const;
 
 const STATUS_OPTIONS = [
   { value: "available", label: "Available" },
-  { value: "occupied",  label: "Occupied" },
-  { value: "disabled",  label: "Disabled" },
+  { value: "occupied", label: "Occupied" },
+  { value: "disabled", label: "Disabled" },
 ] as const;
 
 const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
 const SNAP_Y_THRESHOLD = 12;
 
-
-// ────────── UI helpers ──────────
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="mb-2">
     <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
@@ -41,7 +38,10 @@ const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props)
   />
 );
 
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ children, ...props }) => (
+const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
+  children,
+  ...props
+}) => (
   <select
     {...props}
     className={`w-full border border-gray-300 rounded-lg p-2 text-sm text-gray-800 bg-white appearance-none focus:ring-blue-500 focus:border-blue-500 transition-colors ${props.className ?? ""}`}
@@ -49,25 +49,13 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ child
     {children}
   </select>
 );
-
-// ────────── utils ──────────
-const normDeg = (v: number) => {
-  if (!Number.isFinite(v)) return 0;
-  return ((Math.round(v) % 360) + 360) % 360; // 0..359
-};
-
-export default function PropertiesPanel({
-  selectedIds,
-  state,
-  setState,
-}: PropertiesPanelProps) {
+export default function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps) {
   const { seats, rows, zones } = state;
 
   const selectedZones = zones.filter((z) => selectedIds.includes(z.id));
   const selectedRows = rows.filter((r) => selectedIds.includes(r.id));
   const selectedSeats = seats.filter((s) => selectedIds.includes(s.id));
 
-  // ---------- update helpers ----------
   const updateZone = (zoneId: string, patch: Partial<Zone>) => {
     setState((prev) => ({
       ...prev,
@@ -75,10 +63,7 @@ export default function PropertiesPanel({
     }));
   };
 
-  const updateRowAndSeats = (
-    rowId: string,
-    patch: Partial<Row> & { x?: number; y?: number }
-  ) => {
+  const updateRowAndSeats = (rowId: string, patch: Partial<Row> & { x?: number; y?: number }) => {
     setState((prev) => {
       const row = prev.rows.find((r) => r.id === rowId);
       if (!row) return prev;
@@ -88,9 +73,7 @@ export default function PropertiesPanel({
       return {
         ...prev,
         rows: prev.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
-        seats: prev.seats.map((s) =>
-          s.rowId === rowId ? { ...s, x: s.x + dx, y: s.y + dy } : s
-        ),
+        seats: prev.seats.map((s) => (s.rowId === rowId ? { ...s, x: s.x + dx, y: s.y + dy } : s)),
       };
     });
   };
@@ -107,13 +90,10 @@ export default function PropertiesPanel({
     if (rowIds.size === 0) return;
     setState((prev) => ({
       ...prev,
-      seats: prev.seats.map((s) =>
-        s.rowId && rowIds.has(s.rowId) ? { ...s, ...patch } : s
-      ),
+      seats: prev.seats.map((s) => (s.rowId && rowIds.has(s.rowId) ? { ...s, ...patch } : s)),
     }));
   };
 
-  // ---------- layout ----------
   if (selectedIds.length === 0) {
     return (
       <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
@@ -130,9 +110,11 @@ export default function PropertiesPanel({
     <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Properties</h2>
 
-      {/* --------- ZONES --------- */}
       {selectedZones.map((zone) => (
-        <div key={zone.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div
+          key={zone.id}
+          className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+        >
           <h3 className="text-base font-semibold text-blue-700 mb-3">Zone: {zone.label}</h3>
 
           <Field label="Zone Label">
@@ -184,41 +166,41 @@ export default function PropertiesPanel({
           </div>
 
           <Field label="Rotation (°)">
-  <TextInput
-    type="text"                     // текст, чтобы спокойно вводить "-" и очищать
-    inputMode="numeric"             // мобильным подскажет цифры
-    value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
-    onChange={(e) => {
-      setRotDraft(prev => ({ ...prev, [zone.id]: e.target.value }));
-    }}
-    onBlur={() => {
-      const raw = rotDraft[zone.id] ?? String(zone.rotation ?? 0);
-      const n = Number(raw.trim());
-      // Разрешаем любые градусы (в т.ч. отрицательные). Если хочешь ограничить — раскомментируй:
-      // const clamped = Math.max(-359, Math.min(359, Math.round(n)));
-      const finalVal = Number.isFinite(n) ? Math.round(n) : (zone.rotation ?? 0);
+            <TextInput
+              type="text"
+              inputMode="numeric"
+              value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
+              onChange={(e) => {
+                setRotDraft((prev) => ({ ...prev, [zone.id]: e.target.value }));
+              }}
+              onBlur={() => {
+                const raw = rotDraft[zone.id] ?? String(zone.rotation ?? 0);
+                const n = Number(raw.trim());
 
-      updateZone(zone.id, { rotation: finalVal });
-      setRotDraft(prev => {
-        const copy = { ...prev };
-        delete copy[zone.id];
-        return copy;
-      });
-    }}
-    onKeyDown={(e) => {
-      if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-    }}
-    placeholder="e.g. -45"
-  />
-</Field>
+                const finalVal = Number.isFinite(n) ? Math.round(n) : (zone.rotation ?? 0);
 
+                updateZone(zone.id, { rotation: finalVal });
+                setRotDraft((prev) => {
+                  const copy = { ...prev };
+                  delete copy[zone.id];
+                  return copy;
+                });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+              }}
+              placeholder="e.g. -45"
+            />
+          </Field>
 
           <Field label="Color">
             <div className="flex items-center gap-2">
               <input
                 type="color"
                 value={zone.color ?? zone.fill ?? "#ffffff"}
-                onChange={(e) => updateZone(zone.id, { color: e.target.value, fill: e.target.value })}
+                onChange={(e) =>
+                  updateZone(zone.id, { color: e.target.value, fill: e.target.value })
+                }
                 className="w-10 h-10 rounded-lg border"
               />
               <div className="flex gap-2">
@@ -237,12 +219,14 @@ export default function PropertiesPanel({
         </div>
       ))}
 
-      {/* --------- ROWS --------- */}
       {selectedRows.map((row) => {
         const rowSeats = seats.filter((s) => s.rowId === row.id);
 
         return (
-          <div key={row.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+          <div
+            key={row.id}
+            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+          >
             <h3 className="text-base font-semibold text-green-700 mb-3">Row: {row.label}</h3>
 
             <Field label="Row Label">
@@ -252,7 +236,9 @@ export default function PropertiesPanel({
                 onChange={(e) =>
                   setState((prev) => ({
                     ...prev,
-                    rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)),
+                    rows: prev.rows.map((r) =>
+                      r.id === row.id ? { ...r, label: e.target.value } : r
+                    ),
                   }))
                 }
               />
@@ -275,10 +261,11 @@ export default function PropertiesPanel({
               </Field>
             </div>
 
-            {/* Групповые действия по сиденьям ряда */}
             {rowSeats.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-semibold text-gray-800 mb-3">Apply to all seats in row</h4>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">
+                  Apply to all seats in row
+                </h4>
 
                 <Field label="Status">
                   <Select
@@ -333,11 +320,13 @@ export default function PropertiesPanel({
         );
       })}
 
-      {/* --------- SEATS (индивидуально) --------- */}
       {selectedSeats.map((seat) => {
         const row = seat.rowId ? rows.find((r) => r.id === seat.rowId) : undefined;
         return (
-          <div key={seat.id} className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+          <div
+            key={seat.id}
+            className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+          >
             <h3 className="text-base font-semibold text-purple-700 mb-3">Seat: {seat.label}</h3>
 
             <Field label="Seat Label">
@@ -363,14 +352,12 @@ export default function PropertiesPanel({
                   value={Math.round(seat.y)}
                   onChange={(e) => {
                     const ny = Number(e.target.value) || 0;
-                    // если сиденье «рядовое» — решаем, прилипать к ряду или отлепляться
+
                     if (row) {
                       const dy = Math.abs(ny - row.y);
                       if (dy <= SNAP_Y_THRESHOLD) {
-                        // держим в ряду
                         updateSeat(seat.id, { y: row.y });
                       } else {
-                        // отлипает от ряда
                         updateSeat(seat.id, { y: ny, rowId: null });
                       }
                     } else {

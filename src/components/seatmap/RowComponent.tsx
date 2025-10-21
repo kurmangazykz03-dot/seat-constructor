@@ -1,9 +1,9 @@
 // src/components/editor/RowComponent.tsx
-import React from 'react';
-import { Group, Rect, Text } from 'react-konva';
-import { Row, Seat } from '../../types/types';
-import SeatComponent from './SeatComponent';
-import { SeatmapState } from '../../pages/EditorPage';
+import React from "react";
+import { Group, Rect, Text } from "react-konva";
+import { SeatmapState } from "../../pages/EditorPage";
+import { Row, Seat } from "../../types/types";
+import SeatComponent from "./SeatComponent";
 
 interface RowComponentProps {
   row: Row;
@@ -14,7 +14,6 @@ interface RowComponentProps {
   currentTool: string;
   isViewerMode?: boolean;
 
-  // ✅ добавили единый внешний обработчик
   onSeatDragEnd?: (seatAfterDrag: Seat) => void;
 }
 
@@ -33,24 +32,24 @@ const RowComponent: React.FC<RowComponentProps> = ({
   const isRowSelected = selectedIds.includes(row.id);
   const padding = 8;
 
-  const minX = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.x)) : row.x - seatRadius;
-  const maxX = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.x)) : row.x + seatRadius;
-  const minY = rowSeats.length > 0 ? Math.min(...rowSeats.map(s => s.y)) : row.y - seatRadius;
-  const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.y)) : row.y + seatRadius;
+  const minX = rowSeats.length > 0 ? Math.min(...rowSeats.map((s) => s.x)) : row.x - seatRadius;
+  const maxX = rowSeats.length > 0 ? Math.max(...rowSeats.map((s) => s.x)) : row.x + seatRadius;
+  const minY = rowSeats.length > 0 ? Math.min(...rowSeats.map((s) => s.y)) : row.y - seatRadius;
+  const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map((s) => s.y)) : row.y + seatRadius;
 
   const handleRowDragMove = (e: any) => {
     if (!isRowSelected) return;
     const dx = e.target.x() - row.x;
     const dy = e.target.y() - row.y;
 
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
-      rows: prev.rows.map(r =>
+      rows: prev.rows.map((r) =>
         selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
       ),
-      seats: prev.seats.map(s =>
+      seats: prev.seats.map((s) =>
         selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
-      )
+      ),
     }));
   };
 
@@ -61,8 +60,8 @@ const RowComponent: React.FC<RowComponentProps> = ({
 
   const bboxX = localMinX - seatRadius - padding;
   const bboxY = localMinY - seatRadius - padding;
-  const bboxW = (localMaxX - localMinX) + seatRadius * 2 + padding * 2;
-  const bboxH = (localMaxY - localMinY) + seatRadius * 2 + padding * 2;
+  const bboxW = localMaxX - localMinX + seatRadius * 2 + padding * 2;
+  const bboxH = localMaxY - localMinY + seatRadius * 2 + padding * 2;
 
   const labelWidth = Math.max(24, row.label.length * 8 + 12);
   const labelGap = 8;
@@ -75,46 +74,41 @@ const RowComponent: React.FC<RowComponentProps> = ({
       x={row.x}
       y={row.y}
       draggable={!isViewerMode && isRowSelected && currentTool === "select"}
-      onDragStart={(e) => { e.cancelBubble = true; }}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+      }}
       // src/components/editor/RowComponent.tsx
 
-// ...
-onDragMove={(e) => {
-  e.cancelBubble = true;
+      // ...
+      onDragMove={(e) => {
+        e.cancelBubble = true;
 
-  // считаем сдвиг ОДИН раз — на основании текущего положения ноды и текущего row.x/y
-  const dx = e.target.x() - row.x;
-  const dy = e.target.y() - row.y;
+        const dx = e.target.x() - row.x;
+        const dy = e.target.y() - row.y;
 
-  // двигаем реальные данные в стейте
-  setState(prev => ({
-    ...prev,
-    rows: prev.rows.map(r =>
-      selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
-    ),
-    seats: prev.seats.map(s =>
-      selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
-    )
-  }));
+        setState((prev) => ({
+          ...prev,
+          rows: prev.rows.map((r) =>
+            selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
+          ),
+          seats: prev.seats.map((s) =>
+            selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
+          ),
+        }));
 
-  // ❗️сброс визуального положения ноды в ту же точку, что и в стейте,
-  // чтобы Konva не добавлял своё смещение поверх нашего
-  e.target.position({ x: row.x, y: row.y });
-}}
-
-// onDragEnd можно оставить как есть (тоже сбрасывает), либо просто:
-onDragEnd={(e) => {
-  e.cancelBubble = true;
-  e.target.position({ x: row.x, y: row.y });
-}}
-
+        e.target.position({ x: row.x, y: row.y });
+      }}
+      onDragEnd={(e) => {
+        e.cancelBubble = true;
+        e.target.position({ x: row.x, y: row.y });
+      }}
     >
       <Rect
         x={bboxX}
         y={bboxY}
         width={bboxW}
         height={bboxH}
-        fill={'transparent'}
+        fill={"transparent"}
         listening={true}
         onMouseDown={(e: any) => {
           e.cancelBubble = true;
@@ -170,14 +164,13 @@ onDragEnd={(e) => {
         }}
       />
 
-      {rowSeats.map(seat => (
+      {rowSeats.map((seat) => (
         <SeatComponent
           key={seat.id}
           seat={seat}
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={isRowSelected}
           onClick={handleElementClick}
-          // ✅ единый snap: отдаём наружу уже локальные координаты seatAfterDrag
           onDragEnd={(_e, seatAfterDrag) => onSeatDragEnd?.(seatAfterDrag)}
           offsetX={row.x}
           offsetY={row.y}

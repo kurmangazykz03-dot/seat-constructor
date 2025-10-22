@@ -1,24 +1,30 @@
 import Konva from "konva";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
-import { Layer, Stage, Transformer,Image as KonvaImage } from "react-konva";
+import { Image as KonvaImage, Layer, Stage, Transformer } from "react-konva";
 import { Row, Seat, Zone } from "../../types/types";
 import DrawingZone from "../seatmap/DrawingZone";
 import GridLayer from "../seatmap/GridLayer";
 import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts";
 import ZoneComponent from "../seatmap/ZoneComponent";
 import ZoomControls from "../seatmap/ZoomControls";
+import BackgroundImageLayer from "../seatmap/BackgroundImageLayer";
 
 import { SeatmapState } from "../../pages/EditorPage"; // Импортируем тип
 
 function useHTMLImage(src: string | null) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
-    if (!src) { setImg(null); return; }
+    if (!src) {
+      setImg(null);
+      return;
+    }
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => setImg(image);
     image.src = src;
-    return () => { setImg(null); };
+    return () => {
+      setImg(null);
+    };
   }, [src]);
   return img;
 }
@@ -32,10 +38,18 @@ interface SeatmapCanvasProps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>;
   currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate";
   backgroundImage: string | null;
-   // 🆕
-   showGrid: boolean;                          // 🆕
+  // 🆕
+  showGrid: boolean; // 🆕
   setShowGrid: React.Dispatch<React.SetStateAction<boolean>>; // 🆕
   onDuplicate: () => void;
+  backgroundFit?: 'contain' | 'cover' | 'stretch' | 'none';
+  backgroundScale?: number;
+  setBackgroundFit?: (fit: 'contain' | 'cover' | 'stretch' | 'none') => void;
+  setBackgroundScale?: (n: number) => void;
+  backgroundMode?: 'auto' | 'manual';
+ backgroundRect?: { x: number; y: number; width: number; height: number };
+setBackgroundMode?: (m: 'auto' | 'manual') => void;
+setBackgroundRect?: (r: { x: number; y: number; width: number; height: number }) => void;
 }
 // Константы, которые можно вынести в отдельный config файл
 const SEAT_RADIUS = 12;
@@ -44,12 +58,7 @@ const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
 const CANVAS_WIDTH = 1486;
 const CANVAS_HEIGHT = 752;
-function containRect(
-  imgW: number,
-  imgH: number,
-  boxW: number,
-  boxH: number
-) {
+function containRect(imgW: number, imgH: number, boxW: number, boxH: number) {
   if (imgW === 0 || imgH === 0) {
     return { x: 0, y: 0, width: boxW, height: boxH };
   }
@@ -71,7 +80,15 @@ function SeatmapCanvas({
   currentTool,
   backgroundImage,
   onDuplicate,
-    showGrid,            
+  showGrid,
+  backgroundFit,
+  backgroundScale,
+  setBackgroundScale,
+  setBackgroundFit,
+backgroundMode,
+backgroundRect,
+setBackgroundMode,
+setBackgroundRect,
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -79,17 +96,39 @@ function SeatmapCanvas({
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
+  const bgNodeRef = useRef<Konva.Image | null>(null);
+const bgTrRef = useRef<Konva.Transformer | null>(null);
+
 
 const bgImg = useHTMLImage(backgroundImage);
-const fitted = bgImg
-  ? containRect(bgImg.width, bgImg.height, CANVAS_WIDTH, CANVAS_HEIGHT)
-  : null;
+
+useEffect(() => {
+  if (backgroundMode === 'manual' && !backgroundRect && backgroundImage) {
+    const img = new window.Image();
+    img.onload = () => {
+      const r = containRect(img.width, img.height, CANVAS_WIDTH, CANVAS_HEIGHT);
+      setBackgroundRect?.({ x: r.x, y: r.y, width: r.width, height: r.height });
+    };
+    img.crossOrigin = 'anonymous';
+    img.src = backgroundImage;
+  }
+}, [backgroundMode, backgroundRect, backgroundImage, setBackgroundRect]);
+
+
+// когда ноды готовы — привязываем transformer
+useEffect(() => {
+  if (bgTrRef.current && bgNodeRef.current) {
+    bgTrRef.current.nodes([bgNodeRef.current]);
+    bgTrRef.current.getLayer()?.batchDraw();
+  }
+}, [backgroundMode, backgroundRect, bgImg]);
+
   useKeyboardShortcuts({
     selectedIds,
     setSelectedIds,
-    state: { seats, rows, zones }, 
+    state: { seats, rows, zones },
     setState,
-    onDuplicate
+    onDuplicate,
   });
   const handleSetScale = (newScale: number) => {
     if (!stageRef.current) return;
@@ -111,11 +150,11 @@ const fitted = bgImg
   };
 
   const createRowWithSeats = (
-      zoneId: string,
-  rowIndex: number,
-  cols: number,
-  offsetX: number,
-  offsetY: number
+    zoneId: string,
+    rowIndex: number,
+    cols: number,
+    offsetX: number,
+    offsetY: number
   ) => {
     const rowId = `row-${crypto.randomUUID()}`;
     const y = offsetY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2;
@@ -167,6 +206,8 @@ const fitted = bgImg
         height: 0,
         fill: "#FAFAFA",
         label: `Zone ${zones.length + 1}`,
+        transparent: false,     // ← добавили
+  fillOpacity: 1,         // ← добавили
       };
 
       setDrawingZone(newZone);
@@ -220,7 +261,7 @@ const fitted = bgImg
       height,
       fill: "#FAFAFA",
       label: `Zone ${zones.length + 1}`,
-      rotation: 0, 
+      rotation: 0,
     };
 
     const offsetX = (width - cols * SEAT_SPACING_X) / 2;
@@ -255,10 +296,8 @@ const fitted = bgImg
   };
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
 
- 
-
   return (
-    <div className="rounded-[16px] border border-[#e5e5e5]">
+    <div className="relative rounded-[16px] border border-[#e5e5e5]">
       <Stage
         ref={stageRef}
         width={CANVAS_WIDTH}
@@ -270,22 +309,24 @@ const fitted = bgImg
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
-        draggable={currentTool === "select"}
-       
+        draggable={currentTool === "select" && backgroundMode !== 'manual'}
+        
       >
-         {bgImg && (
-  <Layer listening={false}>
-    <KonvaImage
-      image={bgImg}
-      x={fitted!.x}
-      y={fitted!.y}
-      width={fitted!.width}
-      height={fitted!.height}
-      opacity={0.95}          
-    />
-  </Layer>
-)}
 
+  {/* AUTO: fit/scale слой под всем остальным */}
+   {backgroundImage && backgroundMode !== 'manual' && (
+ <BackgroundImageLayer
+  dataUrl={backgroundImage}
+       canvasW={CANVAS_WIDTH}
+         canvasH={CANVAS_HEIGHT}
+      fit={backgroundFit ?? 'contain'}
+         scale={backgroundScale ?? 1}
+         opacity={0.95}
+        showCanvasBg={false}
+       />
+     )}
+
+  
 
         <Layer>
           {zones.map((zone) => (
@@ -321,7 +362,7 @@ const fitted = bgImg
                 <Transformer
                   nodes={[node]}
                   rotateEnabled={true}
-                  enabledAnchors={[]} 
+                  enabledAnchors={[]}
                   onTransformEnd={() => {
                     const rotation = node.rotation();
                     setState((prev) => ({
@@ -339,7 +380,7 @@ const fitted = bgImg
             seatSpacingY={SEAT_SPACING_Y}
           />
         </Layer>
-         <GridLayer
+        <GridLayer
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           gridSize={GRID_SIZE}
@@ -347,7 +388,93 @@ const fitted = bgImg
           scale={scale}
           stagePos={stagePos}
         />
+         {/* MANUAL: слой поверх — ресайз/перетаскивание */}
+     {backgroundImage && backgroundMode === 'manual' && bgImg && backgroundRect && (
+       <Layer>
+         <KonvaImage
+           ref={bgNodeRef}
+            image={bgImg}
+           x={backgroundRect.x}
+            y={backgroundRect.y}
+            width={backgroundRect.width}
+            height={backgroundRect.height}
+            opacity={0.95}
+           draggable
+            onDragEnd={(e) => {
+              const node = e.target as unknown as Konva.Image;
+              setBackgroundRect?.({
+                x: node.x(),
+                y: node.y(),
+               width: node.width(),
+               height: node.height(),
+             });
+           }}
+           onTransformEnd={() => {
+             const node = bgNodeRef.current!;
+             const newWidth = node.width() * node.scaleX();
+             const newHeight = node.height() * node.scaleY();
+             const newX = node.x();
+             const newY = node.y();
+             node.scaleX(1);
+             node.scaleY(1);
+             setBackgroundRect?.({ x: newX, y: newY, width: newWidth, height: newHeight });
+          }}
+        />
+        <Transformer
+         ref={bgTrRef}
+          nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
+          rotateEnabled={false}
+          keepRatio={true}
+          enabledAnchors={[
+            "top-left","top-center","top-right",
+            "middle-left","middle-right",
+            "bottom-left","bottom-center","bottom-right",
+          ]}
+          boundBoxFunc={(oldBox, newBox) => {
+            const min = 20;
+           if (newBox.width < min || newBox.height < min) return oldBox;
+           return newBox;
+           }}
+          />
+        </Layer>
+       )}
+        
       </Stage>
+<div className="absolute top-4 left-4 z-50 bg-white/90 border border-gray-200 rounded-xl shadow px-3 py-2 flex items-center gap-2">
+      <button
+        className="text-sm px-2 py-1 border rounded"
+        onClick={() => setBackgroundMode?.(backgroundMode === 'manual' ? 'auto' : 'manual')}
+        title="Переключить режим редактирования фона"
+      >
+        {backgroundMode === 'manual' ? 'Готово' : 'Редактировать фон'}
+       </button>
+      {backgroundMode !== 'manual' && (
+        <>
+          <label className="text-xs text-gray-600">Fit</label>
+          <select
+            className="text-sm border rounded px-2 py-1"
+            value={backgroundFit ?? 'contain'}
+            onChange={(e) => setBackgroundFit?.(e.target.value as any)}
+          >
+            <option value="contain">contain</option>
+            <option value="cover">cover</option>
+            <option value="stretch">stretch</option>
+           <option value="none">none</option>
+          </select>
+          <label className="text-xs text-gray-600">Scale</label>
+          <input
+            type="range" min={0.3} max={2} step={0.05}
+            value={backgroundScale ?? 1}
+            onChange={(e) => setBackgroundScale?.(Number(e.target.value))}
+          />
+          <span className="text-xs w-10 text-right">
+            {Math.round((backgroundScale ?? 1) * 100)}%
+          </span>
+        </>
+      )}
+     </div>
+
+
       <ZoomControls scale={scale} setScale={handleSetScale} />
     </div>
   );

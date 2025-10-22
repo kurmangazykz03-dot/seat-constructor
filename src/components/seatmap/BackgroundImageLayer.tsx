@@ -2,6 +2,7 @@
 import React, { useMemo } from "react";
 import { Image as KonvaImage, Layer, Rect } from "react-konva";
 import useImage from "use-image";
+import Konva from "konva"; // ← для Filters.Blur
 
 type Fit = "contain" | "cover" | "stretch" | "none";
 
@@ -12,11 +13,13 @@ interface BackgroundImageLayerProps {
   fit?: Fit;
   opacity?: number;
   blur?: number;
+  scale?: number;          // 1.0 = без доп.масштаба
+  showCanvasBg?: boolean;  // ← опциональная белая подложка
 }
 
 function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, mode: Fit) {
   if (mode === "stretch") return { w: boxW, h: boxH, x: 0, y: 0 };
-  if (mode === "none") return { w: imgW, h: imgH, x: 0, y: 0 };
+  if (mode === "none")    return { w: imgW, h: imgH, x: 0, y: 0 };
 
   const rImg = imgW / imgH;
   const rBox = boxW / boxH;
@@ -32,7 +35,7 @@ function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, mode: F
       return { w, h, x: (boxW - w) / 2, y: 0 };
     }
   }
-
+  // cover
   if (rImg > rBox) {
     const h = boxH;
     const w = h * rImg;
@@ -51,17 +54,33 @@ const BackgroundImageLayer: React.FC<BackgroundImageLayerProps> = ({
   fit = "contain",
   opacity = 0.25,
   blur = 0,
+  scale = 1,
+  showCanvasBg = false, // ← по умолчанию фон холста не заливаем
 }) => {
   const [img] = useImage(dataUrl, "anonymous");
 
   const rect = useMemo(() => {
     if (!img) return { w: canvasW, h: canvasH, x: 0, y: 0 };
-    return fitRect(img.width, img.height, canvasW, canvasH, fit);
-  }, [img, canvasW, canvasH, fit]);
+
+    // базовый прямоугольник под выбранный fit
+    const base = fitRect(img.width, img.height, canvasW, canvasH, fit);
+
+    // применяем дополнительный масштаб и заново центрируем
+    const sw = base.w * scale;
+    const sh = base.h * scale;
+    const cx = base.x + base.w / 2;
+    const cy = base.y + base.h / 2;
+    const sx = cx - sw / 2;
+    const sy = cy - sh / 2;
+
+    return { w: sw, h: sh, x: sx, y: sy };
+  }, [img, canvasW, canvasH, fit, scale]);
 
   return (
     <Layer listening={false}>
-      <Rect x={0} y={0} width={canvasW} height={canvasH} fill="#ffffff" />
+      {showCanvasBg && (
+        <Rect x={0} y={0} width={canvasW} height={canvasH} fill="#ffffff" />
+      )}
       {img && (
         <KonvaImage
           image={img}
@@ -70,7 +89,8 @@ const BackgroundImageLayer: React.FC<BackgroundImageLayerProps> = ({
           width={rect.w}
           height={rect.h}
           opacity={opacity}
-          filters={blur > 0 ? [window.Konva.Filters.Blur] : undefined}
+          // Корректный вызов blur-фильтра
+          filters={blur > 0 ? [Konva.Filters.Blur] : undefined}
           blurRadius={blur}
         />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import PropertiesPanel from "../components/editor/PropertiesPanel";
 import SeatmapCanvas from "../components/editor/SeatMapCanvas";
@@ -24,6 +24,10 @@ export interface SeatmapState {
     x: number;
     y: number;
   };
+  backgroundFit?: 'contain' | 'cover' | 'stretch' | 'none';
+  backgroundScale?: number;
+backgroundMode?: 'auto' | 'manual';
+backgroundRect?: { x: number; y: number; width: number; height: number } | null;
 }
 
 const INITIAL_STATE: SeatmapState = {
@@ -37,6 +41,11 @@ const INITIAL_STATE: SeatmapState = {
     x: 0,
     y: 0,
   },
+  backgroundFit: 'contain',
+backgroundScale: 1,
+backgroundMode: 'auto',
+backgroundRect: null,
+ 
 };
 
 function EditorPage() {
@@ -48,8 +57,6 @@ function EditorPage() {
     "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
   >("select");
   const [showGrid, setShowGrid] = useState(true);
-
-  
 
   const handleSave = () => {
     try {
@@ -94,17 +101,20 @@ function EditorPage() {
     }
   };
   function importFromV2(json: any): SeatmapState {
-    const zones: Zone[] = (json.zones || []).map((z: any) => ({
-      id: String(z.id),
-      x: Number(z.x ?? 0),
-      y: Number(z.y ?? 0),
-      width: Number(z.width ?? 200),
-      height: Number(z.height ?? 120),
-      fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-      label: String(z.name ?? z.label ?? ""),
-      color: z.color ?? undefined,
-      rotation: Number(z.rotation ?? 0),
-    }));
+   const zones: Zone[] = (json.zones || []).map((z: any) => ({
+  id: String(z.id),
+  x: Number(z.x ?? 0),
+  y: Number(z.y ?? 0),
+  width: Number(z.width ?? 200),
+  height: Number(z.height ?? 120),
+  fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+  label: String(z.name ?? z.label ?? ""),
+  color: z.color ?? undefined,
+  rotation: Number(z.rotation ?? 0),
+  transparent: Boolean(z.transparent ?? false),                   // ← добавили
+  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1, // ← добавили
+}));
+
 
     const rows: Row[] = [];
     const seats: Seat[] = [];
@@ -145,6 +155,8 @@ function EditorPage() {
       rows,
       seats,
       stage: { scale: 1, x: 0, y: 0 },
+      backgroundFit: json.backgroundFit ?? 'contain',
+       backgroundScale: Number(json.backgroundScale ?? 1),
     };
   }
 
@@ -153,6 +165,10 @@ function EditorPage() {
       version: 2,
       hallName: s.hallName,
       backgroundImage: s.backgroundImage ?? null,
+      backgroundFit: s.backgroundFit ?? 'contain',
+      backgroundMode: s.backgroundMode ?? 'auto',
+     backgroundRect: s.backgroundRect ?? null,
+      backgroundScale: s.backgroundScale ?? 1,
       zones: s.zones.map((zone) => ({
         id: zone.id,
         name: zone.label,
@@ -162,6 +178,8 @@ function EditorPage() {
         y: zone.y,
         width: zone.width,
         height: zone.height,
+         transparent: !!zone.transparent,                  // ← добавили
+  fillOpacity: zone.fillOpacity != null ? zone.fillOpacity : 1, // ← добавили
         rows: s.rows
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
@@ -284,6 +302,14 @@ function EditorPage() {
             showGrid={showGrid}
             setShowGrid={setShowGrid}
             onDuplicate={handleDuplicate}
+            backgroundFit={state.backgroundFit}
+ backgroundScale={state.backgroundScale}
+ setBackgroundFit={(fit) => setState(prev => ({ ...prev, backgroundFit: fit }))}
+setBackgroundScale={(n) => setState(prev => ({ ...prev, backgroundScale: n }))}
+ backgroundMode={state.backgroundMode}
+backgroundRect={state.backgroundRect ?? undefined}
+setBackgroundMode={(m) => setState(prev => ({ ...prev, backgroundMode: m }))}
+ setBackgroundRect={(r) => setState(prev => ({ ...prev, backgroundRect: r }))}
           />
         </main>
 

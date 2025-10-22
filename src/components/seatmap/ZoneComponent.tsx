@@ -22,6 +22,7 @@ interface ZoneComponentProps {
   setGroupRef?: (node: Konva.Group | null) => void;
   isViewerMode?: boolean;
   isSelected?: boolean;
+       // ← опционально: ползунок прозрачности (0..1)
 }
 
 const seatRadius = 12;
@@ -205,20 +206,31 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       onClick={handleZoneClickLocal}
       onDragEnd={handleZoneDragEnd}
     >
-      <Rect
-        width={zone.width}
-        height={zone.height}
-        fill={zone.fill}
-        stroke={
-          selectedIds.includes(zone.id)
-            ? "blue"
-            : hoveredZoneId === zone.id && currentTool === "add-row"
-              ? "orange"
-              : ""
-        }
-        strokeWidth={selectedIds.includes(zone.id) || hoveredZoneId === zone.id ? 2 : 0}
-        fillOpacity={0.2}
-      />
+     <Rect
+  width={zone.width}
+  height={zone.height}
+  fill={zone.fill}
+
+  // заливку выключаем, если включён «прозрачный фон»
+  fillEnabled={!zone.transparent}
+  // регулируем только прозрачность заливки, обводка не тускнеет
+  fillOpacity={zone.transparent ? 0 : (zone.fillOpacity ?? 1)}
+
+  stroke={
+    selectedIds.includes(zone.id)
+      ? "#3B82F6"
+      : hoveredZoneId === zone.id && currentTool === "add-row"
+      ? "orange"
+      : "#CBD5E1"        // <-- вместо "", нейтральная рамка
+  }
+  strokeWidth={
+    selectedIds.includes(zone.id) || hoveredZoneId === zone.id ? 2 : 1
+  }
+
+  // клик удобно ловить по контуру
+  hitStrokeWidth={12}
+/>
+
       <Text
         text={zone.label}
         x={zone.width / 2}

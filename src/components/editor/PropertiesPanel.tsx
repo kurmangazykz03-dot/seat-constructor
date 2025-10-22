@@ -216,6 +216,68 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               </div>
             </div>
           </Field>
+          {/* --- Фон зоны: компактный тумблер (центр кольца + медленнее анимация) --- */}
+<Field label="Фон зоны">
+  <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg border border-gray-200 bg-white">
+    {/* мини-превью */}
+    <div className="flex items-center gap-2">
+      <div className="relative h-4 w-4 rounded border overflow-hidden">
+        {/* checkerboard */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+              linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+              linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+              linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)
+            `,
+            backgroundSize: "8px 8px",
+            backgroundPosition: "0 0, 0 4px, 4px -4px, -4px 0px",
+            backgroundColor: "#fff",
+          }}
+        />
+        {!zone.transparent && (
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundColor: zone.color ?? zone.fill ?? "#ffffff",
+              opacity: zone.fillOpacity ?? 1,
+            }}
+          />
+        )}
+      </div>
+      <span className="text-xs text-gray-700">
+        {zone.transparent ? "Прозрачный" : "Заливка"}
+      </span>
+    </div>
+
+    {/* тумблер */}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={zone.transparent ? "true" : "false"}
+      onClick={() => updateZone(zone.id, { transparent: !zone.transparent })}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full
+        transition-colors duration-300 ease-out
+        ${zone.transparent ? "bg-emerald-500" : "bg-gray-300"}
+        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
+      title="Переключить прозрачный фон"
+    >
+      {/* кружок-«кольцо»: по центру по вертикали, плавнее анимация */}
+      <span
+        className={`pointer-events-none absolute top-1/2 -translate-y-1/2
+          h-4 w-4 rounded-full bg-white shadow ring-1 ring-gray-300
+          transition-all duration-300 ease-out
+          ${zone.transparent ? "left-4" : "left-1"}`}
+      />
+    </button>
+  </div>
+</Field>
+
+
+
+
         </div>
       ))}
 

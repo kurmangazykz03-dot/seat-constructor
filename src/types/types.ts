@@ -37,5 +37,6 @@ export interface Zone {
 	label: string;
 	color?: string;
 	  rotation?: number;
-
+transparent?: boolean;
+fillOpacity?: number; // 0..1
 }

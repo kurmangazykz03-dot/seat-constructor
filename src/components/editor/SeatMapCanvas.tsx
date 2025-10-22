@@ -42,7 +42,7 @@ const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
 const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
-const CANVAS_WIDTH = 1436;
+const CANVAS_WIDTH = 1486;
 const CANVAS_HEIGHT = 752;
 function containRect(
   imgW: number,

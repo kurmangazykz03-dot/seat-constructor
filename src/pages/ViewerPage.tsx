@@ -113,7 +113,7 @@ function ViewerPage() {
               state={state}
               selectedSeatId={selectedSeat?.id || null}
               onSeatSelect={setSelectedSeat}
-              width={1436}
+              width={1486}
               height={752}
             />
           )}

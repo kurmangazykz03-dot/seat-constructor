@@ -49,14 +49,7 @@ function EditorPage() {
   >("select");
   const [showGrid, setShowGrid] = useState(true);
 
-  useEffect(() => {
-    try {
-      const json = exportToV2(state);            // экспорт в формат v2
-      localStorage.setItem(LS_KEY, JSON.stringify(json));
-    } catch (e) {
-      console.error("Автосейв не удался:", e);
-    }
-  }, [state]);
+  
 
   const handleSave = () => {
     try {

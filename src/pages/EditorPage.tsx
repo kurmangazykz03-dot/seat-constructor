@@ -10,8 +10,21 @@ import { useHistory } from "../hooks/useHistory";
 import { Row, Seat, Zone } from "../types/types";
 import { duplicateSelected } from "../utils/duplicate";
 import { alignRows, alignSeats } from "../utils/seatmapCommands";
+import { useAutoScale } from '../hooks/useAutoScale'
 
 const LS_KEY = "seatmap_schema";
+const DESIGN = {
+  TOPBAR_H: 60,
+  TOOLBAR_W: 80,
+  PROPS_W: 320,
+  CANVAS_W: 1486,
+  CANVAS_H: 752,
+  GAP: 16,
+};
+
+const WORK_W = DESIGN.TOOLBAR_W + DESIGN.GAP + DESIGN.CANVAS_W + DESIGN.GAP + DESIGN.PROPS_W; // 1918
+const WORK_H = DESIGN.TOPBAR_H + DESIGN.GAP + DESIGN.CANVAS_H + DESIGN.GAP; // 844
+
 
 export interface SeatmapState {
   hallName: string;
@@ -56,6 +69,7 @@ function EditorPage() {
     "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
   >("select");
   const [showGrid, setShowGrid] = useState(true);
+  const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.7, max: 1 });
 
   const handleSave = () => {
     try {
@@ -268,60 +282,91 @@ function EditorPage() {
   };
 
   return (
-    <div className="flex flex-col w-full h-screen bg-gray-100">
-      <TopBar
-        onSave={handleSave}
-        onLoad={handleLoad}
-        onClear={handleClear}
-        onExport={handleExport}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-      />
+    <div className="w-screen h-screen bg-gray-100 overflow-hidden">
+      {/* Контейнер, от которого считаем масштаб */}
+      <div ref={scaleRootRef} className="w-full h-full relative">
+        {/* Сцена фиксированных дизайн-размеров */}
+        <div
+          className="absolute left-1/2 top-0"
+          style={{
+            width: WORK_W,
+            height: WORK_H,
+            transform: `translateX(-50%) scale(${scale})`,
+            transformOrigin: "top center",
+          }}
+        >
+          {/* TopBar — фиксированная высота */}
+          <div style={{ height: DESIGN.TOPBAR_H }}>
+            <TopBar
+              onSave={handleSave}
+              onLoad={handleLoad}
+              onClear={handleClear}
+              onExport={handleExport}
+              onUndo={undo}
+              onRedo={redo}
+              canUndo={canUndo}
+              canRedo={canRedo}
+            />
+          </div>
 
-      <div className="flex flex-1 overflow-hidden">
-       <Toolbar
-  onDuplicate={handleDuplicate}
-  currentTool={currentTool}
-  setCurrentTool={setCurrentTool}
-  onDelete={handleDelete}
-  onAlign={handleAlign}
-  onUploadBackground={handleUploadBackground}
-  showGrid={showGrid}
-  onToggleGrid={() => setShowGrid((s) => !s)}
+          {/* Низ — три колонки: Toolbar | Canvas | Properties */}
+          <div
+            className="mt-4 flex"
+            style={{
+              gap: DESIGN.GAP,
+              height: DESIGN.CANVAS_H,
+            }}
+          >
+            {/* Toolbar */}
+            <div style={{ width: DESIGN.TOOLBAR_W, height: DESIGN.CANVAS_H }}>
+              <Toolbar
+                onDuplicate={handleDuplicate}
+                currentTool={currentTool}
+                setCurrentTool={setCurrentTool}
+                onDelete={handleDelete}
+                onAlign={handleAlign}
+                onUploadBackground={handleUploadBackground}
+                showGrid={showGrid}
+                onToggleGrid={() => setShowGrid((s) => !s)}
+                backgroundMode={state.backgroundMode ?? "auto"}
+                setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+                backgroundFit={state.backgroundFit ?? "contain"}
+                setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+              />
+            </div>
 
-  /* фон */
-  backgroundMode={state.backgroundMode ?? "auto"}
-  setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
-  backgroundFit={state.backgroundFit ?? "contain"}
-  setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
- />
+            {/* Canvas — строго 1486×752 */}
+            <div
+              className="rounded-[16px] border border-[#e5e5e5] bg-white"
+              style={{ width: DESIGN.CANVAS_W, height: DESIGN.CANVAS_H }}
+            >
+              <SeatmapCanvas
+                seats={state.seats}
+                rows={state.rows}
+                zones={state.zones}
+                setState={setState}
+                selectedIds={selectedIds}
+                setSelectedIds={setSelectedIds}
+                currentTool={currentTool}
+                backgroundImage={state.backgroundImage ?? null}
+                showGrid={showGrid}
+                setShowGrid={setShowGrid}
+                onDuplicate={handleDuplicate}
+                backgroundFit={state.backgroundFit}
+                setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+                backgroundMode={state.backgroundMode}
+                backgroundRect={state.backgroundRect ?? undefined}
+                setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+                setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
+              />
+            </div>
 
-
-        <main className="flex-1 bg-gray-50 p-4">
-          <SeatmapCanvas
-            seats={state.seats}
-            rows={state.rows}
-            zones={state.zones}
-            setState={setState}
-            selectedIds={selectedIds}
-            setSelectedIds={setSelectedIds}
-            currentTool={currentTool}
-            backgroundImage={state.backgroundImage ?? null}
-            showGrid={showGrid}
-            setShowGrid={setShowGrid}
-            onDuplicate={handleDuplicate}
-            backgroundFit={state.backgroundFit}
-            setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
-            backgroundMode={state.backgroundMode}
-            backgroundRect={state.backgroundRect ?? undefined}
-            setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
-            setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
-          />
-        </main>
-
-        <PropertiesPanel selectedIds={selectedIds} state={state} setState={setState} />
+            {/* Properties */}
+            <div style={{ width: DESIGN.PROPS_W, height: DESIGN.CANVAS_H }}>
+              <PropertiesPanel selectedIds={selectedIds} state={state} setState={setState} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

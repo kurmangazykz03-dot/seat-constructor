@@ -53,7 +53,7 @@ const [img] = useImage(state.backgroundImage || "", "anonymous");
   const selectedIds = useMemo(() => (selectedSeatId ? [selectedSeatId] : []), [selectedSeatId]);
 
   return (
-    <div className="relative rounded-[16px] border border-[#e5e5e5] bg-white">
+    <div className="relative rounded-[10px] border border-[#e5e5e5] bg-white">
 
       <Stage
         width={width}
@@ -120,11 +120,9 @@ const [img] = useImage(state.backgroundImage || "", "anonymous");
         </Layer>
       </Stage>
 
-         <div className="fixed top-4 left-0 z-50 pointer-events-none">
-    <div className="pointer-events-auto">
+        
       <ZoomControls scale={scale} setScale={handleSetScale} />
-    </div>
-  </div>
+
 
 
     </div>

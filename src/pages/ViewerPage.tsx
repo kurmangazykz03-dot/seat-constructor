@@ -23,11 +23,13 @@ function importFromV2(json: any): SeatmapState {
     label: String(z.name ?? z.label ?? ""),
     color: z.color ?? undefined,
     rotation: Number(z.rotation ?? 0),
+    transparent: Boolean(z.transparent ?? false),
+    fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+    // ⛔️ УБРАТЬ отсюда background* — они не относятся к zone
   }));
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
-
   (json.zones || []).forEach((z: any) => {
     (z.rows || []).forEach((r: any, rIdx: number) => {
       const rowId = String(r.id);
@@ -48,7 +50,7 @@ function importFromV2(json: any): SeatmapState {
           fill: String(s.fill ?? "#1f2937"),
           label: String(s.label ?? ""),
           zoneId: String(z.id),
-          rowId: rowId,
+          rowId,
           colIndex: Number(cIdx),
           status: (s.status as any) ?? "available",
           category: s.category ?? "standard",
@@ -57,15 +59,23 @@ function importFromV2(json: any): SeatmapState {
     });
   });
 
+  // ✅ Фоновые поля — в корень state
   return {
     hallName: String(json.hallName ?? "Hall"),
     backgroundImage: json.backgroundImage ?? null,
+    backgroundFit: json.backgroundFit ?? "contain",
+    backgroundMode: json.backgroundMode ?? "auto",
+    backgroundRect: json.backgroundRect ?? null,
+    // если хочешь поддержать масштаб, добавь при экспорте/импорте:
+    // backgroundScale: Number(json.backgroundScale ?? 1),
+
     zones,
     rows,
     seats,
     stage: { scale: 1, x: 0, y: 0 },
   };
 }
+
 
 function ViewerPage() {
   const [state, setState] = useState<SeatmapState | null>(null);

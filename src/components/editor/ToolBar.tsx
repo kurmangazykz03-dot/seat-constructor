@@ -12,6 +12,12 @@ interface ToolbarProps {
   onUploadBackground?: (dataUrl: string | null) => void;
   showGrid?: boolean;
   onToggleGrid?: () => void;
+
+  // ⬇️ управление фоном
+  backgroundMode: "auto" | "manual";
+  setBackgroundMode: (m: "auto" | "manual") => void;
+  backgroundFit: "contain" | "cover" | "stretch" | "none";
+  setBackgroundFit: (fit: "contain" | "cover" | "stretch" | "none") => void;
 }
 
 function ToolButton({
@@ -20,18 +26,19 @@ function ToolButton({
   onClick,
   title,
   children,
+
 }: {
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   title?: string;
   children: React.ReactNode;
+  
 }) {
   const base = "w-12 h-12 rounded-[12px] flex items-center justify-center transition-colors";
   const activeCls = "bg-blue-500 text-white";
   const idleCls = "bg-[#e7e7eb] hover:bg-blue-400 hover:text-white";
   const disabledCls = "bg-gray-200 text-gray-400 cursor-not-allowed";
-
   return (
     <button
       type="button"
@@ -58,7 +65,7 @@ function Divider() {
 }
 
 export default function Toolbar({
-  currentTool,
+   currentTool,
   setCurrentTool,
   onDelete,
   onAlign,
@@ -66,14 +73,20 @@ export default function Toolbar({
   onUploadBackground,
   showGrid,
   onToggleGrid,
+  backgroundMode,
+  setBackgroundMode,
+  backgroundFit,
+  setBackgroundFit,
 }: ToolbarProps) {
-  const [compact, setCompact] = useState(true);
+  const [compact] = useState(true);
   const [alignOpen, setAlignOpen] = useState(false);
+  const [bgOpen, setBgOpen] = useState(false);
+
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const setTool = (t: ToolbarProps["currentTool"]) => () => setCurrentTool(t);
 
-  const toolLabel = useMemo(() => {
+  useMemo(() => {
     switch (currentTool) {
       case "select":
         return "Select";
@@ -91,7 +104,6 @@ export default function Toolbar({
   }, [currentTool]);
 
   const handlePickFile = () => fileRef.current?.click();
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onUploadBackground) return;
@@ -111,26 +123,13 @@ export default function Toolbar({
     >
       <GroupTitle>Primary</GroupTitle>
       <div className="flex flex-col items-center gap-2">
-        <ToolButton
-          title="Select (V)"
-          active={currentTool === "select"}
-          onClick={setTool("select")}
-        >
+        <ToolButton title="Select (V)" active={currentTool === "select"} onClick={setTool("select")}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-            <path
-              d="M7 3l13 7-7 2-2 7-4-16z"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
+            <path d="M7 3l13 7-7 2-2 7-4-16z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
           </svg>
         </ToolButton>
 
-        <ToolButton
-          title="Zone (Z)"
-          active={currentTool === "add-zone"}
-          onClick={setTool("add-zone")}
-        >
+        <ToolButton title="Zone (Z)" active={currentTool === "add-zone"} onClick={setTool("add-zone")}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
             <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
           </svg>
@@ -138,59 +137,33 @@ export default function Toolbar({
 
         <ToolButton title="Row (R)" active={currentTool === "add-row"} onClick={setTool("add-row")}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-            <path
-              d="M4 7h16M4 12h16M4 17h16"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </ToolButton>
 
-        <ToolButton
-          title="Seat (S)"
-          active={currentTool === "add-seat"}
-          onClick={setTool("add-seat")}
-        >
+        <ToolButton title="Seat (S)" active={currentTool === "add-seat"} onClick={setTool("add-seat")}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
             <use xlinkHref="#icon-seats" />
           </svg>
         </ToolButton>
 
-        <ToolButton
-          title="Rotate (O)"
-          active={currentTool === "rotate"}
-          onClick={setTool("rotate")}
-        >
+        <ToolButton title="Rotate (O)" active={currentTool === "rotate"} onClick={setTool("rotate")}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
             <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <path
-              d="M20 12a8 8 0 1 1-4.7-7.3"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d="M20 12a8 8 0 1 1-4.7-7.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </ToolButton>
       </div>
 
       <Divider />
+      
 
       <GroupTitle>Edit</GroupTitle>
       <div className="flex flex-col items-center gap-2">
         <ToolButton title="Duplicate (Ctrl/⌘ + D)" onClick={onDuplicate}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
             <rect x="8" y="8" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
-            <rect
-              x="4"
-              y="4"
-              width="10"
-              height="10"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="2"
-              opacity="0.6"
-            />
+            <rect x="4" y="4" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" opacity="0.6" />
           </svg>
         </ToolButton>
 
@@ -208,44 +181,24 @@ export default function Toolbar({
         <div className="relative">
           <ToolButton title="Align (L / C / R)" onClick={() => setAlignOpen((v) => !v)}>
             <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-              <path
-                d="M12 4v16M6 8h12M4 12h16M6 16h12"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
+              <path d="M12 4v16M6 8h12M4 12h16M6 16h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </ToolButton>
           {alignOpen && (
             <div className="absolute left-16 top-0 z-20 bg-white border border-gray-200 rounded-xl shadow-md p-2 flex gap-2">
               <ToolButton title="Align Left" onClick={() => onAlign("left")}>
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-                  <path
-                    d="M4 4v16M4 8h12M4 12h16M4 16h8"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
+                  <path d="M4 4v16M4 8h12M4 12h16M4 16h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </ToolButton>
               <ToolButton title="Align Center" onClick={() => onAlign("center")}>
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-                  <path
-                    d="M12 4v16M6 8h12M4 12h16M6 16h12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
+                  <path d="M12 4v16M6 8h12M4 12h16M6 16h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </ToolButton>
               <ToolButton title="Align Right" onClick={() => onAlign("right")}>
                 <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
-                  <path
-                    d="M20 4v16M8 8h12M4 12h16M12 16h8"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
+                  <path d="M20 4v16M8 8h12M4 12h16M12 16h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </ToolButton>
             </div>
@@ -260,36 +213,42 @@ export default function Toolbar({
         <ToolButton title="Upload image" onClick={handlePickFile}>
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
             <path d="M4 17v2h16v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <path
-              d="M12 3v10m0 0l-4-4m4 4l4-4"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d="M12 3v10m0 0l-4-4m4 4l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </ToolButton>
       </div>
+
+
+
+
+<div className="flex flex-col items-center gap-2">
+  <ToolButton
+    title={backgroundMode === 'manual' ? 'Background editing: ON' : 'Background editing: OFF'}
+    active={backgroundMode === 'manual'}
+    onClick={() => setBackgroundMode(backgroundMode === 'manual' ? 'auto' : 'manual')}
+  >
+    {/* иконка картинки */}
+    <svg viewBox="0 0 24 24" className="w-4 h-4 text-black" fill="none">
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M7 15l3-3 3 4 2-2 3 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="9" cy="9" r="1.5" fill="currentColor" />
+    </svg>
+  </ToolButton>
+</div>
+
+
+      <Divider />
+
       <GroupTitle>View</GroupTitle>
       <div className="flex flex-col items-center gap-2">
-        <ToolButton
-          title="Toggle grid"
-          active={!!showGrid}
-          onClick={onToggleGrid}
-          disabled={!onToggleGrid}
-        >
+        <ToolButton title="Toggle grid" active={!!showGrid} onClick={onToggleGrid} disabled={!onToggleGrid}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
             <path d="M4 4h16v16H4zM4 12h16M12 4v16" stroke="currentColor" strokeWidth="2" />
           </svg>
         </ToolButton>
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="hidden"
-      />
+      <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
     </aside>
   );
 }

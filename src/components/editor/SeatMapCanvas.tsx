@@ -43,9 +43,7 @@ interface SeatmapCanvasProps {
   setShowGrid: React.Dispatch<React.SetStateAction<boolean>>; // 🆕
   onDuplicate: () => void;
   backgroundFit?: 'contain' | 'cover' | 'stretch' | 'none';
-  backgroundScale?: number;
-  setBackgroundFit?: (fit: 'contain' | 'cover' | 'stretch' | 'none') => void;
-  setBackgroundScale?: (n: number) => void;
+ setBackgroundFit?: (fit: 'contain' | 'cover' | 'stretch' | 'none') => void;
   backgroundMode?: 'auto' | 'manual';
  backgroundRect?: { x: number; y: number; width: number; height: number };
 setBackgroundMode?: (m: 'auto' | 'manual') => void;
@@ -82,8 +80,7 @@ function SeatmapCanvas({
   onDuplicate,
   showGrid,
   backgroundFit,
-  backgroundScale,
-  setBackgroundScale,
+
   setBackgroundFit,
 backgroundMode,
 backgroundRect,
@@ -98,6 +95,7 @@ setBackgroundRect,
 
   const bgNodeRef = useRef<Konva.Image | null>(null);
 const bgTrRef = useRef<Konva.Transformer | null>(null);
+
 
 
 const bgImg = useHTMLImage(backgroundImage);
@@ -313,18 +311,76 @@ useEffect(() => {
         
       >
 
-  {/* AUTO: fit/scale слой под всем остальным */}
-   {backgroundImage && backgroundMode !== 'manual' && (
- <BackgroundImageLayer
-  dataUrl={backgroundImage}
-       canvasW={CANVAS_WIDTH}
-         canvasH={CANVAS_HEIGHT}
-      fit={backgroundFit ?? 'contain'}
-         scale={backgroundScale ?? 1}
-         opacity={0.95}
+ 
+  {/* === ФОН САМЫЙ НИЖНИЙ === */}
+  {backgroundImage && backgroundMode !== 'manual' && (
+    backgroundRect && bgImg ? (
+      <Layer listening={false}>
+        <KonvaImage
+          image={bgImg}
+          x={backgroundRect.x}
+          y={backgroundRect.y}
+          width={backgroundRect.width}
+          height={backgroundRect.height}
+          opacity={0.95}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      </Layer>
+    ) : (
+      <BackgroundImageLayer
+        dataUrl={backgroundImage}
+        canvasW={CANVAS_WIDTH}
+        canvasH={CANVAS_HEIGHT}
+        fit={backgroundFit ?? 'contain'}
+        opacity={0.95}
         showCanvasBg={false}
-       />
-     )}
+      />
+    )
+  )}
+
+  {backgroundImage && backgroundMode === 'manual' && bgImg && backgroundRect && (
+    <Layer>
+      <KonvaImage
+        ref={bgNodeRef}
+        image={bgImg}
+        x={backgroundRect.x}
+        y={backgroundRect.y}
+        width={backgroundRect.width}
+        height={backgroundRect.height}
+        opacity={0.95}
+        draggable
+        onDragEnd={(e) => {
+          const node = e.target as unknown as Konva.Image;
+          setBackgroundRect?.({
+            x: node.x(), y: node.y(), width: node.width(), height: node.height(),
+          });
+        }}
+        onTransformEnd={() => {
+          const node = bgNodeRef.current!;
+          const w = node.width() * node.scaleX();
+          const h = node.height() * node.scaleY();
+          const x = node.x();
+          const y = node.y();
+          node.scaleX(1); node.scaleY(1);
+          setBackgroundRect?.({ x, y, width: w, height: h });
+        }}
+      />
+      <Transformer
+        ref={bgTrRef}
+        nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
+        rotateEnabled={false}
+        keepRatio
+        enabledAnchors={[
+          'top-left','top-center','top-right',
+          'middle-left','middle-right',
+          'bottom-left','bottom-center','bottom-right',
+        ]}
+        boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
+      />
+    </Layer>
+  )}
+
 
   
 
@@ -388,91 +444,9 @@ useEffect(() => {
           scale={scale}
           stagePos={stagePos}
         />
-         {/* MANUAL: слой поверх — ресайз/перетаскивание */}
-     {backgroundImage && backgroundMode === 'manual' && bgImg && backgroundRect && (
-       <Layer>
-         <KonvaImage
-           ref={bgNodeRef}
-            image={bgImg}
-           x={backgroundRect.x}
-            y={backgroundRect.y}
-            width={backgroundRect.width}
-            height={backgroundRect.height}
-            opacity={0.95}
-           draggable
-            onDragEnd={(e) => {
-              const node = e.target as unknown as Konva.Image;
-              setBackgroundRect?.({
-                x: node.x(),
-                y: node.y(),
-               width: node.width(),
-               height: node.height(),
-             });
-           }}
-           onTransformEnd={() => {
-             const node = bgNodeRef.current!;
-             const newWidth = node.width() * node.scaleX();
-             const newHeight = node.height() * node.scaleY();
-             const newX = node.x();
-             const newY = node.y();
-             node.scaleX(1);
-             node.scaleY(1);
-             setBackgroundRect?.({ x: newX, y: newY, width: newWidth, height: newHeight });
-          }}
-        />
-        <Transformer
-         ref={bgTrRef}
-          nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
-          rotateEnabled={false}
-          keepRatio={true}
-          enabledAnchors={[
-            "top-left","top-center","top-right",
-            "middle-left","middle-right",
-            "bottom-left","bottom-center","bottom-right",
-          ]}
-          boundBoxFunc={(oldBox, newBox) => {
-            const min = 20;
-           if (newBox.width < min || newBox.height < min) return oldBox;
-           return newBox;
-           }}
-          />
-        </Layer>
-       )}
-        
+         
       </Stage>
-<div className="absolute top-4 left-4 z-50 bg-white/90 border border-gray-200 rounded-xl shadow px-3 py-2 flex items-center gap-2">
-      <button
-        className="text-sm px-2 py-1 border rounded"
-        onClick={() => setBackgroundMode?.(backgroundMode === 'manual' ? 'auto' : 'manual')}
-        title="Переключить режим редактирования фона"
-      >
-        {backgroundMode === 'manual' ? 'Готово' : 'Редактировать фон'}
-       </button>
-      {backgroundMode !== 'manual' && (
-        <>
-          <label className="text-xs text-gray-600">Fit</label>
-          <select
-            className="text-sm border rounded px-2 py-1"
-            value={backgroundFit ?? 'contain'}
-            onChange={(e) => setBackgroundFit?.(e.target.value as any)}
-          >
-            <option value="contain">contain</option>
-            <option value="cover">cover</option>
-            <option value="stretch">stretch</option>
-           <option value="none">none</option>
-          </select>
-          <label className="text-xs text-gray-600">Scale</label>
-          <input
-            type="range" min={0.3} max={2} step={0.05}
-            value={backgroundScale ?? 1}
-            onChange={(e) => setBackgroundScale?.(Number(e.target.value))}
-          />
-          <span className="text-xs w-10 text-right">
-            {Math.round((backgroundScale ?? 1) * 100)}%
-          </span>
-        </>
-      )}
-     </div>
+
 
 
       <ZoomControls scale={scale} setScale={handleSetScale} />

@@ -24,10 +24,10 @@ export interface SeatmapState {
     x: number;
     y: number;
   };
-  backgroundFit?: 'contain' | 'cover' | 'stretch' | 'none';
-  backgroundScale?: number;
-backgroundMode?: 'auto' | 'manual';
-backgroundRect?: { x: number; y: number; width: number; height: number } | null;
+  backgroundFit?: "contain" | "cover" | "stretch" | "none";
+
+  backgroundMode?: "auto" | "manual";
+  backgroundRect?: { x: number; y: number; width: number; height: number } | null;
 }
 
 const INITIAL_STATE: SeatmapState = {
@@ -41,11 +41,10 @@ const INITIAL_STATE: SeatmapState = {
     x: 0,
     y: 0,
   },
-  backgroundFit: 'contain',
-backgroundScale: 1,
-backgroundMode: 'auto',
-backgroundRect: null,
- 
+  backgroundFit: "contain",
+
+  backgroundMode: "auto",
+  backgroundRect: null,
 };
 
 function EditorPage() {
@@ -101,7 +100,7 @@ function EditorPage() {
     }
   };
   function importFromV2(json: any): SeatmapState {
-   const zones: Zone[] = (json.zones || []).map((z: any) => ({
+    const zones: Zone[] = (json.zones || []).map((z: any) => ({
   id: String(z.id),
   x: Number(z.x ?? 0),
   y: Number(z.y ?? 0),
@@ -111,10 +110,9 @@ function EditorPage() {
   label: String(z.name ?? z.label ?? ""),
   color: z.color ?? undefined,
   rotation: Number(z.rotation ?? 0),
-  transparent: Boolean(z.transparent ?? false),                   // ← добавили
-  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1, // ← добавили
+  transparent: Boolean(z.transparent ?? false),
+  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
 }));
-
 
     const rows: Row[] = [];
     const seats: Seat[] = [];
@@ -155,8 +153,9 @@ function EditorPage() {
       rows,
       seats,
       stage: { scale: 1, x: 0, y: 0 },
-      backgroundFit: json.backgroundFit ?? 'contain',
-       backgroundScale: Number(json.backgroundScale ?? 1),
+      backgroundFit: json.backgroundFit ?? "contain",
+      backgroundMode: json.backgroundMode ?? "auto",
+      backgroundRect: json.backgroundRect ?? null,
     };
   }
 
@@ -165,10 +164,10 @@ function EditorPage() {
       version: 2,
       hallName: s.hallName,
       backgroundImage: s.backgroundImage ?? null,
-      backgroundFit: s.backgroundFit ?? 'contain',
-      backgroundMode: s.backgroundMode ?? 'auto',
-     backgroundRect: s.backgroundRect ?? null,
-      backgroundScale: s.backgroundScale ?? 1,
+      backgroundFit: s.backgroundFit ?? "contain",
+      backgroundMode: s.backgroundMode ?? "auto",
+      backgroundRect: s.backgroundRect ?? null,
+
       zones: s.zones.map((zone) => ({
         id: zone.id,
         name: zone.label,
@@ -178,8 +177,8 @@ function EditorPage() {
         y: zone.y,
         width: zone.width,
         height: zone.height,
-         transparent: !!zone.transparent,                  // ← добавили
-  fillOpacity: zone.fillOpacity != null ? zone.fillOpacity : 1, // ← добавили
+        transparent: !!zone.transparent,
+        fillOpacity: zone.fillOpacity ?? 1,
         rows: s.rows
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
@@ -255,8 +254,12 @@ function EditorPage() {
   };
 
   const handleUploadBackground = (dataUrl: string | null) => {
-    setState((prev) => ({ ...prev, backgroundImage: dataUrl ?? null }));
-  };
+  setState((prev) => ({
+    ...prev,
+    backgroundImage: dataUrl ?? null,
+    ...(prev.backgroundMode === "manual" ? { backgroundRect: null } : {}),
+  }));
+};
 
   const handleDuplicate = () => {
     const { next, newSelectedIds } = duplicateSelected(state, selectedIds, 24);
@@ -278,16 +281,23 @@ function EditorPage() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <Toolbar
-          onDuplicate={handleDuplicate}
-          currentTool={currentTool}
-          setCurrentTool={setCurrentTool}
-          onDelete={handleDelete}
-          onAlign={handleAlign}
-          onUploadBackground={handleUploadBackground}
-          showGrid={showGrid}
-          onToggleGrid={() => setShowGrid((s) => !s)}
-        />
+       <Toolbar
+  onDuplicate={handleDuplicate}
+  currentTool={currentTool}
+  setCurrentTool={setCurrentTool}
+  onDelete={handleDelete}
+  onAlign={handleAlign}
+  onUploadBackground={handleUploadBackground}
+  showGrid={showGrid}
+  onToggleGrid={() => setShowGrid((s) => !s)}
+
+  /* фон */
+  backgroundMode={state.backgroundMode ?? "auto"}
+  setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+  backgroundFit={state.backgroundFit ?? "contain"}
+  setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+ />
+
 
         <main className="flex-1 bg-gray-50 p-4">
           <SeatmapCanvas
@@ -303,13 +313,11 @@ function EditorPage() {
             setShowGrid={setShowGrid}
             onDuplicate={handleDuplicate}
             backgroundFit={state.backgroundFit}
- backgroundScale={state.backgroundScale}
- setBackgroundFit={(fit) => setState(prev => ({ ...prev, backgroundFit: fit }))}
-setBackgroundScale={(n) => setState(prev => ({ ...prev, backgroundScale: n }))}
- backgroundMode={state.backgroundMode}
-backgroundRect={state.backgroundRect ?? undefined}
-setBackgroundMode={(m) => setState(prev => ({ ...prev, backgroundMode: m }))}
- setBackgroundRect={(r) => setState(prev => ({ ...prev, backgroundRect: r }))}
+            setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+            backgroundMode={state.backgroundMode}
+            backgroundRect={state.backgroundRect ?? undefined}
+            setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+            setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
           />
         </main>
 

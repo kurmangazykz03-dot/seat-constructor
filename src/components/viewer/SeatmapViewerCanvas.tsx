@@ -1,10 +1,13 @@
 // src/components/viewer/SeatmapViewerCanvas.tsx
 import React, { useMemo, useRef, useState } from "react";
-import { Layer, Stage } from "react-konva";
+
 import { SeatmapState } from "../../pages/EditorPage";
 import BackgroundImageLayer from "../seatmap/BackgroundImageLayer";
 import ZoneComponent from "../seatmap/ZoneComponent";
 import ZoomControls from "../seatmap/ZoomControls";
+
+import { Layer, Stage, Image as KonvaImage } from "react-konva";
+import useImage from 'use-image'
 
 interface ViewerCanvasProps {
   state: SeatmapState;
@@ -45,6 +48,7 @@ const SeatmapViewerCanvas: React.FC<ViewerCanvasProps> = ({
     onSeatSelect(seat);
   };
 
+const [img] = useImage(state.backgroundImage || "", "anonymous");
   // Подготавливаем selectedIds: в viewer выделяем только кресло
   const selectedIds = useMemo(() => (selectedSeatId ? [selectedSeatId] : []), [selectedSeatId]);
 
@@ -65,15 +69,31 @@ const SeatmapViewerCanvas: React.FC<ViewerCanvasProps> = ({
           if (clickedOnEmpty) onSeatSelect(null);
         }}
       >
-        {!!state.backgroundImage && (
-          <BackgroundImageLayer
-            dataUrl={state.backgroundImage}
-            canvasW={width}
-            canvasH={height}
-            fit="contain"
-            opacity={0.95}
-          />
-        )}
+      {state.backgroundImage && state.backgroundRect ? (
+  <Layer listening={false}>
+    {img && (
+      <KonvaImage
+        image={img}
+        x={state.backgroundRect.x}
+        y={state.backgroundRect.y}
+        width={state.backgroundRect.width}
+        height={state.backgroundRect.height}
+        opacity={0.95}
+        listening={false}
+      />
+    )}
+  </Layer>
+) : state.backgroundImage ? (
+  <BackgroundImageLayer
+    dataUrl={state.backgroundImage}
+    canvasW={width}
+    canvasH={height}
+    fit={state.backgroundFit ?? 'contain'}
+    /* scale убран, если не используешь */
+    opacity={0.95}
+  />
+) : null}
+
 
         <Layer listening>
           {state.zones.map((zone) => (

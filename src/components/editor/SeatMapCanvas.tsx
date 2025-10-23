@@ -295,7 +295,7 @@ useEffect(() => {
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
 
   return (
-    <div className="relative rounded-[16px] border border-[#e5e5e5]">
+    <div className='relative'>
       <Stage
         ref={stageRef}
         width={CANVAS_WIDTH}

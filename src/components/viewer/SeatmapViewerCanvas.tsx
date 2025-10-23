@@ -53,7 +53,7 @@ const [img] = useImage(state.backgroundImage || "", "anonymous");
   const selectedIds = useMemo(() => (selectedSeatId ? [selectedSeatId] : []), [selectedSeatId]);
 
   return (
-    <div className="relative rounded-[10px] border border-[#e5e5e5] bg-white">
+    <div >
 
       <Stage
         width={width}

@@ -89,8 +89,7 @@ function ViewerPage() {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // авто-масштаб рамки
-  const { ref: hostRef, scale } = useAutoScale(DESIGN_W, DESIGN_H, { min: 0.7, max: 1 });
+ const { ref: hostRef, scale } = useAutoScale(DESIGN_W, DESIGN_H, { min: 0.5, max: 1 });
 
   useEffect(() => {
     try {

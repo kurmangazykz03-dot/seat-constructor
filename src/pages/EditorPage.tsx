@@ -69,7 +69,7 @@ function EditorPage() {
     "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
   >("select");
   const [showGrid, setShowGrid] = useState(true);
-  const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.7, max: 1 });
+  const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.5, max: 1 });
 
   const handleSave = () => {
     try {
@@ -282,7 +282,7 @@ function EditorPage() {
   };
 
   return (
-    <div className="w-screen h-screen bg-gray-100 overflow-hidden">
+    <div className="w-screen h-screen bg-gray-100 overflow-auto">
       {/* Контейнер, от которого считаем масштаб */}
       <div ref={scaleRootRef} className="w-full h-full relative">
         {/* Сцена фиксированных дизайн-размеров */}

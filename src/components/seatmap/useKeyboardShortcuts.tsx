@@ -1,15 +1,16 @@
 // src/components/seatmap/useKeyboardShortcuts.ts
 import { useEffect } from "react";
-import type { SeatmapState } from "../../pages/EditorPage";
+
 import type { Row, Seat, Zone } from "../../types/types";
 
-interface UseKeyboardShortcutsProps {
-  selectedIds: string[];
-  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
-  state: SeatmapState;
-  setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
-  onDuplicate?: () => void;
-}
+type EntitiesState = { seats: Seat[]; rows: Row[]; zones: Zone[] };
+ interface UseKeyboardShortcutsProps {
+   selectedIds: string[];
+   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
+   state: EntitiesState;
+   setState: (updater: (prev: any) => any) => void; // допускаем любой расширенный стейт
+   onDuplicate?: () => void;
+ }
 
 export const useKeyboardShortcuts = ({
   selectedIds,

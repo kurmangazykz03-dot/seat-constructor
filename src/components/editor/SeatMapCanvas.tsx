@@ -1,15 +1,15 @@
 import Konva from "konva";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 
+import { Image as KonvaImage, Layer, Stage, Transformer, Rect, Circle } from "react-konva";
+
 import { Row, Seat, Zone } from "../../types/types";
+import BackgroundImageLayer from "../seatmap/BackgroundImageLayer";
 import DrawingZone from "../seatmap/DrawingZone";
 import GridLayer from "../seatmap/GridLayer";
 import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts";
 import ZoneComponent from "../seatmap/ZoneComponent";
 import ZoomControls from "../seatmap/ZoomControls";
-import BackgroundImageLayer from "../seatmap/BackgroundImageLayer";
-import { Image as KonvaImage, Layer, Stage, Transformer, Rect } from "react-konva";
-
 
 import { SeatmapState } from "../../pages/EditorPage"; // Импортируем тип
 
@@ -44,12 +44,12 @@ interface SeatmapCanvasProps {
   showGrid: boolean; // 🆕
   setShowGrid: React.Dispatch<React.SetStateAction<boolean>>; // 🆕
   onDuplicate: () => void;
-  backgroundFit?: 'contain' | 'cover' | 'stretch' | 'none';
- setBackgroundFit?: (fit: 'contain' | 'cover' | 'stretch' | 'none') => void;
-  backgroundMode?: 'auto' | 'manual';
- backgroundRect?: { x: number; y: number; width: number; height: number };
-setBackgroundMode?: (m: 'auto' | 'manual') => void;
-setBackgroundRect?: (r: { x: number; y: number; width: number; height: number }) => void;
+  backgroundFit?: "contain" | "cover" | "stretch" | "none";
+  setBackgroundFit?: (fit: "contain" | "cover" | "stretch" | "none") => void;
+  backgroundMode?: "auto" | "manual";
+  backgroundRect?: { x: number; y: number; width: number; height: number };
+  setBackgroundMode?: (m: "auto" | "manual") => void;
+  setBackgroundRect?: (r: { x: number; y: number; width: number; height: number }) => void;
 }
 // Константы, которые можно вынести в отдельный config файл
 const SEAT_RADIUS = 12;
@@ -84,10 +84,10 @@ function SeatmapCanvas({
   backgroundFit,
 
   setBackgroundFit,
-backgroundMode,
-backgroundRect,
-setBackgroundMode,
-setBackgroundRect,
+  backgroundMode,
+  backgroundRect,
+  setBackgroundMode,
+  setBackgroundRect,
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -95,197 +95,224 @@ setBackgroundRect,
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
-
   // ——— утилиты ———
 
-// было: только clamp
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  // было: только clamp
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** Зум к экранной точке (anchor = pointer) */
-const zoomAtScreenPoint = (anchor: { x: number; y: number }, nextScaleRaw: number) => {
-  const stage: Konva.Stage | null = stageRef.current;
-  if (!stage) return;
+  /** Зум к экранной точке (anchor = pointer) */
+  const zoomAtScreenPoint = (anchor: { x: number; y: number }, nextScaleRaw: number) => {
+    const stage: Konva.Stage | null = stageRef.current;
+    if (!stage) return;
 
-  const oldScale = stage.scaleX();
-  const nextScale = clamp(nextScaleRaw, 0.4, 3);
+    const oldScale = stage.scaleX();
+    const nextScale = clamp(nextScaleRaw, 0.4, 3);
 
-  const world = stage.getAbsoluteTransform().copy().invert().point(anchor);
-  const newPos = { x: anchor.x - world.x * nextScale, y: anchor.y - world.y * nextScale };
+    const world = stage.getAbsoluteTransform().copy().invert().point(anchor);
+    const newPos = { x: anchor.x - world.x * nextScale, y: anchor.y - world.y * nextScale };
 
-  setScale(nextScale);
-  setStagePos(newPos);
-};
-
-useEffect(() => {
-  const onKeyDown = (e: KeyboardEvent) => {
-    const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (document.activeElement as any)?.isContentEditable) return;
-
-    const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-    const anchor = lastPointerRef.current ?? center;
-
-    if ((e.metaKey || e.ctrlKey) && (e.key === '+' || e.key === '=')) {
-      e.preventDefault();
-      zoomAtScreenPoint(anchor, scale * 1.1);
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === '-') {
-      e.preventDefault();
-      zoomAtScreenPoint(anchor, scale / 1.1);
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === '0') {
-      e.preventDefault();
-      zoomAtScreenPoint(center, 1);
-    }
+    setScale(nextScale);
+    setStagePos(newPos);
   };
-  window.addEventListener('keydown', onKeyDown);
-  return () => window.removeEventListener('keydown', onKeyDown);
-}, [scale]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
+      if (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        (document.activeElement as any)?.isContentEditable
+      )
+        return;
 
+      const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+      const anchor = lastPointerRef.current ?? center;
 
-/** конвертирует координату указателя в «мировые» координаты (без учёта scale/pos Stage) */
-const toWorldPoint = (stage: Konva.Stage, p: { x: number; y: number }) =>
-  stage.getAbsoluteTransform().copy().invert().point(p);
+      if ((e.metaKey || e.ctrlKey) && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        zoomAtScreenPoint(anchor, scale * 1.1);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "-") {
+        e.preventDefault();
+        zoomAtScreenPoint(anchor, scale / 1.1);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        zoomAtScreenPoint(center, 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scale]);
 
-// ——— hand tool (Space) ———
-const [isSpacePressed, setIsSpacePressed] = useState(false);
-useEffect(() => {
-  const onKeyDown = (e: KeyboardEvent) => {
-    const el = document.activeElement as HTMLElement | null;
-    const editing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
-    if (editing) return;
-    if (e.code === 'Space') { e.preventDefault(); setIsSpacePressed(true); }
+  /** конвертирует координату указателя в «мировые» координаты (без учёта scale/pos Stage) */
+  const toWorldPoint = (stage: Konva.Stage, p: { x: number; y: number }) =>
+    stage.getAbsoluteTransform().copy().invert().point(p);
+
+  // ——— hand tool (Space) ———
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const editing =
+        el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if (editing) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        setIsSpacePressed(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") setIsSpacePressed(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
+  useEffect(() => {
+    const el = stageRef.current?.container();
+    if (!el) return;
+    el.style.cursor = isSpacePressed ? "grab" : "default";
+  }, [isSpacePressed]);
+  useEffect(() => {
+    const el = stageRef.current?.container();
+    if (!el) return;
+    el.style.touchAction = "none"; // отключает нативные pinch/scroll-жесты
+  }, []);
+
+  const [marquee, setMarquee] = useState<{
+    active: boolean;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }>({
+    active: false,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+  });
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const startMarquee = (p: { x: number; y: number }) => {
+    dragStartRef.current = p;
+    setMarquee({ active: true, x: p.x, y: p.y, w: 0, h: 0 });
   };
-  const onKeyUp = (e: KeyboardEvent) => { if (e.code === 'Space') setIsSpacePressed(false); };
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  return () => {
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
+  const updateMarquee = (p: { x: number; y: number }) => {
+    if (!dragStartRef.current) return;
+    const dx = p.x - dragStartRef.current.x;
+    const dy = p.y - dragStartRef.current.y;
+    const x = dx < 0 ? p.x : dragStartRef.current.x;
+    const y = dy < 0 ? p.y : dragStartRef.current.y;
+    const w = Math.abs(dx);
+    const h = Math.abs(dy);
+    setMarquee((m) => ({ ...m, x, y, w, h }));
   };
-}, []);
-useEffect(() => {
-  const el = stageRef.current?.container();
-  if (!el) return;
-  el.style.cursor = isSpacePressed ? 'grab' : 'default';
-}, [isSpacePressed]);
-useEffect(() => {
-  const el = stageRef.current?.container();
-  if (!el) return;
-  el.style.touchAction = 'none'; // отключает нативные pinch/scroll-жесты
-}, []);
+  const finishMarquee = (append: boolean) => {
+    if (!marquee.active) return;
 
+    // hit-test в "мировых" координатах
+    const rx2 = marquee.x + marquee.w,
+      ry2 = marquee.y + marquee.h;
+    const selected: string[] = [];
 
-const [marquee, setMarquee] = useState<{ active: boolean; x: number; y: number; w: number; h: number }>({
-  active: false, x: 0, y: 0, w: 0, h: 0
-});
-const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-
-const startMarquee = (p: { x: number; y: number }) => {
-  dragStartRef.current = p;
-  setMarquee({ active: true, x: p.x, y: p.y, w: 0, h: 0 });
-};
-const updateMarquee = (p: { x: number; y: number }) => {
-  if (!dragStartRef.current) return;
-  const dx = p.x - dragStartRef.current.x;
-  const dy = p.y - dragStartRef.current.y;
-  const x = dx < 0 ? p.x : dragStartRef.current.x;
-  const y = dy < 0 ? p.y : dragStartRef.current.y;
-  const w = Math.abs(dx);
-  const h = Math.abs(dy);
-  setMarquee(m => ({ ...m, x, y, w, h }));
-};
-const finishMarquee = (append: boolean) => {
-  if (!marquee.active) return;
-
-  // hit-test в "мировых" координатах
-  const rx2 = marquee.x + marquee.w, ry2 = marquee.y + marquee.h;
-  const selected: string[] = [];
-
-  // зоны (AABB)
-  for (const z of zones) {
-    const zx1 = z.x, zy1 = z.y, zx2 = z.x + z.width, zy2 = z.y + z.height;
-    const intersect = !(zx2 < marquee.x || zx1 > rx2 || zy2 < marquee.y || zy1 > ry2);
-    if (intersect) selected.push(z.id);
-  }
-
-  // ряды — по экстентам сидений (или точка вокруг row.x,row.y, если пусто)
-  const R = 12, PAD = 8;
-  for (const r of rows) {
-    const z = zones.find(zz => zz.id === r.zoneId);
-    if (!z) continue;
-    const rowSeats = seats.filter(s => s.rowId === r.id);
-    let x1, x2, y1, y2;
-    if (rowSeats.length) {
-      const lefts  = rowSeats.map(s => z.x + s.x - (s.radius ?? R));
-      const rights = rowSeats.map(s => z.x + s.x + (s.radius ?? R));
-      x1 = Math.min(...lefts) - PAD;
-      x2 = Math.max(...rights) + PAD;
-      y1 = z.y + r.y - (R + PAD);
-      y2 = z.y + r.y + (R + PAD);
-    } else {
-      x1 = z.x + r.x - (R + PAD);
-      x2 = z.x + r.x + (R + PAD);
-      y1 = z.y + r.y - (R + PAD);
-      y2 = z.y + r.y + (R + PAD);
+    // зоны (AABB)
+    for (const z of zones) {
+      const zx1 = z.x,
+        zy1 = z.y,
+        zx2 = z.x + z.width,
+        zy2 = z.y + z.height;
+      const intersect = !(zx2 < marquee.x || zx1 > rx2 || zy2 < marquee.y || zy1 > ry2);
+      if (intersect) selected.push(z.id);
     }
-    const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
-    if (intersect) selected.push(r.id);
-  }
 
-  // сидения (по bbox круга)
-  for (const s of seats) {
-    const z = zones.find(zz => zz.id === s.zoneId);
-    if (!z) continue;
-    const r = s.radius ?? 12;
-    const cx = z.x + s.x, cy = z.y + s.y;
-    const x1 = cx - r, x2 = cx + r, y1 = cy - r, y2 = cy + r;
-    const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
-    if (intersect) selected.push(s.id);
-  }
+    // ряды — по экстентам сидений (или точка вокруг row.x,row.y, если пусто)
+    const R = 12,
+      PAD = 8;
+    for (const r of rows) {
+      const z = zones.find((zz) => zz.id === r.zoneId);
+      if (!z) continue;
+      const rowSeats = seats.filter((s) => s.rowId === r.id);
+      let x1, x2, y1, y2;
+      if (rowSeats.length) {
+        const lefts = rowSeats.map((s) => z.x + s.x - (s.radius ?? R));
+        const rights = rowSeats.map((s) => z.x + s.x + (s.radius ?? R));
+        x1 = Math.min(...lefts) - PAD;
+        x2 = Math.max(...rights) + PAD;
+        y1 = z.y + r.y - (R + PAD);
+        y2 = z.y + r.y + (R + PAD);
+      } else {
+        x1 = z.x + r.x - (R + PAD);
+        x2 = z.x + r.x + (R + PAD);
+        y1 = z.y + r.y - (R + PAD);
+        y2 = z.y + r.y + (R + PAD);
+      }
+      const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
+      if (intersect) selected.push(r.id);
+    }
 
-  setSelectedIds(prev => append ? Array.from(new Set([...prev, ...selected])) : selected);
-  setMarquee({ active: false, x: 0, y: 0, w: 0, h: 0 });
-  dragStartRef.current = null;
-};
+    // сидения (по bbox круга)
+    // сидения (по bbox круга) — учитываем и привязанные к зоне, и «свободные»
+    for (const s of seats) {
+      const r = s.radius ?? 12;
+      const z = s.zoneId ? zones.find((zz) => zz.id === s.zoneId) : null;
+      const cx = z ? z.x + s.x : s.x;
+      const cy = z ? z.y + s.y : s.y;
+      const x1 = cx - r,
+        x2 = cx + r,
+        y1 = cy - r,
+        y2 = cy + r;
+      const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
+      if (intersect) selected.push(s.id);
+    }
+
+    setSelectedIds((prev) => (append ? Array.from(new Set([...prev, ...selected])) : selected));
+    setMarquee({ active: false, x: 0, y: 0, w: 0, h: 0 });
+    dragStartRef.current = null;
+  };
 
   const bgNodeRef = useRef<Konva.Image | null>(null);
-const bgTrRef = useRef<Konva.Transformer | null>(null);
-// где-то рядом с другими useRef/useState
-const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const bgTrRef = useRef<Konva.Transformer | null>(null);
+  // где-то рядом с другими useRef/useState
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
+  // универсальный setter для кнопок (+/-)
+  const setScaleFromButtons = (nextScale: number) => {
+    const anchor = lastPointerRef.current ?? { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+    zoomAtScreenPoint(anchor, nextScale);
+  };
 
+  const bgImg = useHTMLImage(backgroundImage);
 
-// универсальный setter для кнопок (+/-)
-const setScaleFromButtons = (nextScale: number) => {
-  const anchor = lastPointerRef.current ?? { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
-  zoomAtScreenPoint(anchor, nextScale);
-};
+  useEffect(() => {
+    if (backgroundMode === "manual" && !backgroundRect && backgroundImage) {
+      const img = new window.Image();
+      img.onload = () => {
+        const r = containRect(img.width, img.height, CANVAS_WIDTH, CANVAS_HEIGHT);
+        setBackgroundRect?.({ x: r.x, y: r.y, width: r.width, height: r.height });
+      };
+      img.crossOrigin = "anonymous";
+      img.src = backgroundImage;
+    }
+  }, [backgroundMode, backgroundRect, backgroundImage, setBackgroundRect]);
 
-
-
-const bgImg = useHTMLImage(backgroundImage);
-
+  // когда ноды готовы — привязываем transformer
+  useEffect(() => {
+    if (bgTrRef.current && bgNodeRef.current) {
+      bgTrRef.current.nodes([bgNodeRef.current]);
+      bgTrRef.current.getLayer()?.batchDraw();
+    }
+  }, [backgroundMode, backgroundRect, bgImg]);
 useEffect(() => {
-  if (backgroundMode === 'manual' && !backgroundRect && backgroundImage) {
-    const img = new window.Image();
-    img.onload = () => {
-      const r = containRect(img.width, img.height, CANVAS_WIDTH, CANVAS_HEIGHT);
-      setBackgroundRect?.({ x: r.x, y: r.y, width: r.width, height: r.height });
-    };
-    img.crossOrigin = 'anonymous';
-    img.src = backgroundImage;
-  }
-}, [backgroundMode, backgroundRect, backgroundImage, setBackgroundRect]);
-
-
-// когда ноды готовы — привязываем transformer
-useEffect(() => {
-  if (bgTrRef.current && bgNodeRef.current) {
-    bgTrRef.current.nodes([bgNodeRef.current]);
-    bgTrRef.current.getLayer()?.batchDraw();
-  }
-}, [backgroundMode, backgroundRect, bgImg]);
+  const el = stageRef.current?.container();
+  if (!el) return;
+  el.style.cursor = isSpacePressed ? "grab" : (currentTool === "add-seat" ? "crosshair" : "default");
+}, [isSpacePressed, currentTool]);
 
   useKeyboardShortcuts({
     selectedIds,
@@ -294,7 +321,6 @@ useEffect(() => {
     setState,
     onDuplicate,
   });
-
 
   const createRowWithSeats = (
     zoneId: string,
@@ -332,114 +358,150 @@ useEffect(() => {
   };
 
   const handleStageMouseDown = (e: any) => {
-   const stage: Konva.Stage = e.target.getStage();
-  const isEmpty = e.target === stage;
+    const stage: Konva.Stage = e.target.getStage();
+    const isEmpty = e.target === stage;
 
-  // ✅ тоже можно обновить — полезно, если нажали, не двигая мышь
-  const p = stage.getPointerPosition();
-  if (p) lastPointerRef.current = p;
-
-  // select + пустота + не зажат Space → стартуем marquee
-  if (currentTool === "select" && isEmpty && !isSpacePressed) {
+    // ✅ тоже можно обновить — полезно, если нажали, не двигая мышь
     const p = stage.getPointerPosition();
-    if (p) startMarquee(toWorldPoint(stage, p));
-  }
+    if (p) lastPointerRef.current = p;
 
-  // add-zone — как у тебя было
-  if (currentTool === "add-zone" && isEmpty) {
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-    const realPos = toWorldPoint(stage, pointer);
+    // select + пустота + не зажат Space → стартуем marquee
+    if (currentTool === "select" && isEmpty && !isSpacePressed) {
+      const p = stage.getPointerPosition();
+      if (p) startMarquee(toWorldPoint(stage, p));
+    }
+    // add-seat — свободное место (вне зоны)
+    if (currentTool === "add-seat" ) {
+      if (isSpacePressed) return; 
+      const p = stage.getPointerPosition();
+      if (!p) return;
+      const world = toWorldPoint(stage, p);
+      const snappedX = Math.round(world.x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(world.y / GRID_SIZE) * GRID_SIZE;
 
-    const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
-    const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+      const newSeat: Seat = {
+        id: `seat-${crypto.randomUUID()}`,
+        x: snappedX,
+        y: snappedY,
+        radius: SEAT_RADIUS,
+        fill: "#22C55E",
+        label: "1",
+        status: "available",
+        category: "standard",
+        zoneId: null,
+        rowId: null,
+        colIndex: 1,
+      };
+      setState((prev) => ({ ...prev, seats: [...prev.seats, newSeat] }));
+      setSelectedIds([newSeat.id]);
+      return; // не запускаем marquee в этом случае
+    }
 
-    const newZone: Zone = {
-      id: "zone-temp",
-      x: snappedX, y: snappedY,
-      width: 0, height: 0,
-      fill: "#FAFAFA",
-      label: `Zone ${zones.length + 1}`,
-      transparent: false,
-      fillOpacity: 1,
-    };
-    setDrawingZone(newZone);
-  }
-};
+    // add-zone — как у тебя было
+    if (currentTool === "add-zone" && isEmpty) {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const realPos = toWorldPoint(stage, pointer);
 
-const handleStageMouseMove = (e: any) => {
-  const stage: Konva.Stage = e.target.getStage();
-  const p = stage.getPointerPosition();
-  if (!p) return;
-   // ✅ записываем актуальную позицию курсора
-  lastPointerRef.current = p;
+      const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
 
-  // тянем рамку
-  if (marquee.active) {
-    updateMarquee(toWorldPoint(stage, p));
-    return;
-  }
+      const newZone: Zone = {
+        id: "zone-temp",
+        x: snappedX,
+        y: snappedY,
+        width: 0,
+        height: 0,
+        fill: "#FAFAFA",
+        label: `Zone ${zones.length + 1}`,
+        transparent: false,
+        fillOpacity: 1,
+      };
+      setDrawingZone(newZone);
+    }
+  };
 
-  // тянем прямоугольник зоны (режим add-zone)
-  if (drawingZone) {
-    const realPos = toWorldPoint(stage, p);
-    const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
-    const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
-    setDrawingZone(prev => prev ? { ...prev, width: snappedX - prev.x, height: snappedY - prev.y } : null);
-  }
-};
+  const handleStageMouseMove = (e: any) => {
+    const stage: Konva.Stage = e.target.getStage();
+    const p = stage.getPointerPosition();
+    if (!p) return;
+    // ✅ записываем актуальную позицию курсора
+    lastPointerRef.current = p;
 
-const handleStageMouseUp = (e: any) => {
-  const stage: Konva.Stage = e.target.getStage();
-
-  // завершаем marquee
-  if (marquee.active) {
-    finishMarquee(!!e.evt.shiftKey);
-    return;
-  }
-
-  // завершаем отрисовку зоны
-  if (drawingZone) {
-    const startX = drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
-    const startY = drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
-    const width = Math.abs(drawingZone.width);
-    const height = Math.abs(drawingZone.height);
-
-    if (width < SEAT_SPACING_X || height < SEAT_SPACING_Y) {
-      setDrawingZone(null);
+    // тянем рамку
+    if (marquee.active) {
+      updateMarquee(toWorldPoint(stage, p));
       return;
     }
 
-    const cols = Math.max(1, Math.floor(width / SEAT_SPACING_X));
-    const rowsCount = Math.max(1, Math.floor(height / SEAT_SPACING_Y));
-    const newZone: Zone = {
-      id: `zone-${crypto.randomUUID()}`,
-      x: startX, y: startY, width, height,
-      fill: "#FAFAFA", label: `Zone ${zones.length + 1}`, rotation: 0,
-    };
+    // тянем прямоугольник зоны (режим add-zone)
+    if (drawingZone) {
+      const realPos = toWorldPoint(stage, p);
+      const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+      setDrawingZone((prev) =>
+        prev ? { ...prev, width: snappedX - prev.x, height: snappedY - prev.y } : null
+      );
+    }
+  };
 
-    const offsetX = (width - cols * SEAT_SPACING_X) / 2;
-    const offsetY = (height - rowsCount * SEAT_SPACING_Y) / 2;
+  const handleStageMouseUp = (e: any) => {
+    const stage: Konva.Stage = e.target.getStage();
 
-    const allNewRows: Row[] = [];
-    const allNewSeats: Seat[] = [];
-    for (let r = 0; r < rowsCount; r++) {
-      const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
-      allNewRows.push(row);
-      allNewSeats.push(...rowSeats);
+    // завершаем marquee
+    if (marquee.active) {
+      finishMarquee(!!e.evt.shiftKey);
+      return;
     }
 
-    setState(prev => ({
-      ...prev,
-      zones: [...prev.zones, newZone],
-      rows: [...prev.rows, ...allNewRows],
-      seats: [...prev.seats, ...allNewSeats],
-    }));
-    setDrawingZone(null);
-  }
-};
+    // завершаем отрисовку зоны
+    if (drawingZone) {
+      const startX = drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
+      const startY = drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
+      const width = Math.abs(drawingZone.width);
+      const height = Math.abs(drawingZone.height);
+
+      if (width < SEAT_SPACING_X || height < SEAT_SPACING_Y) {
+        setDrawingZone(null);
+        return;
+      }
+
+      const cols = Math.max(1, Math.floor(width / SEAT_SPACING_X));
+      const rowsCount = Math.max(1, Math.floor(height / SEAT_SPACING_Y));
+      const newZone: Zone = {
+        id: `zone-${crypto.randomUUID()}`,
+        x: startX,
+        y: startY,
+        width,
+        height,
+        fill: "#FAFAFA",
+        label: `Zone ${zones.length + 1}`,
+        rotation: 0,
+      };
+
+      const offsetX = (width - cols * SEAT_SPACING_X) / 2;
+      const offsetY = (height - rowsCount * SEAT_SPACING_Y) / 2;
+
+      const allNewRows: Row[] = [];
+      const allNewSeats: Seat[] = [];
+      for (let r = 0; r < rowsCount; r++) {
+        const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
+        allNewRows.push(row);
+        allNewSeats.push(...rowSeats);
+      }
+
+      setState((prev) => ({
+        ...prev,
+        zones: [...prev.zones, newZone],
+        rows: [...prev.rows, ...allNewRows],
+        seats: [...prev.seats, ...allNewSeats],
+      }));
+      setDrawingZone(null);
+    }
+  };
 
   const handleElementClick = (id: string, e: any) => {
+    if (currentTool === "add-seat") return;
     e.cancelBubble = true;
     if (e.evt.shiftKey) {
       setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
@@ -448,39 +510,36 @@ const handleStageMouseUp = (e: any) => {
     }
   };
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
-const handleWheel = (e: any) => {
-  e.evt.preventDefault();
+  const handleWheel = (e: any) => {
+    e.evt.preventDefault();
 
-  const stage: Konva.Stage | null = stageRef.current || e.target?.getStage?.();
-  if (!stage) return;
+    const stage: Konva.Stage | null = stageRef.current || e.target?.getStage?.();
+    if (!stage) return;
 
-  const pointer = stage.getPointerPosition();
-  if (!pointer) return;
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
 
-  // запоминаем последний якорь для кнопок +/- и хоткеев
-  lastPointerRef.current = pointer;
+    // запоминаем последний якорь для кнопок +/- и хоткеев
+    lastPointerRef.current = pointer;
 
-  const isZoomGesture = e.evt.ctrlKey || e.evt.metaKey || e.evt.altKey;
+    const isZoomGesture = e.evt.ctrlKey || e.evt.metaKey || e.evt.altKey;
 
-  if (isZoomGesture) {
-    const scaleBy = 1.05;
-    const direction = e.evt.deltaY < 0 ? 1 : -1; // вверх — приблизить
-    const target = direction > 0 ? scale * scaleBy : scale / scaleBy;
-    zoomAtScreenPoint(pointer, target);
-  } else {
-    // трекпад/колесо без модификаторов — пан
-    setStagePos((pos) => ({
-      x: pos.x - e.evt.deltaX,
-      y: pos.y - e.evt.deltaY,
-    }));
-  }
-};
-
-
-
+    if (isZoomGesture) {
+      const scaleBy = 1.05;
+      const direction = e.evt.deltaY < 0 ? 1 : -1; // вверх — приблизить
+      const target = direction > 0 ? scale * scaleBy : scale / scaleBy;
+      zoomAtScreenPoint(pointer, target);
+    } else {
+      // трекпад/колесо без модификаторов — пан
+      setStagePos((pos) => ({
+        x: pos.x - e.evt.deltaX,
+        y: pos.y - e.evt.deltaY,
+      }));
+    }
+  };
 
   return (
-    <div className='relative'>
+    <div className="relative">
       <Stage
   ref={stageRef}
   width={CANVAS_WIDTH}
@@ -490,97 +549,110 @@ const handleWheel = (e: any) => {
   x={stagePos.x}
   y={stagePos.y}
   draggable={isSpacePressed}
-  onWheel={handleWheel}                     // ← вот это добавить
+  dragDistance={2}               // чуть защищаемся от случайных драг-стартов
+  onWheel={handleWheel}
   onMouseDown={handleStageMouseDown}
   onMouseMove={handleStageMouseMove}
   onMouseUp={handleStageMouseUp}
-  onDragStart={() => {
-  const el = stageRef.current?.container();
-  if (el) el.style.cursor = 'grabbing';
-}}
-
-onDragMove={(e) => setStagePos(e.target.position())}
-onDragEnd={(e) => setStagePos(e.target.position())}
-
-
-
+  onDragStart={(e) => {
+    const stage = stageRef.current;
+    if (!stage || e.target !== stage) return; // <-- ключевая проверка
+    const el = stage.container();
+    if (el) el.style.cursor = "grabbing";
+  }}
+  onDragMove={(e) => {
+    const stage = stageRef.current;
+    if (!stage || e.target !== stage) return; // <-- ключевая проверка
+    setStagePos(stage.position());
+  }}
+  onDragEnd={(e) => {
+    const stage = stageRef.current;
+    if (!stage || e.target !== stage) return; // <-- ключевая проверка
+    setStagePos(stage.position());
+    const el = stage.container();
+    if (el) el.style.cursor = isSpacePressed ? "grab" : "default";
+  }}
 >
 
+        {/* === ФОН САМЫЙ НИЖНИЙ === */}
+        {backgroundImage &&
+          backgroundMode !== "manual" &&
+          (backgroundRect && bgImg ? (
+            <Layer listening={false}>
+              <KonvaImage
+                image={bgImg}
+                x={backgroundRect.x}
+                y={backgroundRect.y}
+                width={backgroundRect.width}
+                height={backgroundRect.height}
+                opacity={0.95}
+                listening={false}
+                perfectDrawEnabled={false}
+              />
+            </Layer>
+          ) : (
+            <BackgroundImageLayer
+              dataUrl={backgroundImage}
+              canvasW={CANVAS_WIDTH}
+              canvasH={CANVAS_HEIGHT}
+              fit={backgroundFit ?? "contain"}
+              opacity={0.95}
+              showCanvasBg={false}
+            />
+          ))}
 
- 
-  {/* === ФОН САМЫЙ НИЖНИЙ === */}
-  {backgroundImage && backgroundMode !== 'manual' && (
-    backgroundRect && bgImg ? (
-     <Layer listening={false}>
-    <KonvaImage
-      image={bgImg}
-      x={backgroundRect.x}
-      y={backgroundRect.y}
-      width={backgroundRect.width}
-      height={backgroundRect.height}
-      opacity={0.95}
-      listening={false}
-      perfectDrawEnabled={false}
-    />
-  </Layer>
-    ) : (
-      <BackgroundImageLayer
-        dataUrl={backgroundImage}
-        canvasW={CANVAS_WIDTH}
-        canvasH={CANVAS_HEIGHT}
-        fit={backgroundFit ?? 'contain'}
-        opacity={0.95}
-        showCanvasBg={false}
-      />
-    )
-  )}
+        {backgroundImage && backgroundMode === "manual" && bgImg && backgroundRect && (
+         <Layer listening={currentTool === "select" && !isSpacePressed}>
+            <KonvaImage
+              ref={bgNodeRef}
+              image={bgImg}
+              x={backgroundRect.x}
+              y={backgroundRect.y}
+              width={backgroundRect.width}
+              height={backgroundRect.height}
+              opacity={0.95}
+              draggable={currentTool === "select" && !isSpacePressed}
+              onDragEnd={(e) => {
+                const node = e.target as unknown as Konva.Image;
+                setBackgroundRect?.({
+                  x: node.x(),
+                  y: node.y(),
+                  width: node.width(),
+                  height: node.height(),
+                });
+              }}
+              onTransformEnd={() => {
+                const node = bgNodeRef.current!;
+                const w = node.width() * node.scaleX();
+                const h = node.height() * node.scaleY();
+                const x = node.x();
+                const y = node.y();
+                node.scaleX(1);
+                node.scaleY(1);
+                setBackgroundRect?.({ x, y, width: w, height: h });
+              }}
+            />
+            <Transformer
+              ref={bgTrRef}
+              nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
+              rotateEnabled={false}
+              keepRatio
+              enabledAnchors={[
+                "top-left",
+                "top-center",
+                "top-right",
+                "middle-left",
+                "middle-right",
+                "bottom-left",
+                "bottom-center",
+                "bottom-right",
+              ]}
+              boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
+            />
+          </Layer>
+        )}
 
-  {backgroundImage && backgroundMode === 'manual' && bgImg && backgroundRect && (
-    <Layer listening={!isSpacePressed}>
-      <KonvaImage
-        ref={bgNodeRef}
-        image={bgImg}
-        x={backgroundRect.x}
-        y={backgroundRect.y}
-        width={backgroundRect.width}
-        height={backgroundRect.height}
-        opacity={0.95}
-        draggable={!isSpacePressed}  
-        onDragEnd={(e) => {
-          const node = e.target as unknown as Konva.Image;
-          setBackgroundRect?.({
-            x: node.x(), y: node.y(), width: node.width(), height: node.height(),
-          });
-        }}
-        onTransformEnd={() => {
-          const node = bgNodeRef.current!;
-          const w = node.width() * node.scaleX();
-          const h = node.height() * node.scaleY();
-          const x = node.x();
-          const y = node.y();
-          node.scaleX(1); node.scaleY(1);
-          setBackgroundRect?.({ x, y, width: w, height: h });
-        }}
-      />
-      <Transformer
-        ref={bgTrRef}
-        nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
-        rotateEnabled={false}
-        keepRatio
-        enabledAnchors={[
-          'top-left','top-center','top-right',
-          'middle-left','middle-right',
-          'bottom-left','bottom-center','bottom-right',
-        ]}
-        boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
-      />
-    </Layer>
-  )}
-
-
-  
-
-        <Layer>
+        <Layer listening={currentTool !== "add-seat"}>
           {zones.map((zone) => (
             <ZoneComponent
               key={zone.id}
@@ -632,7 +704,33 @@ onDragEnd={(e) => setStagePos(e.target.position())}
             seatSpacingY={SEAT_SPACING_Y}
           />
         </Layer>
-        
+        {/* Свободные сиденья (не привязаны к зонам) */}
+        <Layer listening={currentTool === "select" && !isSpacePressed}>
+          {seats
+            .filter((s) => !s.zoneId)
+            .map((s) => (
+              <Circle
+                key={s.id}
+                x={s.x}
+                y={s.y}
+                radius={s.radius ?? SEAT_RADIUS}
+                fill={s.fill}
+                stroke="#0F172A"
+                strokeWidth={0.5}
+                opacity={1}
+                draggable={currentTool === "select" && !isSpacePressed}
+                onClick={(e) => handleElementClick(s.id, e)}
+                onDragEnd={(e) => {
+                  const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
+                  const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
+                  setState((prev) => ({
+                    ...prev,
+                    seats: prev.seats.map((ss) => (ss.id === s.id ? { ...ss, x: nx, y: ny } : ss)),
+                  }));
+                }}
+              />
+            ))}
+        </Layer>
         <GridLayer
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
@@ -642,28 +740,25 @@ onDragEnd={(e) => setStagePos(e.target.position())}
           stagePos={stagePos}
         />
 
-       <Layer listening={false}>
-  {marquee.active && (
-    <Rect
-      x={marquee.x}
-      y={marquee.y}
-      width={marquee.w}
-      height={marquee.h}
-      stroke="#3B82F6"
-      strokeWidth={1}
-      dash={[6, 4]}
-      fill="rgba(59,130,246,0.06)"
-    />
-  )}
-</Layer>
 
-         
+        <Layer listening={false}>
+          {marquee.active && (
+            <Rect
+              x={marquee.x}
+              y={marquee.y}
+              width={marquee.w}
+              height={marquee.h}
+              stroke="#3B82F6"
+              strokeWidth={1}
+              dash={[6, 4]}
+              fill="rgba(59,130,246,0.06)"
+            />
+          )}
+        </Layer>
+        
       </Stage>
 
-
-
-      <ZoomControls scale={scale}
-  setScale={setScaleFromButtons} />
+      <ZoomControls scale={scale} setScale={setScaleFromButtons} />
     </div>
   );
 }

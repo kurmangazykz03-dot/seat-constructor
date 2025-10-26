@@ -50,6 +50,53 @@ export const useKeyboardShortcuts = ({
         setSelectedIds([]);
         return;
       }
+      // ===== Nudge arrows (←↑→↓) + Shift=×10 =====
+const arrows = new Set(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"]);
+if (arrows.has(e.key)) {
+  e.preventDefault();
+  const step = e.shiftKey ? 10 : 1;
+  const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+  const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+
+  const selSeatIds = new Set(selectedIds.filter(id => id.startsWith("seat-")));
+  const selRowIds  = new Set(selectedIds.filter(id => id.startsWith("row-")));
+  const selZoneIds = new Set(selectedIds.filter(id => id.startsWith("zone-")));
+
+  setState((prev) => {
+    // двигаем зоны
+    const zones = prev.zones.map(z =>
+      selZoneIds.has(z.id) ? { ...z, x: z.x + dx, y: z.y + dy } : z
+    );
+
+    // ряды: двигаем сами ряды...
+    const rows = prev.rows.map(r =>
+      selRowIds.has(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
+    );
+
+    // ...и сиденья тех рядов, которые выбраны (если сами сиденья не выделены отдельно)
+    const moveRowSeat = (s: Seat) =>
+      selRowIds.has(s.rowId ?? "") && !selSeatIds.has(s.id);
+
+    // сиденья: двигаем выделенные + «подчинённые» рядам/зонам
+    const seats = prev.seats.map(s => {
+      if (selSeatIds.has(s.id)) return { ...s, x: s.x + dx, y: s.y + dy };
+
+      // если выбрана зона — двигаем все её ряды/сиденья (если сами не выделены)
+      const zoneSelected = selZoneIds.has(prev.rows.find(r => r.id === s.rowId)?.zoneId ?? "");
+      if (zoneSelected && !selSeatIds.has(s.id) && !selRowIds.has(s.rowId ?? "")) {
+        return { ...s, x: s.x + dx, y: s.y + dy };
+      }
+
+      if (moveRowSeat(s)) return { ...s, x: s.x + dx, y: s.y + dy };
+      return s;
+    });
+
+    return { ...prev, zones, rows, seats };
+  });
+
+  return;
+}
+
 
       // ===== Copy (Ctrl/⌘ + C) =====
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {

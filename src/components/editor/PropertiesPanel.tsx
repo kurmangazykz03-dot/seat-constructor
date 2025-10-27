@@ -1,7 +1,9 @@
 // src/components/editor/PropertiesPanel.tsx
 import React from "react";
 import type { SeatmapState } from "../../pages/EditorPage";
-import type { Row, Seat, Zone } from "../../types/types";
+import type { Row, Seat, Zone, TextObject, ShapeObject } from "../../types/types";
+
+
 
 interface PropertiesPanelProps {
   selectedIds: string[];
@@ -25,6 +27,31 @@ const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
 const SNAP_Y_THRESHOLD = 12;
 const RADIUS_MIN = 6;
 const RADIUS_MAX = 30;
+
+
+
+const STATUS_COLOR = {
+  available: "#22c55e",
+  occupied:  "#ef4444",
+  disabled:  "#9ca3af",
+} as const;
+
+const CATEGORY_COLOR: Record<string, string> = {
+  standard: "#22c55e",
+  vip:      "#eab308",
+  discount: "#22c55e", // при желании поменяете позже
+};
+const SPACING_X = 30;        // шаг по X между местами (как в Canvas)
+const DEFAULT_RADIUS = 12;   // радиус по умолчанию, если в ряду ещё нет мест
+
+
+function colorFor(status: Seat["status"], category?: string) {
+  if (status === "occupied") return STATUS_COLOR.occupied;
+  if (status === "disabled") return STATUS_COLOR.disabled;
+  // available
+  if (category && CATEGORY_COLOR[category]) return CATEGORY_COLOR[category];
+  return STATUS_COLOR.available;
+}
 
 const Panel = ({ children }: { children: React.ReactNode }) => (
   <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">{children}</div>
@@ -80,9 +107,244 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
   if (zoneIds.size === 0) return;
   setState(prev => ({
     ...prev,
-    seats: prev.seats.map(s =>
-      s.zoneId && zoneIds.has(s.zoneId) ? { ...s, ...patch } : s
-    ),
+    seats: prev.seats.map(s => {
+      if (!s.zoneId || !zoneIds.has(s.zoneId)) return s;
+      const next = { ...s, ...patch };
+      if ("status" in patch || "category" in patch) {
+        next.fill = colorFor(
+          (next.status ?? s.status) as Seat["status"],
+          (next.category ?? s.category) as string
+        );
+      }
+      return next;
+    }),
+  }));
+};
+const addColumnToZone = (zoneId: string, side: "left" | "right") => {
+  setState(prev => {
+    const zone = prev.zones.find(z => z.id === zoneId);
+    if (!zone) return prev;
+
+    // ряды и места этой зоны
+    let rows = [...prev.rows];
+    let seats = [...prev.seats];
+    const zoneRows = rows.filter(r => r.zoneId === zoneId);
+
+    // если вставляем слева — возможно надо чуть сдвинуть контент вправо,
+    // чтобы новое место не ушло левее 0 внутри зоны.
+    let requiredShift = 0;
+    if (side === "left") {
+      for (const r of zoneRows) {
+        const rowSeats = seats.filter(s => s.rowId === r.id);
+        const rRad = rowSeats[0]?.radius ?? DEFAULT_RADIUS;
+        const baseMin = rowSeats.length ? Math.min(...rowSeats.map(s => s.x)) : (r.x + rRad);
+        const proposed = rowSeats.length ? baseMin - SPACING_X : (r.x + rRad);
+        // хотим: proposed >= rRad (центр не выходит за рамки)
+        requiredShift = Math.max(requiredShift, Math.max(0, rRad - proposed));
+      }
+      if (requiredShift > 0) {
+        rows  = rows.map(rr => rr.zoneId === zoneId ? { ...rr, x: rr.x + requiredShift } : rr);
+        seats = seats.map(s  => s.zoneId === zoneId ? { ...s, x: s.x + requiredShift } : s);
+      }
+    }
+
+    // теперь реально добавляем по одному месту в каждый ряд
+    const newSeats: Seat[] = [];
+    for (const r of zoneRows) {
+      const rowSeats = seats.filter(s => s.rowId === r.id);
+      const base = rowSeats[0]; // шаблон внешнего вида и статусов
+      const rRad = base?.radius ?? DEFAULT_RADIUS;
+
+      let newX: number;
+      if (rowSeats.length === 0) {
+        // если в ряду ещё нет мест — ставим первое на левую «полочку» ряда
+        newX = r.x + rRad;
+      } else if (side === "right") {
+        const maxX = Math.max(...rowSeats.map(s => s.x));
+        newX = maxX + SPACING_X;
+      } else {
+        const minX = Math.min(...rowSeats.map(s => s.x));
+        newX = minX - SPACING_X;
+      }
+
+      newSeats.push({
+        id: `seat-${crypto.randomUUID()}`,
+        x: newX,
+        y: r.y,
+        radius: rRad,
+        fill: base?.fill ?? "#22c55e",
+        label: "",                 // проставим после, при перенумерации
+        category: base?.category ?? "standard",
+        status: base?.status ?? "available",
+        zoneId,
+        rowId: r.id,
+        colIndex: 0,              // проставим после, при перенумерации
+      });
+    }
+
+    seats = seats.concat(newSeats);
+
+    // гарантируем ширину зоны справа (чтоб не обрезало)
+    const seatsInZone = seats.filter(s => s.zoneId === zoneId);
+    const needWidth = seatsInZone.length
+      ? Math.max(...seatsInZone.map(s => (s.x + (s.radius ?? DEFAULT_RADIUS))))
+      : zone.width;
+    const zones = prev.zones.map(z =>
+      z.id === zoneId ? { ...z, width: Math.max(z.width, needWidth) } : z
+    );
+
+    // перенумерация мест в каждом ряду слева-направо
+    for (const r of zoneRows) {
+      const rs = seats
+        .filter(s => s.rowId === r.id)
+        .sort((a, b) => a.x - b.x);
+      rs.forEach((s, i) => {
+        s.colIndex = i + 1;
+        s.label = String(i + 1);
+      });
+    }
+
+    return { ...prev, rows, seats, zones };
+  });
+};
+// Перенумерация всех рядов в зоне слева-направо или справа-налево
+const renumberZoneSeats = (zoneId: string, dir: "ltr" | "rtl") => {
+  setState(prev => {
+    const rowsInZone = prev.rows.filter(r => r.zoneId === zoneId);
+    if (rowsInZone.length === 0) return prev;
+
+    const seats = prev.seats.map(s => ({ ...s })); // мутируем копию
+
+    for (const r of rowsInZone) {
+      const rs = seats.filter(s => s.rowId === r.id).sort((a, b) => a.x - b.x);
+      const n = rs.length;
+      if (!n) continue;
+
+      if (dir === "ltr") {
+        rs.forEach((s, i) => {
+          s.colIndex = i + 1;
+          s.label = String(i + 1);
+        });
+      } else {
+        rs.forEach((s, i) => {
+          const num = n - i;
+          s.colIndex = num;
+          s.label = String(num);
+        });
+      }
+    }
+    return { ...prev, seats };
+  });
+};
+
+// Перенумерация конкретного ряда по направлению
+const renumberRowSeatsDir = (rowId: string, dir: "ltr" | "rtl") => {
+  setState(prev => {
+    const rs = prev.seats.filter(s => s.rowId === rowId).sort((a, b) => a.x - b.x);
+    const n = rs.length;
+    if (!n) return prev;
+
+    const id2num = new Map<string, number>();
+    if (dir === "ltr") {
+      rs.forEach((s, i) => id2num.set(s.id, i + 1));
+    } else {
+      rs.forEach((s, i) => id2num.set(s.id, n - i));
+    }
+
+    return {
+      ...prev,
+      seats: prev.seats.map(s => {
+        const num = id2num.get(s.id);
+        return num ? { ...s, colIndex: num, label: String(num) } : s;
+      }),
+    };
+  });
+};
+// равномерно раскладывает ряды (Y) и места (X) внутри зоны, не меняя их количество
+
+
+const reflowZone = (zoneId: string) => {
+  setState(prev => {
+    const z = prev.zones.find(zz => zz.id === zoneId);
+    if (!z) return prev;
+
+    const rowsInZone = [...prev.rows].filter(r => r.zoneId === zoneId).sort((a,b) => a.y - b.y);
+    if (rowsInZone.length === 0) return prev;
+
+    const rows  = prev.rows.map(r => ({ ...r }));
+    const seats = prev.seats.map(s => ({ ...s }));
+
+    // радиусы по рядам
+    const rowMaxR: Record<string, number> = {};
+    for (const r of rowsInZone) {
+      const rs = seats.filter(s => s.rowId === r.id);
+      rowMaxR[r.id] = rs.length ? Math.max(...rs.map(s => s.radius ?? DEFAULT_RADIUS)) : DEFAULT_RADIUS;
+    }
+
+    // --- по Y (ряды) ---
+    const rowsCount = rowsInZone.length;
+    const padY = Math.min(Math.max(...rowsInZone.map(r => rowMaxR[r.id])), z.height / 2);
+    const usableH = Math.max(0, z.height - 2 * padY);
+    const stepY = rowsCount > 1 ? usableH / (rowsCount - 1) : 0;
+
+    rowsInZone.forEach((r, i) => {
+      const newY = rowsCount > 1 ? (padY + stepY * i) : (z.height / 2);
+      const idx = rows.findIndex(rr => rr.id === r.id);
+      if (idx >= 0) rows[idx].y = Math.round(newY);
+    });
+
+    // --- по X (места в каждом ряду) ---
+    for (const r of rowsInZone) {
+      const rs = seats.filter(s => s.rowId === r.id).sort((a,b) => a.x - b.x);
+      if (rs.length === 0) continue;
+
+      const rPadX = Math.min(Math.max(...rs.map(s => s.radius ?? DEFAULT_RADIUS)), z.width / 2);
+      const cols = rs.length;
+      const usableW = Math.max(0, z.width - 2 * rPadX);
+      const stepX = cols > 1 ? usableW / (cols - 1) : 0;
+
+      rs.forEach((s, i) => {
+        const nx = cols > 1 ? (rPadX + stepX * i) : (z.width / 2);
+        const si = seats.findIndex(ss => ss.id === s.id);
+        if (si >= 0) seats[si].x = Math.round(nx);
+      });
+    }
+
+    return { ...prev, rows, seats };
+  });
+};
+
+
+// внутри компонента PropertiesPanel
+const selectedTexts = state.texts.filter((t) => selectedIds.includes(t.id)); // ← НОВОЕ
+const selectedShapes = (state.shapes || []).filter(sh => selectedIds.includes(sh.id));
+
+const updateShape = (shapeId: string, patch: Partial<ShapeObject>) => {
+  setState(prev => ({
+    ...prev,
+    shapes: prev.shapes.map(s => s.id === shapeId ? { ...s, ...patch } : s),
+  }));
+};
+
+
+// для пропорционального скейла полигонов при изменении width/height
+const resizePolygon = (sh: ShapeObject, nextW: number, nextH: number) => {
+  if (sh.kind !== "polygon" || !sh.points || sh.width === 0 || sh.height === 0) return sh;
+  const sx = nextW / sh.width;
+  const sy = nextH / sh.height;
+  return {
+    ...sh,
+    width: nextW,
+    height: nextH,
+    points: sh.points.map(p => ({ x: p.x * sx, y: p.y * sy })),
+  };
+};
+
+
+const updateText = (textId: string, patch: Partial<TextObject>) => {
+  setState((prev) => ({
+    ...prev,
+    texts: prev.texts.map((t) => (t.id === textId ? { ...t, ...patch } : t)),
   }));
 };
 
@@ -143,29 +405,59 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
     });
   };
 
-  const updateSeat = (seatId: string, patch: Partial<Seat>) => {
-    setState((prev) => ({
-      ...prev,
-      seats: prev.seats.map((s) => (s.id === seatId ? { ...s, ...patch } : s)),
-    }));
-  };
+const updateSeat = (seatId: string, patch: Partial<Seat>) => {
+  setState((prev) => ({
+    ...prev,
+    seats: prev.seats.map((s) => {
+      if (s.id !== seatId) return s;
+      const next = { ...s, ...patch };
+      if ("status" in patch || "category" in patch) {
+        next.fill = colorFor(next.status as Seat["status"], next.category as string);
+      }
+      return next;
+    }),
+  }));
+};
 
-  const updateAllSeatsOfSelectedRows = (patch: Partial<Seat>) => {
-    const rowIds = new Set(selectedRows.map((r) => r.id));
-    if (rowIds.size === 0) return;
-    setState((prev) => ({
-      ...prev,
-      seats: prev.seats.map((s) => (s.rowId && rowIds.has(s.rowId) ? { ...s, ...patch } : s)),
-    }));
-  };
+
+const updateAllSeatsOfSelectedRows = (patch: Partial<Seat>) => {
+  const rowIds = new Set(selectedRows.map((r) => r.id));
+  if (rowIds.size === 0) return;
+  setState((prev) => ({
+    ...prev,
+    seats: prev.seats.map((s) => {
+      if (!s.rowId || !rowIds.has(s.rowId)) return s;
+      const next = { ...s, ...patch };
+      if ("status" in patch || "category" in patch) {
+        next.fill = colorFor(
+          (next.status ?? s.status) as Seat["status"],
+          (next.category ?? s.category) as string
+        );
+      }
+      return next;
+    }),
+  }));
+};
+
 
   const updateSelectedSeatsBulk = (patch: Partial<Seat>) => {
-    if (selectedSeatIdSet.size === 0) return;
-    setState((prev) => ({
-      ...prev,
-      seats: prev.seats.map((s) => (selectedSeatIdSet.has(s.id) ? { ...s, ...patch } : s)),
-    }));
-  };
+  if (selectedSeatIdSet.size === 0) return;
+  setState((prev) => ({
+    ...prev,
+    seats: prev.seats.map((s) => {
+      if (!selectedSeatIdSet.has(s.id)) return s;
+      const next = { ...s, ...patch };
+      if ("status" in patch || "category" in patch) {
+        next.fill = colorFor(
+          (next.status ?? s.status) as Seat["status"],
+          (next.category ?? s.category) as string
+        );
+      }
+      return next;
+    }),
+  }));
+};
+
 
 
 
@@ -191,6 +483,144 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
           {selectedSeats.length > 0 && <span>Seats: {selectedSeats.length}</span>}
         </div>
       </div>
+      {/* === Texts === */}
+{selectedShapes.map((sh) => (
+  <Panel key={sh.id}>
+    <h3 className="text-base font-semibold text-amber-700 mb-3">
+      Shape: {sh.kind}
+    </h3>
+
+    <div className="grid grid-cols-2 gap-2">
+      <Field label="X">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          step={1}
+          value={Math.round(sh.x)}
+          onChange={(e) => updateShape(sh.id, { x: Number(e.target.value) || 0 })}
+        />
+      </Field>
+      <Field label="Y">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          step={1}
+          value={Math.round(sh.y)}
+          onChange={(e) => updateShape(sh.id, { y: Number(e.target.value) || 0 })}
+        />
+      </Field>
+    </div>
+
+    <div className="grid grid-cols-2 gap-2">
+      <Field label="Width">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          min={2}
+          step={1}
+          value={Math.round(sh.width)}
+          onChange={(e) => updateShape(sh.id, { width: Math.max(2, Number(e.target.value) || 0) })}
+        />
+      </Field>
+      <Field label="Height">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          min={2}
+          step={1}
+          value={Math.round(sh.height)}
+          onChange={(e) => updateShape(sh.id, { height: Math.max(2, Number(e.target.value) || 0) })}
+        />
+      </Field>
+    </div>
+
+    <div className="grid grid-cols-2 gap-2">
+      <Field label="Fill">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={sh.fill ?? "#ffffff"}
+            onChange={(e) => updateShape(sh.id, { fill: e.target.value })}
+            className="w-10 h-10 rounded-lg border"
+          />
+        </div>
+      </Field>
+
+      <Field label="Stroke">
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={sh.stroke ?? "#111827"}
+            onChange={(e) => updateShape(sh.id, { stroke: e.target.value })}
+            className="w-10 h-10 rounded-lg border"
+          />
+        </div>
+      </Field>
+    </div>
+
+    <div className="grid grid-cols-2 gap-2">
+      <Field label="Stroke width">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={1}
+          value={Math.round(sh.strokeWidth ?? 1)}
+          onChange={(e) =>
+            updateShape(sh.id, { strokeWidth: Math.max(0, Number(e.target.value) || 0) })
+          }
+        />
+      </Field>
+
+      <Field label={`Opacity: ${Math.round((sh.opacity ?? 1) * 100)}%`}>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round((sh.opacity ?? 1) * 100)}
+          onChange={(e) => updateShape(sh.id, { opacity: Math.round(Number(e.target.value)) / 100 })}
+          className="w-full accent-blue-600"
+        />
+      </Field>
+    </div>
+
+    <div className="grid grid-cols-2 gap-2">
+      <Field label="Rotation (°)">
+        <TextInput
+          type="number"
+          inputMode="numeric"
+          step={1}
+          value={Math.round(sh.rotation ?? 0)}
+          onChange={(e) => updateShape(sh.id, { rotation: Math.round(Number(e.target.value) || 0) })}
+        />
+      </Field>
+      <Field label="Flip">
+        <div className="flex items-center gap-2">
+          <button
+            className="px-2 py-1 text-xs bg-gray-100 rounded border"
+            onClick={() => updateShape(sh.id, { flipX: !sh.flipX })}
+          >
+            Mirror X
+          </button>
+          <button
+            className="px-2 py-1 text-xs bg-gray-100 rounded border"
+            onClick={() => updateShape(sh.id, { flipY: !sh.flipY })}
+          >
+            Mirror Y
+          </button>
+        </div>
+      </Field>
+    </div>
+
+    {sh.kind === "polygon" && (
+      <p className="text-xs text-gray-500 mt-2">
+        Polygon points редактируются в будущей версии (сейчас только общие свойства).
+      </p>
+    )}
+  </Panel>
+))}
+
+
 
       {/* === Bulk editor for seats (multi-select) — добавлен RADIUS === */}
       {selectedSeats.length > 1 && (
@@ -392,38 +822,73 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
 
           <div className="grid grid-cols-2 gap-2">
             <Field label="Width">
-              <TextInput
-                type="number"
-                inputMode="numeric"
-                min={10}
-                step={1}
-                value={Math.round(zone.width)}
-                onChange={(e) =>
-                  updateZone(zone.id, { width: Math.max(10, Number(e.target.value) || 0) })
-                }
-                onBlur={(e) => {
-                  const n = Math.max(10, Number(e.currentTarget.value) || 0);
-                  updateZone(zone.id, { width: n });
-                }}
-              />
-            </Field>
-            <Field label="Height">
-              <TextInput
-                type="number"
-                inputMode="numeric"
-                min={10}
-                step={1}
-                value={Math.round(zone.height)}
-                onChange={(e) =>
-                  updateZone(zone.id, { height: Math.max(10, Number(e.target.value) || 0) })
-                }
-                onBlur={(e) => {
-                  const n = Math.max(10, Number(e.currentTarget.value) || 0);
-                  updateZone(zone.id, { height: n });
-                }}
-              />
-            </Field>
+  <TextInput
+    type="number"
+    inputMode="numeric"
+    min={10}
+    step={1}
+    value={Math.round(zone.width)}
+    onChange={(e) =>
+      updateZone(zone.id, { width: Math.max(10, Number(e.target.value) || 0) })
+    }
+    onBlur={(e) => {
+      const n = Math.max(10, Number(e.currentTarget.value) || 0);
+      updateZone(zone.id, { width: n });
+      reflowZone(zone.id); // ← перераскладка после изменения ширины
+    }}
+  />
+</Field>
+
+<Field label="Height">
+  <TextInput
+    type="number"
+    inputMode="numeric"
+    min={10}
+    step={1}
+    value={Math.round(zone.height)}
+    onChange={(e) =>
+      updateZone(zone.id, { height: Math.max(10, Number(e.target.value) || 0) })
+    }
+    onBlur={(e) => {
+      const n = Math.max(10, Number(e.currentTarget.value) || 0);
+      updateZone(zone.id, { height: n });
+      reflowZone(zone.id); // ← перераскладка после изменения высоты
+    }}
+  />
+</Field>
+
           </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+  <button
+    onClick={() => addColumnToZone(zone.id, "left")}
+    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    + Column Left
+  </button>
+  <button
+    onClick={() => addColumnToZone(zone.id, "right")}
+    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    + Column Right
+  </button>
+</div>
+<div className="mt-2 flex items-center gap-2">
+  <span className="text-xs text-gray-600">Seat numbering:</span>
+  <button
+    onClick={() => renumberZoneSeats(zone.id, "ltr")}
+    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    L→R
+  </button>
+  <button
+    onClick={() => renumberZoneSeats(zone.id, "rtl")}
+    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    R→L
+  </button>
+</div>
+
+
 
           <Field label="Rotation (°)">
             <TextInput
@@ -522,6 +987,14 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
               </button>
             </div>
           </Field>
+<div className="mt-2 flex items-center gap-2">
+  <button
+    onClick={() => reflowZone(zone.id)}
+    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    Distribute seats to fit
+  </button>
+</div>
 
           {!zone.transparent && (
             <Field label={`Opacity: ${Math.round((zone.fillOpacity ?? 1) * 100)}%`}>
@@ -599,6 +1072,23 @@ const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
                     Renumber seats
                   </button>
                 </div>
+                <div className="mt-2 flex items-center gap-2">
+  <span className="text-xs text-gray-600">Seat numbering (row):</span>
+  <button
+    onClick={() => renumberRowSeatsDir(row.id, "ltr")}
+    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    L→R
+  </button>
+  <button
+    onClick={() => renumberRowSeatsDir(row.id, "rtl")}
+    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border"
+  >
+    R→L
+  </button>
+</div>
+
+                
 
                 <h4 className="text-sm font-semibold text-gray-800 mb-3">
                   Apply to all seats in row

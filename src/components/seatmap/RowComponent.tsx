@@ -120,18 +120,19 @@ const RowComponent: React.FC<RowComponentProps> = ({
         }}
       />
 
-      {isRowSelected && (
-        <Rect
-          x={bboxX}
-          y={bboxY}
-          width={bboxW}
-          height={bboxH}
-          stroke="blue"
-          strokeWidth={2}
-          dash={[6, 4]}
-          listening={false}
-        />
-      )}
+     {isRowSelected && (
+  <Rect
+    x={bboxX}
+    y={bboxY}
+    width={bboxW}
+    height={bboxH}
+    stroke="blue"
+    strokeWidth={2}
+    dash={[6, 4]}
+    strokeScaleEnabled={false}
+    listening={false}
+  />
+)}
 
       <Rect
         x={labelX}
@@ -146,6 +147,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
           e.cancelBubble = true;
           if (!isViewerMode) handleElementClick(row.id, e);
         }}
+        hitStrokeWidth={12}
       />
       <Text
         text={row.label}

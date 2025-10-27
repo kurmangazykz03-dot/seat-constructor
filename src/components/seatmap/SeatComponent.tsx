@@ -39,6 +39,7 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
 
   const x = Math.round(seat.x - offsetX);
   const y = Math.round(seat.y - offsetY);
+  const label = String(seat.label ?? "");
 
   return (
     <Group
@@ -72,22 +73,23 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
       }}
     >
       <Circle
-        radius={seat.radius}
+        radius={seat.radius ?? 12}
         fill={visualFill}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
+        strokeScaleEnabled={false}
       />
 
       <Text
-        text={seat.label}
-        fontSize={12}
-        fill="white"
-        x={0}
-        y={0}
-        offsetX={Math.round((seat.label.length * 6) / 2)}
-        offsetY={6}
-        listening={false}
-      />
+  text={label}
+  fontSize={12}
+  fill="white"
+  x={0}
+  y={0}
+  offsetX={Math.round((label.length * 6) / 2)}
+  offsetY={6}
+  listening={false}
+/>
     </Group>
   );
 };

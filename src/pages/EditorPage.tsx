@@ -1,3 +1,4 @@
+// src/pages/EditorPage.tsx
 import { useState } from "react";
 
 import PropertiesPanel from "../components/editor/PropertiesPanel";
@@ -7,7 +8,8 @@ import TopBar from "../components/editor/TopBar";
 
 import { useHistory } from "../hooks/useHistory";
 
-import { Row, Seat, Zone } from "../types/types";
+import { Row, Seat, Zone, TextObject, ShapeObject } from "../types/types";
+
 import { duplicateSelected } from "../utils/duplicate";
 import { alignRows, alignSeats } from "../utils/seatmapCommands";
 import { useAutoScale } from '../hooks/useAutoScale'
@@ -25,22 +27,22 @@ const DESIGN = {
 const WORK_W = DESIGN.TOOLBAR_W + DESIGN.GAP + DESIGN.CANVAS_W + DESIGN.GAP + DESIGN.PROPS_W; // 1918
 const WORK_H = DESIGN.TOPBAR_H + DESIGN.GAP + DESIGN.CANVAS_H + DESIGN.GAP; // 844
 
-
 export interface SeatmapState {
   hallName: string;
   backgroundImage?: string | null;
   zones: Zone[];
   rows: Row[];
   seats: Seat[];
+  texts: TextObject[];                 // ← НОВОЕ
   stage: {
     scale: number;
     x: number;
     y: number;
   };
   backgroundFit?: "contain" | "cover" | "stretch" | "none";
-
   backgroundMode?: "auto" | "manual";
   backgroundRect?: { x: number; y: number; width: number; height: number } | null;
+  shapes: ShapeObject[];
 }
 
 const INITIAL_STATE: SeatmapState = {
@@ -49,15 +51,16 @@ const INITIAL_STATE: SeatmapState = {
   zones: [],
   rows: [],
   seats: [],
+  texts: [],                            // ← НОВОЕ
   stage: {
     scale: 1,
     x: 0,
     y: 0,
   },
   backgroundFit: "contain",
-
   backgroundMode: "auto",
   backgroundRect: null,
+    shapes: [],  
 };
 
 function EditorPage() {
@@ -65,9 +68,13 @@ function EditorPage() {
     useHistory<SeatmapState>(INITIAL_STATE);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [currentTool, setCurrentTool] = useState<
-    "select" | "add-seat" | "add-row" | "add-zone" | "rotate"
-  >("select");
+  // src/pages/EditorPage.tsx
+const [currentTool, setCurrentTool] = useState<
+  | "select" | "add-seat" | "add-row" | "add-zone" | "rotate" | "add-text"
+  | "add-rect" | "add-ellipse" | "add-polygon" | "bend"   // ✅ добавили
+>("select");
+
+
   const [showGrid, setShowGrid] = useState(true);
   const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.5, max: 1 });
 
@@ -109,24 +116,34 @@ function EditorPage() {
         zones: [],
         rows: [],
         seats: [],
+        texts: [],  
+         shapes: [],                     // ← очистка текстов
         stage: { scale: 1, x: 0, y: 0 },
+        backgroundFit: "contain",
+        backgroundMode: "auto",
+        backgroundRect: null,
       }));
     }
   };
+
   function importFromV2(json: any): SeatmapState {
     const zones: Zone[] = (json.zones || []).map((z: any) => ({
-  id: String(z.id),
-  x: Number(z.x ?? 0),
-  y: Number(z.y ?? 0),
-  width: Number(z.width ?? 200),
-  height: Number(z.height ?? 120),
-  fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-  label: String(z.name ?? z.label ?? ""),
-  color: z.color ?? undefined,
-  rotation: Number(z.rotation ?? 0),
-  transparent: Boolean(z.transparent ?? false),
-  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
-}));
+      id: String(z.id),
+      x: Number(z.x ?? 0),
+      y: Number(z.y ?? 0),
+      width: Number(z.width ?? 200),
+      height: Number(z.height ?? 120),
+      fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+      label: String(z.name ?? z.label ?? ""),
+      color: z.color ?? undefined,
+      rotation: Number(z.rotation ?? 0),
+      transparent: Boolean(z.transparent ?? false),
+      fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+      bendTop: Number(z.bendTop ?? 0),
+  bendRight: Number(z.bendRight ?? 0),
+  bendBottom: Number(z.bendBottom ?? 0),
+  bendLeft: Number(z.bendLeft ?? 0),
+    }));
 
     const rows: Row[] = [];
     const seats: Seat[] = [];
@@ -160,12 +177,43 @@ function EditorPage() {
       });
     });
 
+    const texts: TextObject[] = (json.texts || []).map((t: any) => ({
+      id: String(t.id ?? crypto.randomUUID()),
+      text: String(t.text ?? "Text"),
+      x: Number(t.x ?? 0),
+      y: Number(t.y ?? 0),
+      fontSize: Number(t.fontSize ?? 18),
+      rotation: Number(t.rotation ?? 0),
+      fill: t.fill ?? "#111827",
+      fontFamily: t.fontFamily ?? undefined,
+    }));
+    const shapes: ShapeObject[] = (json.shapes || []).map((s: any) => ({
+  id: String(s.id ?? crypto.randomUUID()),
+  kind: (s.kind as any) ?? "rect",
+  x: Number(s.x ?? 0),
+  y: Number(s.y ?? 0),
+  width: Number(s.width ?? 100),
+  height: Number(s.height ?? 60),
+  fill: s.fill ?? "#ffffff",
+  stroke: s.stroke ?? "#111827",
+  strokeWidth: Number(s.strokeWidth ?? 1),
+  opacity: s.opacity != null ? Number(s.opacity) : 1,
+  rotation: Number(s.rotation ?? 0),
+  flipX: !!s.flipX,
+  flipY: !!s.flipY,
+  points: Array.isArray(s.points)
+    ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
+    : undefined,
+}));
+
     return {
       hallName: String(json.hallName ?? "Зал 1"),
       backgroundImage: json.backgroundImage ?? null,
       zones,
       rows,
       seats,
+      texts,     
+      shapes,                            // ← НОВОЕ
       stage: { scale: 1, x: 0, y: 0 },
       backgroundFit: json.backgroundFit ?? "contain",
       backgroundMode: json.backgroundMode ?? "auto",
@@ -193,6 +241,11 @@ function EditorPage() {
         height: zone.height,
         transparent: !!zone.transparent,
         fillOpacity: zone.fillOpacity ?? 1,
+        // ✅ bends
+  bendTop: zone.bendTop ?? 0,
+  bendRight: zone.bendRight ?? 0,
+  bendBottom: zone.bendBottom ?? 0,
+  bendLeft: zone.bendLeft ?? 0,
         rows: s.rows
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
@@ -215,6 +268,33 @@ function EditorPage() {
               })),
           })),
       })),
+      texts: (s.texts || []).map((t) => ({   // ← НОВОЕ
+        id: t.id,
+        text: t.text,
+        x: t.x,
+        y: t.y,
+        fontSize: t.fontSize,
+        rotation: t.rotation ?? 0,
+        fill: t.fill ?? "#111827",
+        fontFamily: t.fontFamily ?? null,
+      })),
+      shapes: (s.shapes || []).map((sh) => ({
+    id: sh.id,
+    kind: sh.kind,
+    x: sh.x,
+    y: sh.y,
+    width: sh.width,
+    height: sh.height,
+    fill: sh.fill ?? "#ffffff",
+    stroke: sh.stroke ?? "#111827",
+    strokeWidth: sh.strokeWidth ?? 1,
+    opacity: sh.opacity ?? 1,
+    rotation: sh.rotation ?? 0,
+    flipX: !!sh.flipX,
+    flipY: !!sh.flipY,
+    points: sh.points?.map((p) => ({ x: p.x, y: p.y })) ?? null,
+  })),
+  
     };
   }
 
@@ -238,12 +318,11 @@ function EditorPage() {
 
     setState((prev) => ({
       ...prev,
-
       seats: prev.seats.filter((s) => !selectedIds.includes(s.id)),
-
       rows: prev.rows.filter((r) => !selectedIds.includes(r.id)),
-
       zones: prev.zones.filter((z) => !selectedIds.includes(z.id)),
+      texts: prev.texts.filter((t) => !selectedIds.includes(t.id)), // ← удаляем тексты
+       shapes: prev.shapes.filter((sh) => !selectedIds.includes(sh.id)),  // ✅
     }));
 
     setSelectedIds([]);
@@ -268,12 +347,12 @@ function EditorPage() {
   };
 
   const handleUploadBackground = (dataUrl: string | null) => {
-  setState((prev) => ({
-    ...prev,
-    backgroundImage: dataUrl ?? null,
-    ...(prev.backgroundMode === "manual" ? { backgroundRect: null } : {}),
-  }));
-};
+    setState((prev) => ({
+      ...prev,
+      backgroundImage: dataUrl ?? null,
+      ...(prev.backgroundMode === "manual" ? { backgroundRect: null } : {}),
+    }));
+  };
 
   const handleDuplicate = () => {
     const { next, newSelectedIds } = duplicateSelected(state, selectedIds, 24);
@@ -283,9 +362,7 @@ function EditorPage() {
 
   return (
     <div className="w-screen h-screen bg-gray-100 overflow-auto">
-      {/* Контейнер, от которого считаем масштаб */}
       <div ref={scaleRootRef} className="w-full h-full relative">
-        {/* Сцена фиксированных дизайн-размеров */}
         <div
           className="absolute left-1/2 top-0"
           style={{
@@ -295,7 +372,6 @@ function EditorPage() {
             transformOrigin: "top center",
           }}
         >
-          {/* TopBar — фиксированная высота */}
           <div style={{ height: DESIGN.TOPBAR_H }}>
             <TopBar
               onSave={handleSave}
@@ -309,7 +385,6 @@ function EditorPage() {
             />
           </div>
 
-          {/* Низ — три колонки: Toolbar | Canvas | Properties */}
           <div
             className="mt-4 flex"
             style={{
@@ -317,7 +392,6 @@ function EditorPage() {
               height: DESIGN.CANVAS_H,
             }}
           >
-            {/* Toolbar */}
             <div style={{ width: DESIGN.TOOLBAR_W, height: DESIGN.CANVAS_H }}>
               <Toolbar
                 onDuplicate={handleDuplicate}
@@ -335,7 +409,6 @@ function EditorPage() {
               />
             </div>
 
-            {/* Canvas — строго 1486×752 */}
             <div
               className="rounded-[16px] border border-[#e5e5e5] bg-white"
               style={{ width: DESIGN.CANVAS_W, height: DESIGN.CANVAS_H }}
@@ -344,6 +417,8 @@ function EditorPage() {
                 seats={state.seats}
                 rows={state.rows}
                 zones={state.zones}
+                texts={state.texts}       
+                 shapes={state.shapes}                 
                 setState={setState}
                 selectedIds={selectedIds}
                 setSelectedIds={setSelectedIds}
@@ -361,7 +436,6 @@ function EditorPage() {
               />
             </div>
 
-            {/* Properties */}
             <div style={{ width: DESIGN.PROPS_W, height: DESIGN.CANVAS_H }}>
               <PropertiesPanel selectedIds={selectedIds} state={state} setState={setState} />
             </div>

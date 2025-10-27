@@ -1,3 +1,23 @@
+export type ShapeKind = "rect" | "ellipse" | "polygon";
+
+export interface ShapePoint { x: number; y: number; }
+
+export interface ShapeObject {
+  id: string;
+  kind: ShapeKind;
+  x: number; y: number;
+  width: number; height: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  rotation?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  // только для polygon — локальные точки в bbox (0..width, 0..height)
+  points?: ShapePoint[];
+}
+
 export interface Row {
   id: string;
   zoneId: string | null;
@@ -19,16 +39,37 @@ export interface Seat {
   status?: "available" | "occupied" | "disabled";
   category?: string;
 }
-export interface Zone {
+// types/types.ts
+export type Zone = {
   id: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  fill: string;
   label: string;
-  color?: string;
+  fill?: string;
   rotation?: number;
   transparent?: boolean;
   fillOpacity?: number;
+
+  // новые поля для bend-инструмента
+  bendTop?: number;
+  bendRight?: number;
+  bendBottom?: number;
+  bendLeft?: number;
+};
+
+
+// src/types/types.ts
+// src/types/types.ts
+export interface TextObject {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  rotation?: number;
+  fill?: string;
+  fontFamily?: string;
 }
+

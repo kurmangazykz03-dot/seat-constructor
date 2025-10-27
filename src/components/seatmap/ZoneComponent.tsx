@@ -1,12 +1,15 @@
-// ZoneComponent.tsx
+// components/seatmap/ZoneComponent.tsx
 import Konva from "konva";
-import React, { useRef } from "react";
-import { Group, Rect, Text } from "react-konva";
+import React, { useMemo, useRef } from "react";
+import { Group, Rect, Text, Path } from "react-konva";
 import { SeatmapState } from "../../pages/EditorPage";
 import { Row, Seat, Zone } from "../../types/types";
 import { applySeatDrop } from "../../utils/seatSnap";
 import RowComponent from "./RowComponent";
 import SeatComponent from "./SeatComponent";
+import ZoneBendOverlay from "./ZoneBendOverlay";
+import { buildBentRectPath, hasBends } from "./zonePath";
+import { warpPointLocal } from "./zoneWarp";
 
 interface ZoneComponentProps {
   zone: Zone;
@@ -22,12 +25,12 @@ interface ZoneComponentProps {
   setGroupRef?: (node: Konva.Group | null) => void;
   isViewerMode?: boolean;
   isSelected?: boolean;
-       // ← опционально: ползунок прозрачности (0..1)
 }
 
 const seatRadius = 12;
 const seatSpacingX = 30;
 const seatSpacingY = 30;
+
 
 const createRowWithSeats = (
   zoneId: string,
@@ -79,6 +82,31 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   const zoneSeats = (seats ?? []).filter((s) => s.zoneId === zone.id);
   const zoneRows = (rows ?? []).filter((r) => r.zoneId === zone.id);
   const seatsWithoutRow = zoneSeats.filter((s) => !s.rowId);
+  const groupRef = useRef<Konva.Group | null>(null);
+  const isSelected = selectedIds.includes(zone.id);
+
+  const handleGroupRef = (node: Konva.Group | null) => {
+    groupRef.current = node;
+    setGroupRef?.(node);
+
+  };
+  const warpIf = (p: { x: number; y: number }) =>
+  (hasBends(zone) || currentTool === "bend") ? warpPointLocal(p.x, p.y, zone) : p;
+
+const rowsRender = useMemo(
+  () => zoneRows.map(r => ({ ...r, ...warpIf({ x: r.x, y: r.y }) })),
+  [zoneRows, zone, currentTool]
+);
+
+const seatsRender = useMemo(
+  () => zoneSeats.map(s => ({ ...s, ...warpIf({ x: s.x, y: s.y }) })),
+  [zoneSeats, zone, currentTool]
+);
+
+const seatsWithoutRowRender = useMemo(
+  () => seatsRender.filter(s => !s.rowId),
+  [seatsRender]
+);
 
   const handleZoneClick = (e: any) => {
     e.cancelBubble = true;
@@ -121,31 +149,18 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       return;
     }
 
-    // add-row: создаём row и seats в локальных координатах
     if (currentTool === "add-row") {
       const cols = zoneSeats.length > 0 ? Math.max(...zoneSeats.map((s) => s.colIndex || 1)) : 5;
       const newRowIndex = zoneRows.length;
-
-      // локальная позиция ряда — под текущим зоной
       const localY = zone.height + seatSpacingY / 2;
 
       const { row: newRow, seats: newSeats } = createRowWithSeats(zone.id, newRowIndex, cols, 0, 0);
-
-      const adjustedRow: Row = {
-        ...newRow,
-        y: localY,
-        index: newRowIndex,
-        label: `${newRowIndex + 1}`,
-      };
-
-      // newSeats уже локальные; нужно только выставить y = localY
+      const adjustedRow: Row = { ...newRow, y: localY, index: newRowIndex, label: `${newRowIndex + 1}` };
       const adjustedSeats: Seat[] = newSeats.map((s) => ({ ...s, y: localY }));
 
       setState((prev) => ({
         ...prev,
-        zones: prev.zones.map((z) =>
-          z.id === zone.id ? { ...z, height: z.height + seatSpacingY } : z
-        ),
+        zones: prev.zones.map((z) => (z.id === zone.id ? { ...z, height: z.height + seatSpacingY } : z)),
         rows: [...prev.rows, adjustedRow],
         seats: [...prev.seats, ...adjustedSeats],
       }));
@@ -153,11 +168,9 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       return;
     }
 
-    // Выделение
+    // обычное выделение
     if (e.evt.shiftKey) {
-      setSelectedIds((prev) =>
-        prev.includes(zone.id) ? prev.filter((i) => i !== zone.id) : [...prev, zone.id]
-      );
+      setSelectedIds((prev) => (prev.includes(zone.id) ? prev.filter((i) => i !== zone.id) : [...prev, zone.id]));
     } else {
       setSelectedIds([zone.id]);
     }
@@ -182,11 +195,7 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       zones: prev.zones.map((z) => (z.id === zone.id ? { ...z, x: newX, y: newY } : z)),
     }));
   };
-  const groupRef = useRef<Konva.Group | null>(null);
-  const handleGroupRef = (node: Konva.Group | null) => {
-    groupRef.current = node;
-    setGroupRef?.(node);
-  };
+
   const onSeatDragEnd = (seatAfterDrag: Seat) => {
     setState((prev) => {
       const z = prev.zones.find((zz) => zz.id === zone.id);
@@ -194,7 +203,30 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       return applySeatDrop(prev, z, seatAfterDrag.id, seatAfterDrag.x, seatAfterDrag.y, 12, false);
     });
   };
+
+  // параметры оформления
+  const strokeColor = isSelected
+    ? "#3B82F6"
+    : hoveredZoneId === zone.id && currentTool === "add-row"
+    ? "orange"
+    : "#CBD5E1";
+
+  const strokeWidth = isSelected || hoveredZoneId === zone.id ? 2 : 1;
+
+  const bendPath =
+    hasBends(zone) || currentTool === "bend"
+      ? buildBentRectPath(
+          zone.width,
+          zone.height,
+          zone.bendTop ?? 0,
+          zone.bendRight ?? 0,
+          zone.bendBottom ?? 0,
+          zone.bendLeft ?? 0
+        )
+      : null;
+
   return (
+    
     <Group
       ref={handleGroupRef}
       x={zone.x}
@@ -202,34 +234,34 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       rotation={zone.rotation ?? 0}
       onMouseEnter={() => setHoveredZoneId(zone.id)}
       onMouseLeave={() => setHoveredZoneId(null)}
-      draggable={!isViewerMode}
+      draggable={currentTool !== "bend" && !isViewerMode}
+
       onClick={handleZoneClickLocal}
       onDragEnd={handleZoneDragEnd}
     >
-     <Rect
-  width={zone.width}
-  height={zone.height}
-  fill={zone.fill}
-
-  // заливку выключаем, если включён «прозрачный фон»
-  fillEnabled={!zone.transparent}
-  // регулируем только прозрачность заливки, обводка не тускнеет
-  fillOpacity={zone.transparent ? 0 : (zone.fillOpacity ?? 1)}
-
-  stroke={
-    selectedIds.includes(zone.id)
-      ? "#3B82F6"
-      : hoveredZoneId === zone.id && currentTool === "add-row"
-      ? "orange"
-      : "#CBD5E1"        // <-- вместо "", нейтральная рамка
-  }
-  strokeWidth={
-    selectedIds.includes(zone.id) || hoveredZoneId === zone.id ? 2 : 1
-  }
-
-  // клик удобно ловить по контуру
-  hitStrokeWidth={12}
-/>
+      {/* Фигура зоны: Path при изгибе, иначе Rect */}
+      {bendPath ? (
+        <Path
+          data={bendPath}
+          fill={zone.fill}
+          fillEnabled={!zone.transparent}
+          fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          hitStrokeWidth={12}
+        />
+      ) : (
+        <Rect
+          width={zone.width}
+          height={zone.height}
+          fill={zone.fill}
+          fillEnabled={!zone.transparent}
+          fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          hitStrokeWidth={12}
+        />
+      )}
 
       <Text
         text={zone.label}
@@ -241,31 +273,36 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
         offsetX={(zone.label.length * 7) / 2}
       />
 
-      {seatsWithoutRow.map((seat) => (
-        <SeatComponent
-          key={seat.id}
-          seat={seat}
-          isSelected={selectedIds.includes(seat.id)}
-          isRowSelected={false}
-          onClick={handleElementClick}
-          onDragEnd={(_e, s) => onSeatDragEnd(s)}
-          isViewerMode={isViewerMode}
-        />
-      ))}
+      {seatsWithoutRowRender.map(seat => (
+  <SeatComponent
+    key={seat.id}
+    seat={seat}
+    isSelected={selectedIds.includes(seat.id)}
+    onClick={handleElementClick}
+    // во время Bend не даём перетаскивать
+    isViewerMode={isViewerMode || currentTool === "bend"}
+    onDragEnd={(_e, s) => onSeatDragEnd(s)}
+  />
+))}
 
-      {zoneRows.map((row) => (
-        <RowComponent
-          key={row.id}
-          row={row}
-          rowSeats={zoneSeats.filter((s) => s.rowId === row.id)}
-          selectedIds={selectedIds}
-          setState={setState}
-          handleElementClick={handleElementClick}
-          currentTool={currentTool}
-          isViewerMode={isViewerMode}
-          onSeatDragEnd={onSeatDragEnd}
-        />
-      ))}
+{/* Ряды — ТОЛЬКО варп-версия */}
+{rowsRender.map(row => (
+  <RowComponent
+    key={row.id}
+    row={row}
+    rowSeats={seatsRender.filter(s => s.rowId === row.id)}
+    selectedIds={selectedIds}
+    setState={setState}
+    handleElementClick={handleElementClick}
+    currentTool={currentTool}
+    isViewerMode={isViewerMode || currentTool === "bend"}
+    onSeatDragEnd={onSeatDragEnd}
+  />
+))}
+
+      
+
+   
     </Group>
   );
 };

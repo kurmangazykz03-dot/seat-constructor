@@ -3,8 +3,19 @@ import React, { useMemo, useRef, useState } from "react";
 type AlignDirection = "left" | "center" | "right";
 
 interface ToolbarProps {
-  currentTool: "select" | "add-seat" | "add-row" | "add-zone" | "rotate";
+  currentTool:
+    | "select"
+    | "add-seat"
+    | "add-row"
+    | "add-zone"
+    | "rotate"
+    | "add-text"
+    | "add-rect"
+    | "add-ellipse"
+    | "add-polygon"
+    | "bend"; // ✅ добавили Bend
   setCurrentTool: (t: ToolbarProps["currentTool"]) => void;
+
   onDelete: () => void;
   onAlign: (dir: AlignDirection) => void;
   onDuplicate: () => void;
@@ -78,6 +89,7 @@ export default function Toolbar({
       case "add-row": return "Row";
       case "add-seat": return "Seat";
       case "rotate": return "Rotate";
+      case "bend": return "Bend"; // ✅ для ясности
       default: return "";
     }
   }, [currentTool]);
@@ -126,6 +138,32 @@ export default function Toolbar({
         <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
           <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path d="M20 12a8 8 0 1 1-4.7-7.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </ToolButton>
+
+      {/* ✅ Новый инструмент: Bend */}
+      <ToolButton title="Bend (B)" active={currentTool === "bend"} onClick={setTool("bend")}>
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          {/* иконка — волнистая рамка (условно) */}
+          <path d="M5 7c2-3 12-3 14 0v10c-2 3-12 3-14 0V7z" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </ToolButton>
+
+      <ToolButton title="Rectangle (M)" active={currentTool === "add-rect"} onClick={setTool("add-rect")}>
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          <rect x="5" y="6" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </ToolButton>
+
+      <ToolButton title="Ellipse (E)" active={currentTool === "add-ellipse"} onClick={setTool("add-ellipse")}>
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          <ellipse cx="12" cy="12" rx="7" ry="5" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </ToolButton>
+
+      <ToolButton title="Polygon (P)" active={currentTool === "add-polygon"} onClick={setTool("add-polygon")}>
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          <path d="M6 8l6-3 6 3-2 7H8L6 8z" stroke="currentColor" strokeWidth="2" />
         </svg>
       </ToolButton>
 
@@ -202,6 +240,16 @@ export default function Toolbar({
       <ToolButton title="Toggle grid" active={!!showGrid} onClick={onToggleGrid} disabled={!onToggleGrid}>
         <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
           <path d="M4 4h16v16H4zM4 12h16M12 4v16" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      </ToolButton>
+
+      <ToolButton
+        title="Add text (T)"
+        active={currentTool === "add-text"}
+        onClick={() => setCurrentTool(currentTool === "add-text" ? "select" : "add-text")}
+      >
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          <path d="M5 6h14M12 6v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       </ToolButton>
 

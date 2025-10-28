@@ -1,6 +1,7 @@
 import Konva from "konva";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { applyBendToZoneContent } from "../seatmap/zoneWarp";
+import type { KonvaEventObject } from "konva/lib/Node";
 import {
   Image as KonvaImage,
   Layer,
@@ -23,7 +24,7 @@ import ZoomControls from "../seatmap/ZoomControls";
 import ZoneBendOverlay from "../seatmap/ZoneBendOverlay";
 
 import { SeatmapState } from "../../pages/EditorPage";
-
+type KonvaPointerEvt = KonvaEventObject<MouseEvent | TouchEvent>;
 function useHTMLImage(src: string | null) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -40,6 +41,11 @@ function useHTMLImage(src: string | null) {
     };
   }, [src]);
   return img;
+}
+function rectsIntersect(a: {x:number;y:number;width:number;height:number}, b: {x:number;y:number;width:number;height:number}) {
+  const ax2 = a.x + a.width, ay2 = a.y + a.height;
+  const bx2 = b.x + b.width, by2 = b.y + b.height;
+  return !(ax2 < b.x || a.x > bx2 || ay2 < b.y || a.y > by2);
 }
 
 interface SeatmapCanvasProps {
@@ -117,7 +123,7 @@ function SeatmapCanvas({
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
-  const stageRef = useRef<any>(null);
+const stageRef = useRef<Konva.Stage | null>(null);
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
@@ -279,14 +285,7 @@ function SeatmapCanvas({
       ry2 = marquee.y + marquee.h;
     const selected: string[] = [];
 
-    for (const z of zones) {
-      const zx1 = z.x,
-        zy1 = z.y,
-        zx2 = z.x + z.width,
-        zy2 = z.y + z.height;
-      const intersect = !(zx2 < marquee.x || zx1 > rx2 || zy2 < marquee.y || zy1 > ry2);
-      if (intersect) selected.push(z.id);
-    }
+    
 
     const R = 12,
       PAD = 8;
@@ -332,8 +331,23 @@ function SeatmapCanvas({
       const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
       if (intersect) selected.push(sh.id);
     }
+    const marqueeRect = { x: marquee.x, y: marquee.y, width: marquee.w, height: marquee.h };
 
-    setSelectedIds((prev) => (append ? Array.from(new Set([...prev, ...selected])) : selected));
+for (const z of zones) {
+  const node = zoneRefs.current[z.id];
+  if (node) {
+    const zr = node.getClientRect({ skipTransform: false });
+    if (rectsIntersect(zr, marqueeRect)) selected.push(z.id);
+  } else {
+    const zx2 = z.x + z.width, zy2 = z.y + z.height;
+    const intersect = !(zx2 < marquee.x || z.x > marqueeRect.x + marqueeRect.width || zy2 < marquee.y || z.y > marqueeRect.y + marqueeRect.height);
+    if (intersect) selected.push(z.id);
+  }
+}
+
+   // финальный uniq всегда
+    const uniq = Array.from(new Set(selected));
+    setSelectedIds(prev => (append ? Array.from(new Set([...prev, ...uniq])) : uniq));
     setMarquee({ active: false, x: 0, y: 0, w: 0, h: 0 });
     dragStartRef.current = null;
   };
@@ -368,11 +382,7 @@ function SeatmapCanvas({
     }
   }, [backgroundMode, backgroundRect, bgImg]);
 
-  useEffect(() => {
-    const el = stageRef.current?.container();
-    if (!el) return;
-    el.style.cursor = isSpacePressed ? "grab" : currentTool === "add-seat" ? "crosshair" : "default";
-  }, [isSpacePressed, currentTool]);
+
 
   useKeyboardShortcuts({
     selectedIds,
@@ -382,36 +392,35 @@ function SeatmapCanvas({
     onDuplicate,
   });
 
-  const createRowWithSeats = (zoneId: string, rowIndex: number, cols: number, offsetX: number, offsetY: number) => {
-    const rowId = `row-${crypto.randomUUID()}`;
-    const y = offsetY + rowIndex * SEAT_SPACING_Y + SEAT_SPACING_Y / 2;
-    const row: Row = {
-      id: rowId,
-      zoneId,
-      index: rowIndex,
-      label: `${rowIndex + 1}`,
-      x: offsetX,
-      y,
-    };
+  const createRowWithSeats = (
+  zoneId: string,
+  rowIndex: number,
+  cols: number,
+  offsetX: number,
+  offsetY: number,
+  stepX: number,
+  stepY: number
+) => {
+  const rowId = `row-${crypto.randomUUID()}`;
+  const y = offsetY + rowIndex * stepY + stepY / 2;
+  const row: Row = { id: rowId, zoneId, index: rowIndex, label: `${rowIndex + 1}`, x: offsetX, y };
 
-    const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
-      id: `seat-${crypto.randomUUID()}`,
-      x: offsetX + c * SEAT_SPACING_X + SEAT_RADIUS,
-      y,
-      radius: SEAT_RADIUS,
-      fill: "#22C55E",
-      label: `${c + 1}`,
-      category: "standard",
-      status: "available",
-      zoneId,
-      rowId,
-      colIndex: c + 1,
-    }));
-
-    return { row, seats: newSeats };
-  };
-
-  const handleStageMouseDown = (e: any) => {
+  const newSeats: Seat[] = Array.from({ length: cols }, (_, c) => ({
+    id: `seat-${crypto.randomUUID()}`,
+    x: offsetX + c * stepX + SEAT_RADIUS,
+    y,
+    radius: SEAT_RADIUS,
+    fill: "#22C55E",
+    label: `${c + 1}`,
+    category: "standard",
+    status: "available",
+    zoneId,
+    rowId,
+    colIndex: c + 1,
+  }));
+  return { row, seats: newSeats };
+};
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
     const isEmpty = e.target === stage;
 
@@ -533,7 +542,7 @@ function SeatmapCanvas({
     }
   };
 
-  const handleStageMouseMove = (e: any) => {
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
     const p = stage.getPointerPosition();
     if (!p) return;
@@ -544,12 +553,16 @@ function SeatmapCanvas({
       return;
     }
 
-    if (drawingZone) {
-      const realPos = toWorldPoint(stage, p);
-      const snappedX = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
-      const snappedY = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
-      setDrawingZone((prev) => (prev ? { ...prev, width: snappedX - prev.x, height: snappedY - prev.y } : null));
-    }
+     if (drawingZone) {
+   const realPos = toWorldPoint(stage, p);
+   const ex = Math.round(realPos.x / GRID_SIZE) * GRID_SIZE;
+   const ey = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
+   setDrawingZone((prev) => {
+     if (!prev) return null;
+     const r = normRect(prev.x, prev.y, ex, ey); // ← всегда top-left + положительные width/height
+     return { ...prev, x: r.x, y: r.y, width: r.width, height: r.height };
+   });
+ }
 
     if (shapeDraft) {
       const w = toWorldPoint(stage, p);
@@ -560,7 +573,7 @@ function SeatmapCanvas({
     }
   };
 
-  const handleStageMouseUp = (e: any) => {
+  const handleStageMouseUp = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
 
     if (marquee.active) {
@@ -568,52 +581,65 @@ function SeatmapCanvas({
       return;
     }
 
-    if (drawingZone) {
-      const startX = drawingZone.width < 0 ? drawingZone.x + drawingZone.width : drawingZone.x;
-      const startY = drawingZone.height < 0 ? drawingZone.y + drawingZone.height : drawingZone.y;
-      const width = Math.abs(drawingZone.width);
-      const height = Math.abs(drawingZone.height);
+     if (drawingZone) {
+   const { x: startX, y: startY, width, height } = drawingZone; // уже нормализовано
 
-      if (width < SEAT_SPACING_X || height < SEAT_SPACING_Y) {
-        setDrawingZone(null);
-        return;
-      }
+if (width < SEAT_SPACING_X || height < SEAT_SPACING_Y) {
+  setDrawingZone(null);
+  return;
+}
 
-      const cols = Math.max(1, Math.floor(width / SEAT_SPACING_X));
-      const rowsCount = Math.max(1, Math.floor(height / SEAT_SPACING_Y));
-      const newZone: Zone = {
-        id: `zone-${crypto.randomUUID()}`,
-        x: startX,
-        y: startY,
-        width,
-        height,
-        fill: "#FAFAFA",
-        label: `Zone ${zones.length + 1}`,
-        rotation: 0,
-        bendTop: 0,
-        bendRight: 0,
-        bendBottom: 0,
-        bendLeft: 0,
-      };
+const newZone: Zone = {
+  id: `zone-${crypto.randomUUID()}`,
+  x: startX,
+  y: startY,
+  width,
+  height,
+  fill: "#FAFAFA",
+  label: `Zone ${zones.length + 1}`,
+  rotation: 0,
+  bendTop: 0,
+  bendRight: 0,
+  bendBottom: 0,
+  bendLeft: 0,
+  seatSpacingX: SEAT_SPACING_X,
+  seatSpacingY: SEAT_SPACING_Y,
+  rowLabelSide: 'left',
+};
 
-      const offsetX = (width - cols * SEAT_SPACING_X) / 2;
-      const offsetY = (height - rowsCount * SEAT_SPACING_Y) / 2;
+// ✅ используем шаги зоны, а не константы напрямую
+const stepX = newZone.seatSpacingX ?? SEAT_SPACING_X;
+const stepY = newZone.seatSpacingY ?? SEAT_SPACING_Y;
 
-      const allNewRows: Row[] = [];
-      const allNewSeats: Seat[] = [];
-      for (let r = 0; r < rowsCount; r++) {
-        const { row, seats: rowSeats } = createRowWithSeats(newZone.id, r, cols, offsetX, offsetY);
-        allNewRows.push(row);
-        allNewSeats.push(...rowSeats);
-      }
+const cols = Math.max(1, Math.floor(width / stepX));
+const rowsCount = Math.max(1, Math.floor(height / stepY));
+const offsetX = (width - cols * stepX) / 2;
+const offsetY = (height - rowsCount * stepY) / 2;
 
-      setState((prev) => ({
-        ...prev,
-        zones: [...prev.zones, newZone],
-        rows: [...prev.rows, ...allNewRows],
-        seats: [...prev.seats, ...allNewSeats],
-      }));
-      setDrawingZone(null);
+const allNewRows: Row[] = [];
+const allNewSeats: Seat[] = [];
+
+for (let r = 0; r < rowsCount; r++) {
+  const { row, seats: rowSeats } = createRowWithSeats(
+    newZone.id,
+    r,
+    cols,
+    offsetX,
+    offsetY,
+    stepX,    // ← передаём шаг по X
+    stepY     // ← передаём шаг по Y
+  );
+  allNewRows.push(row);
+  allNewSeats.push(...rowSeats);
+}
+
+setState((prev) => ({
+  ...prev,
+  zones: [...prev.zones, newZone],
+  rows: [...prev.rows, ...allNewRows],
+  seats: [...prev.seats, ...allNewSeats],
+}));
+setDrawingZone(null);
     }
 
     if (shapeDraft) {
@@ -623,7 +649,7 @@ function SeatmapCanvas({
           id: `shape-${crypto.randomUUID()}`,
           kind,
           x,
-          y,
+          y, 
           width,
           height,
           fill: shapeDraft.fill,
@@ -643,38 +669,59 @@ function SeatmapCanvas({
   };
 
   const textRefs = useRef<Record<string, Konva.Text | null>>({});
-  const handleElementClick = (id: string, e: any) => {
-    if (currentTool === "add-seat" || currentTool === "add-text") return;
-    e.cancelBubble = true;
-    if (e.evt.shiftKey) {
-      setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
-    } else {
-      setSelectedIds([id]);
-    }
-  };
+ 
+const parentZoneIdOf = (id: string) => {
+  const r = rows.find(r => r.id === id);
+  if (r) return r.zoneId;
+  const s = seats.find(s => s.id === id);
+  return s?.zoneId ?? null;
+};
+
+const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent|TouchEvent>) => {
+  if (currentTool === "add-seat" || currentTool === "add-text") return;
+  e.cancelBubble = true;
+
+  // ⬇️ Зажми Alt/Ctrl/Meta и кликни по ряду/месту — выберется родительская зона
+  if (e.evt.altKey || e.evt.ctrlKey || e.evt.metaKey) {
+    const zid = parentZoneIdOf(id);
+    if (zid) setSelectedIds([zid]);
+    return;
+  }
+
+  if (e.evt.shiftKey) {
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  } else {
+    setSelectedIds([id]);
+  }
+};
+
 
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
-  const handleWheel = (e: any) => {
-    e.evt.preventDefault();
-    const stage: Konva.Stage | null = stageRef.current || e.target?.getStage?.();
-    if (!stage) return;
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-    lastPointerRef.current = pointer;
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
+  e.evt.preventDefault();
+  const stage: Konva.Stage | null = stageRef.current || e.target?.getStage?.();
+  if (!stage) return;
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
+  lastPointerRef.current = pointer;
 
-    const isZoomGesture = e.evt.ctrlKey || e.evt.metaKey || e.evt.altKey;
-    if (isZoomGesture) {
-      const scaleBy = 1.05;
-      const direction = e.evt.deltaY < 0 ? 1 : -1;
-      const target = direction > 0 ? scale * scaleBy : scale / scaleBy;
-      zoomAtScreenPoint(pointer, target);
-    } else {
-      setStagePos((pos) => ({
-        x: pos.x - e.evt.deltaX,
-        y: pos.y - e.evt.deltaY,
-      }));
-    }
-  };
+  const mode = e.evt.deltaMode; // 0: pixels, 1: lines, 2: pages
+  const line = 40, page = 800;
+  const dx = mode === 1 ? e.evt.deltaX * line : mode === 2 ? e.evt.deltaX * page : e.evt.deltaX;
+  const dy = mode === 1 ? e.evt.deltaY * line : mode === 2 ? e.evt.deltaY * page : e.evt.deltaY;
+
+  const isZoomGesture = e.evt.ctrlKey || e.evt.metaKey || e.evt.altKey;
+  if (isZoomGesture) {
+    const scaleBy = 1.05;
+    const direction = dy < 0 ? 1 : -1;
+    const target = direction > 0 ? scale * scaleBy : scale / scaleBy;
+    zoomAtScreenPoint(pointer, target);
+  } else {
+    setStagePos((pos) => ({ x: pos.x - dx, y: pos.y - dy }));
+  }
+};
+const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" && selectedIds.length === 1);
+
 
   return (
     <div className="relative">
@@ -692,7 +739,7 @@ function SeatmapCanvas({
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
-        onDragStart={(e) => {
+        onDragStart={(e: KonvaEventObject<MouseEvent>) => {
           const stage = stageRef.current;
           if (!stage || e.target !== stage) return;
           const el = stage.container();
@@ -741,58 +788,60 @@ function SeatmapCanvas({
             />
           ))}
 
-        {backgroundImage && backgroundMode === "manual" && bgImg && backgroundRect && (
-          <Layer listening={currentTool === "select" && !isSpacePressed}>
-            <KonvaImage
-              ref={bgNodeRef}
-              image={bgImg}
-              x={backgroundRect.x}
-              y={backgroundRect.y}
-              width={backgroundRect.width}
-              height={backgroundRect.height}
-              opacity={0.95}
-              draggable={currentTool === "select" && !isSpacePressed}
-              onDragEnd={(e) => {
-                const node = e.target as unknown as Konva.Image;
-                setBackgroundRect?.({
-                  x: node.x(),
-                  y: node.y(),
-                  width: node.width(),
-                  height: node.height(),
-                });
-              }}
-              onTransformEnd={() => {
-                const node = bgNodeRef.current!;
-                const w = node.width() * node.scaleX();
-                const h = node.height() * node.scaleY();
-                const x = node.x();
-                const y = node.y();
-                node.scaleX(1);
-                node.scaleY(1);
-                setBackgroundRect?.({ x, y, width: w, height: h });
-              }}
-            />
-            <Transformer
-              ref={bgTrRef}
-              nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
-              rotateEnabled={false}
-              keepRatio
-              enabledAnchors={[
-                "top-left",
-                "top-center",
-                "top-right",
-                "middle-left",
-                "middle-right",
-                "bottom-left",
-                "bottom-center",
-                "bottom-right",
-              ]}
-              boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
-            />
-          </Layer>
-        )}
+       {backgroundImage && backgroundMode === "manual" && bgImg && backgroundRect ? (
+  <Layer
+    listening={currentTool === "select" && !isSpacePressed}
+    children={[
+      <KonvaImage
+        key="bg"
+        ref={bgNodeRef}
+        image={bgImg}
+        x={backgroundRect.x}
+        y={backgroundRect.y}
+        width={backgroundRect.width}
+        height={backgroundRect.height}
+        opacity={0.95}
+        draggable={currentTool === "select" && !isSpacePressed}
+        onDragEnd={(e) => {
+          const node = e.target as unknown as Konva.Image;
+          setBackgroundRect?.({
+            x: node.x(),
+            y: node.y(),
+            width: node.width(),
+            height: node.height(),
+          });
+        }}
+        onTransformEnd={() => {
+          const node = bgNodeRef.current!;
+          const w = node.width() * node.scaleX();
+          const h = node.height() * node.scaleY();
+          const x = node.x();
+          const y = node.y();
+          node.scaleX(1);
+          node.scaleY(1);
+          setBackgroundRect?.({ x, y, width: w, height: h });
+        }}
+      />,
+      <Transformer
+        key="bgTr"
+        ref={bgTrRef}
+        nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
+        rotateEnabled={false}
+        keepRatio
+        enabledAnchors={[
+          "top-left","top-center","top-right",
+          "middle-left","middle-right",
+          "bottom-left","bottom-center","bottom-right",
+        ]}
+        boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
+      />,
+    ]}
+  />
+) : null}
+
 
         {/* Сетка */}
+
         <GridLayer
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
@@ -802,100 +851,120 @@ function SeatmapCanvas({
           stagePos={stagePos}
         />
 
-        {/* Зоны */}
-        <Layer listening={currentTool !== "add-seat" && currentTool !== "bend"}>
-          {zones.map((zone) => (
-            <ZoneComponent
-  key={zone.id}
-  zone={zone}
-  seats={seats}
-  rows={rows}
-  isSelected={selectedIds.includes(zone.id)}
-  // ⛔ onClick={(e: any) => handleElementClick(zone.id, e)}  <-- убрать
-  setGroupRef={(node) => { zoneRefs.current[zone.id] = node; }}
-  selectedIds={selectedIds}
-  currentTool={currentTool}
-  hoveredZoneId={hoveredZoneId}
-  setState={setState}
-  setSelectedIds={setSelectedIds}
-  setHoveredZoneId={setHoveredZoneId}
-  handleElementClick={handleElementClick}
-  isViewerMode={false}
-/>
-          ))}
 
-          <DrawingZone drawingZone={drawingZone} seatSpacingX={SEAT_SPACING_X} seatSpacingY={SEAT_SPACING_Y} />
-        </Layer>
+        {/* Зоны */}
+        
+<Layer
+  listening={canInteractZones}
+  children={[
+    ...zones.map((zone) => (
+      <ZoneComponent
+        key={zone.id}
+        zone={zone}
+        seats={seats}
+        rows={rows}
+        isSelected={selectedIds.includes(zone.id)}
+        setGroupRef={(node) => { zoneRefs.current[zone.id] = node; }}
+        selectedIds={selectedIds}
+        currentTool={currentTool}
+        hoveredZoneId={hoveredZoneId}
+        setState={setState}
+        setSelectedIds={setSelectedIds}
+        setHoveredZoneId={setHoveredZoneId}
+        handleElementClick={handleElementClick}
+        isViewerMode={false}
+      />
+    )),
+    <DrawingZone
+      key="drawing-zone"
+      drawingZone={drawingZone}
+      seatSpacingX={SEAT_SPACING_X}
+      seatSpacingY={SEAT_SPACING_Y}
+    />,
+  ]}
+/>
 
         {/* SHAPES */}
-        <Layer listening={currentTool === "select" && !isSpacePressed}>
-          {shapes.map((sh) => {
-            const cx = sh.x + sh.width / 2;
-            const cy = sh.y + sh.height / 2;
-            const scaleX = sh.flipX ? -1 : 1;
-            const scaleY = sh.flipY ? -1 : 1;
+     <Layer
+  listening={currentTool === "select" && !isSpacePressed}
+  children={[
+    ...shapes.map((sh) => {
+      const cx = sh.x + sh.width / 2;
+      const cy = sh.y + sh.height / 2;
+      const scaleX = sh.flipX ? -1 : 1;
+      const scaleY = sh.flipY ? -1 : 1;
 
-            return (
-              <Group
-                key={sh.id}
-                ref={(node) => {
-                  shapeRefs.current[sh.id] = node;
-                }}
-                x={cx}
-                y={cy}
-                offsetX={sh.width / 2}
-                offsetY={sh.height / 2}
-                rotation={sh.rotation ?? 0}
-                scaleX={scaleX}
-                scaleY={scaleY}
-                opacity={sh.opacity ?? 1}
-                draggable={currentTool === "select" && !isSpacePressed}
-                onClick={(e) => handleElementClick(sh.id, e)}
-                onDragEnd={(e) => {
-                  const nx = e.target.x() - sh.width / 2;
-                  const ny = e.target.y() - sh.height / 2;
-                  const sx = Math.round(nx / GRID_SIZE) * GRID_SIZE;
-                  const sy = Math.round(ny / GRID_SIZE) * GRID_SIZE;
-                  setState((prev) => ({
-                    ...prev,
-                    shapes: prev.shapes.map((s) => (s.id === sh.id ? { ...s, x: sx, y: sy } : s)),
-                  }));
-                }}
-              >
-                {sh.kind === "rect" && (
-                  <Rect x={0} y={0} width={sh.width} height={sh.height} fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} />
-                )}
-                {sh.kind === "ellipse" && (
-                  <Ellipse
-                    x={sh.width / 2}
-                    y={sh.height / 2}
-                    radiusX={sh.width / 2}
-                    radiusY={sh.height / 2}
-                    fill={sh.fill ?? "#fff"}
-                    stroke={sh.stroke ?? "#111827"}
-                    strokeWidth={sh.strokeWidth ?? 1}
-                  />
-                )}
-                {sh.kind === "polygon" && (
-                  <Line x={0} y={0} points={(sh.points ?? []).flatMap((p) => [p.x, p.y])} closed fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} lineJoin="round" />
-                )}
-              </Group>
-            );
-          })}
-
-          {/* Драфт шейпов */}
-          {shapeDraft && (
-            <Group x={shapeDraft.x + shapeDraft.width / 2} y={shapeDraft.y + shapeDraft.height / 2} offsetX={shapeDraft.width / 2} offsetY={shapeDraft.height / 2} opacity={0.7} listening={false}>
-              {shapeDraft.kind === "rect" ? (
-                <Rect x={0} y={0} width={shapeDraft.width} height={shapeDraft.height} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
-              ) : (
-                <Ellipse x={shapeDraft.width / 2} y={shapeDraft.height / 2} radiusX={shapeDraft.width / 2} radiusY={shapeDraft.height / 2} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
-              )}
-            </Group>
+      return (
+        <Group
+          key={sh.id}
+          ref={(node) => { shapeRefs.current[sh.id] = node; }}
+          x={cx}
+          y={cy}
+          offsetX={sh.width / 2}
+          offsetY={sh.height / 2}
+          rotation={sh.rotation ?? 0}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          opacity={sh.opacity ?? 1}
+          draggable={currentTool === "select" && !isSpacePressed}
+          onClick={(e) => handleElementClick(sh.id, e)}
+          onDragEnd={(e) => {
+            const nx = e.target.x() - sh.width / 2;
+            const ny = e.target.y() - sh.height / 2;
+            const sx = Math.round(nx / GRID_SIZE) * GRID_SIZE;
+            const sy = Math.round(ny / GRID_SIZE) * GRID_SIZE;
+            setState((prev) => ({
+              ...prev,
+              shapes: prev.shapes.map((s) => (s.id === sh.id ? { ...s, x: sx, y: sy } : s)),
+            }));
+          }}
+        >
+          {sh.kind === "rect" && (
+            <Rect x={0} y={0} width={sh.width} height={sh.height} fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} />
           )}
+          {sh.kind === "ellipse" && (
+            <Ellipse x={sh.width / 2} y={sh.height / 2} radiusX={sh.width / 2} radiusY={sh.height / 2} fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} />
+          )}
+          {sh.kind === "polygon" && (
+            <Line x={0} y={0} points={(sh.points ?? []).flatMap((p) => [p.x, p.y])} closed fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} lineJoin="round" />
+          )}
+        </Group>
+      );
+    }),
 
-          {polyDraft && <Line points={polyDraft.points.flatMap((p) => [p.x, p.y])} stroke="#3B82F6" strokeWidth={1} dash={[6, 4]} closed={false} listening={false} />}
-        </Layer>
+    // draft(s)
+    shapeDraft ? (
+      <Group
+        key="shape-draft"
+        x={shapeDraft.x + shapeDraft.width / 2}
+        y={shapeDraft.y + shapeDraft.height / 2}
+        offsetX={shapeDraft.width / 2}
+        offsetY={shapeDraft.height / 2}
+        opacity={0.7}
+        listening={false}
+      >
+        {shapeDraft.kind === "rect" ? (
+          <Rect x={0} y={0} width={shapeDraft.width} height={shapeDraft.height} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
+        ) : (
+          <Ellipse x={shapeDraft.width / 2} y={shapeDraft.height / 2} radiusX={shapeDraft.width / 2} radiusY={shapeDraft.height / 2} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
+        )}
+      </Group>
+    ) : null,
+
+    polyDraft ? (
+      <Line
+        key="poly-draft"
+        points={polyDraft.points.flatMap((p) => [p.x, p.y])}
+        stroke="#3B82F6"
+        strokeWidth={1}
+        dash={[6, 4]}
+        closed={false}
+        listening={false}
+      />
+    ) : null,
+  ]}
+/>
+
 
         {/* Свободные сиденья (вне зон) */}
         <Layer listening={currentTool === "select" && !isSpacePressed}>
@@ -911,9 +980,10 @@ function SeatmapCanvas({
                 stroke="#0F172A"
                 strokeWidth={0.5}
                 opacity={1}
+                hitStrokeWidth={12}
                 draggable={currentTool === "select" && !isSpacePressed}
-                onClick={(e) => handleElementClick(s.id, e)}
-                onDragEnd={(e) => {
+                onClick={(e: KonvaEventObject<MouseEvent>) => handleElementClick(s.id, e)}
+                onDragEnd={(e: KonvaEventObject<MouseEvent>) => {
                   const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
                   const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
                   setState((prev) => ({
@@ -926,97 +996,115 @@ function SeatmapCanvas({
         </Layer>
 
         {/* Тексты */}
-        <Layer listening={currentTool === "select" && !isSpacePressed}>
-          {texts.map((t) => (
-            <KonvaText
-              key={t.id}
-              ref={(node) => {
-                textRefs.current[t.id] = node as unknown as Konva.Text;
-              }}
-              x={t.x}
-              y={t.y}
-              text={t.text}
-              fontSize={t.fontSize}
-              rotation={t.rotation ?? 0}
-              fill={t.fill ?? "#111827"}
-              fontFamily={t.fontFamily}
-              draggable={currentTool === "select" && !isSpacePressed}
-              onClick={(e) => handleElementClick(t.id, e)}
-              onDragEnd={(e) => {
-                const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
-                const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
-                setState((prev) => ({
-                  ...prev,
-                  texts: prev.texts.map((tt) => (tt.id === t.id ? { ...tt, x: nx, y: ny } : tt)),
-                }));
-              }}
-              listening
-            />
-          ))}
-        </Layer>
-
-        {/* Rotate transformer */}
-        {currentTool === "rotate" &&
-          selectedIds.length === 1 &&
-          (() => {
-            const selectedId = selectedIds[0];
-            const zoneNode = zoneRefs.current[selectedId];
-            const textNode = textRefs.current[selectedId];
-            const shapeNode = shapeRefs.current[selectedId];
-            const node = zoneNode ?? textNode ?? shapeNode;
-            if (!node) return null;
-            return (
-              <Layer>
-                <Transformer
-                  nodes={[node]}
-                  rotateEnabled
-                  enabledAnchors={[]}
-                  onTransformEnd={() => {
-                    const rotation = node.rotation();
-                    setState((prev) => ({
-                      ...prev,
-                      zones: prev.zones.map((z) => (z.id === selectedId ? { ...z, rotation } : z)),
-                      texts: prev.texts.map((t) => (t.id === selectedId ? { ...t, rotation } : t)),
-                      shapes: prev.shapes.map((s) => (s.id === selectedId ? { ...s, rotation } : s)),
-                    }));
-                  }}
-                />
-              </Layer>
-            );
-          })()}
-
-        {/* 🆕 Bend overlay — редактирование изгибов выбранной зоны */}
-       {currentTool === "bend" && selectedIds.length === 1 && (() => {
-  const z = zones.find((zz) => zz.id === selectedIds[0]);
-  if (!z) return null;
-  return (
-    <Layer>
-      <ZoneBendOverlay
-        zone={z}
-  gridSize={GRID_SIZE}
-        setZone={(updater) =>
+       <Layer
+  listening={currentTool === "select" && !isSpacePressed}
+  children={[
+    ...seats.filter((s) => !s.zoneId).map((s) => (
+      <Circle
+        key={s.id}
+        x={s.x}
+        y={s.y}
+        radius={s.radius ?? SEAT_RADIUS}
+        fill={s.fill}
+        stroke="#0F172A"
+        strokeWidth={0.5}
+        opacity={1}
+        hitStrokeWidth={12}
+        draggable={currentTool === "select" && !isSpacePressed}
+        onClick={(e) => handleElementClick(s.id, e)}
+        onDragEnd={(e) => {
+          const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
+          const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
           setState((prev) => ({
             ...prev,
-            zones: prev.zones.map((one) => (one.id === z.id ? updater(one) : one)),
-          }))
-        }
-        onCommit={(zoneAfter) => {
-          setState((prev) => {
-            const { rows, seats } = applyBendToZoneContent(prev, zoneAfter);
-            return { ...prev, rows, seats };
-          });
+            seats: prev.seats.map((ss) => (ss.id === s.id ? { ...ss, x: nx, y: ny } : ss)),
+          }));
         }}
       />
-    </Layer>
-  );
-})()}
+    )),
+  ]}
+/>
+
+
+        {/* Rotate transformer */}
+       {currentTool === "rotate" && selectedIds.length === 1 ? (() => {
+  const selectedId = selectedIds[0];
+  const zoneNode = zoneRefs.current[selectedId];
+  const textNode = textRefs.current[selectedId];
+  const shapeNode = shapeRefs.current[selectedId];
+  const node = zoneNode ?? textNode ?? shapeNode;
+  return node ? (
+    <Layer
+      children={[
+        <Transformer
+          key="rot"
+          nodes={[node]}
+          rotateEnabled
+          enabledAnchors={[]}
+          onTransformEnd={() => {
+            const rotation = node.rotation();
+            setState((prev) => ({
+              ...prev,
+              zones: prev.zones.map((z) => (z.id === selectedId ? { ...z, rotation } : z)),
+              texts: prev.texts.map((t) => (t.id === selectedId ? { ...t, rotation } : t)),
+              shapes: prev.shapes.map((s) => (s.id === selectedId ? { ...s, rotation } : s)),
+            }));
+          }}
+        />,
+      ]}
+    />
+  ) : null;
+})() : null}
+
+        {/* 🆕 Bend overlay — редактирование изгибов выбранной зоны */}
+       {currentTool === "bend" && selectedIds.length === 1 ? (() => {
+  const z = zones.find((zz) => zz.id === selectedIds[0]);
+  return z ? (
+    <Layer
+      children={[
+        <ZoneBendOverlay
+          key="bend"
+          zone={z}
+          gridSize={GRID_SIZE}
+          setZone={(updater) =>
+            setState((prev) => ({
+              ...prev,
+              zones: prev.zones.map((one) => (one.id === z.id ? updater(one) : one)),
+            }))
+          }
+          onCommit={(zoneAfter) => {
+            setState((prev) => {
+              const { rows, seats } = applyBendToZoneContent(prev, zoneAfter);
+              return { ...prev, rows, seats };
+            });
+          }}
+        />,
+      ]}
+    />
+  ) : null;
+})() : null}
+
 
         {/* Рамка выделения */}
-        <Layer listening={false}>
-          {marquee.active && (
-            <Rect x={marquee.x} y={marquee.y} width={marquee.w} height={marquee.h} stroke="#3B82F6" strokeWidth={1} dash={[6, 4]} fill="rgba(59,130,246,0.06)" />
-          )}
-        </Layer>
+        <Layer
+  listening={false}
+  children={[
+    marquee.active ? (
+      <Rect
+        key="marquee"
+        x={marquee.x}
+        y={marquee.y}
+        width={marquee.w}
+        height={marquee.h}
+        stroke="#3B82F6"
+        strokeWidth={1}
+        dash={[6, 4]}
+        fill="rgba(59,130,246,0.06)"
+      />
+    ) : null,
+  ]}
+/>
+
       </Stage>
 
       <ZoomControls scale={scale} setScale={setScaleFromButtons} />

@@ -1,6 +1,7 @@
 // src/components/editor/RowComponent.tsx
-import React from "react";
-import { Group, Rect, Text } from "react-konva";
+import React, { useRef, useMemo } from "react";
+import { Group, Rect } from "react-konva";
+import type Konva from "konva";
 import { SeatmapState } from "../../pages/EditorPage";
 import { Row, Seat } from "../../types/types";
 import SeatComponent from "./SeatComponent";
@@ -13,11 +14,13 @@ interface RowComponentProps {
   handleElementClick: (id: string, e: any) => void;
   currentTool: string;
   isViewerMode?: boolean;
-
   onSeatDragEnd?: (seatAfterDrag: Seat) => void;
 }
 
 const seatRadius = 12;
+// Сделаем хит-зону компактной
+const HIT_PAD_X = 4;
+const HIT_PAD_Y = 4;
 
 const RowComponent: React.FC<RowComponentProps> = ({
   row,
@@ -30,142 +33,122 @@ const RowComponent: React.FC<RowComponentProps> = ({
   onSeatDragEnd,
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
-  const padding = 8;
+  // ✅ Разрешаем тащить сразу в режиме Select (не требуем предварительного выделения)
+  const canDrag = !isViewerMode && currentTool === "select";
 
-  const minX = rowSeats.length > 0 ? Math.min(...rowSeats.map((s) => s.x)) : row.x - seatRadius;
-  const maxX = rowSeats.length > 0 ? Math.max(...rowSeats.map((s) => s.x)) : row.x + seatRadius;
-  const minY = rowSeats.length > 0 ? Math.min(...rowSeats.map((s) => s.y)) : row.y - seatRadius;
-  const maxY = rowSeats.length > 0 ? Math.max(...rowSeats.map((s) => s.y)) : row.y + seatRadius;
+  // для корректного dx/dy
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const handleRowDragMove = (e: any) => {
-    if (!isRowSelected) return;
-    const dx = e.target.x() - row.x;
-    const dy = e.target.y() - row.y;
+  // Узкий bbox по фактическим сиденьям ряда (локальные координаты относительно row.x/row.y)
+  const { bboxX, bboxY, bboxW, bboxH } = useMemo(() => {
+    if (!rowSeats.length) {
+      return {
+        bboxX: -seatRadius - HIT_PAD_X,
+        bboxY: -seatRadius - HIT_PAD_Y,
+        bboxW: seatRadius * 2 + HIT_PAD_X * 2,
+        bboxH: seatRadius * 2 + HIT_PAD_Y * 2,
+      };
+    }
+    const minAbsX = Math.min(...rowSeats.map((s) => s.x - (s.radius ?? seatRadius)));
+    const maxAbsX = Math.max(...rowSeats.map((s) => s.x + (s.radius ?? seatRadius)));
+    const minAbsY = Math.min(...rowSeats.map((s) => s.y - (s.radius ?? seatRadius)));
+    const maxAbsY = Math.max(...rowSeats.map((s) => s.y + (s.radius ?? seatRadius)));
 
-    setState((prev) => ({
-      ...prev,
-      rows: prev.rows.map((r) =>
-        selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
-      ),
-      seats: prev.seats.map((s) =>
-        selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
-      ),
-    }));
-  };
+    const minLocalX = minAbsX - row.x;
+    const maxLocalX = maxAbsX - row.x;
+    const minLocalY = minAbsY - row.y;
+    const maxLocalY = maxAbsY - row.y;
 
-  const localMinX = minX - row.x;
-  const localMaxX = maxX - row.x;
-  const localMinY = minY - row.y;
-  const localMaxY = maxY - row.y;
-
-  const bboxX = localMinX - seatRadius - padding;
-  const bboxY = localMinY - seatRadius - padding;
-  const bboxW = localMaxX - localMinX + seatRadius * 2 + padding * 2;
-  const bboxH = localMaxY - localMinY + seatRadius * 2 + padding * 2;
-
-  const labelWidth = Math.max(24, row.label.length * 8 + 12);
-  const labelGap = 8;
-  const labelX = bboxX - labelWidth - labelGap;
-  const labelY = bboxY + bboxH / 2 - 10;
+    return {
+      bboxX: minLocalX - HIT_PAD_X,
+      bboxY: minLocalY - HIT_PAD_Y,
+      bboxW: (maxLocalX - minLocalX) + HIT_PAD_X * 2,
+      bboxH: (maxLocalY - minLocalY) + HIT_PAD_Y * 2,
+    };
+  }, [rowSeats, row.x, row.y]);
 
   return (
     <Group
       key={row.id}
       x={row.x}
       y={row.y}
-      draggable={!isViewerMode && isRowSelected && currentTool === "select"}
+      draggable={canDrag}
+      // гасим всплытие, чтобы зона не перехватывала
+      onMouseDown={(e) => (e.cancelBubble = true)}
+      onMouseUp={(e) => (e.cancelBubble = true)}
+      onTap={(e) => (e.cancelBubble = true)}
       onDragStart={(e) => {
         e.cancelBubble = true;
+        const node = e.target as Konva.Group;
+        dragStartRef.current = { x: node.x(), y: node.y() };
+
+        // ✅ Автовыделение при начале драга
+        if (!isRowSelected) {
+          handleElementClick(row.id, e as any);
+        }
       }}
-      // src/components/editor/RowComponent.tsx
-
-      // ...
       onDragMove={(e) => {
+        // не пишем в state каждый кадр — Konva двигает визуально
         e.cancelBubble = true;
-
-        const dx = e.target.x() - row.x;
-        const dy = e.target.y() - row.y;
-
-        setState((prev) => ({
-          ...prev,
-          rows: prev.rows.map((r) =>
-            selectedIds.includes(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
-          ),
-          seats: prev.seats.map((s) =>
-            selectedIds.includes(s.rowId ?? "") ? { ...s, x: s.x + dx, y: s.y + dy } : s
-          ),
-        }));
-
-        e.target.position({ x: row.x, y: row.y });
       }}
       onDragEnd={(e) => {
         e.cancelBubble = true;
-        e.target.position({ x: row.x, y: row.y });
+        const node = e.target as Konva.Group;
+        const start = dragStartRef.current ?? { x: row.x, y: row.y };
+        const end = { x: node.x(), y: node.y() };
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+
+        // Коммитим смещение и для ряда, и для всех его сидений
+        setState((prev) => ({
+          ...prev,
+          rows: prev.rows.map((r) =>
+            r.id === row.id ? { ...r, x: r.x + dx, y: r.y + dy } : r
+          ),
+          seats: prev.seats.map((s) =>
+            s.rowId === row.id ? { ...s, x: s.x + dx, y: s.y + dy } : s
+          ),
+        }));
+
+        dragStartRef.current = null;
       }}
     >
+      {/* Узкая прозрачная хит-зона — клик/захват именно вокруг сидений */}
       <Rect
         x={bboxX}
         y={bboxY}
         width={bboxW}
         height={bboxH}
-        fill={"transparent"}
-        listening={true}
-        onMouseDown={(e: any) => {
-          e.cancelBubble = true;
-          if (!isViewerMode) handleElementClick(row.id, e);
-        }}
-        onTouchStart={(e: any) => {
-          e.cancelBubble = true;
-          if (!isViewerMode) handleElementClick(row.id, e);
-        }}
-      />
-
-     {isRowSelected && (
-  <Rect
-    x={bboxX}
-    y={bboxY}
-    width={bboxW}
-    height={bboxH}
-    stroke="blue"
-    strokeWidth={2}
-    dash={[6, 4]}
-    strokeScaleEnabled={false}
-    listening={false}
-  />
-)}
-
-      <Rect
-        x={labelX}
-        y={labelY}
-        width={labelWidth}
-        height={20}
-        fill={isRowSelected ? "#D0E8FF" : "white"}
-        opacity={0.95}
-        cornerRadius={4}
-        listening={true}
-        onClick={(e: any) => {
-          e.cancelBubble = true;
-          if (!isViewerMode) handleElementClick(row.id, e);
-        }}
+        fillEnabled={false}
+        strokeEnabled={false}
+        listening
         hitStrokeWidth={12}
-      />
-      <Text
-        text={row.label}
-        x={labelX}
-        y={labelY}
-        width={labelWidth}
-        height={20}
-        align="center"
-        verticalAlign="middle"
-        fontSize={14}
-        fill={isRowSelected ? "blue" : "black"}
-        listening={true}
-        onClick={(e: any) => {
+        onMouseDown={(e) => {
+          e.cancelBubble = true;
+          if (!isViewerMode) handleElementClick(row.id, e);
+        }}
+        onTouchStart={(e) => {
           e.cancelBubble = true;
           if (!isViewerMode) handleElementClick(row.id, e);
         }}
       />
 
+      {/* Рамка выделения — только при выбранном ряду */}
+      {isRowSelected && (
+        <Rect
+          x={bboxX}
+          y={bboxY}
+          width={bboxW}
+          height={bboxH}
+          stroke="#3B82F6"
+          strokeWidth={2}
+          dash={[6, 4]}
+          strokeScaleEnabled={false}
+          listening={false}
+        />
+      )}
+
+      {/* Сиденья ряда */}
       {rowSeats.map((seat) => (
         <SeatComponent
           key={seat.id}

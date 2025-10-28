@@ -57,6 +57,10 @@ export type Zone = {
   bendRight?: number;
   bendBottom?: number;
   bendLeft?: number;
+  seatSpacingX?: number; // px, по умолчанию 30
+  seatSpacingY?: number; // px, по умолчанию 30
+
+  rowLabelSide?: 'left' | 'right'; // default: 'left
 };
 
 

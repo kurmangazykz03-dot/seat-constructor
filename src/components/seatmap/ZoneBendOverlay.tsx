@@ -16,6 +16,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 const snap = (n: number, step?: number) => (step ? Math.round(n / step) * step : n);
 
 export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: Props) {
+  const gs = gridSize ?? 1;
   const grpRef = useRef<Konva.Group>(null);
 
   const W = zone.width;
@@ -26,7 +27,8 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
   const bb = zone.bendBottom ?? 0;
   const bl = zone.bendLeft ?? 0;
 
-  const maxB = Math.max(20, Math.floor(Math.min(W, H) * 0.9));
+const maxTopBottom = Math.max(20, Math.floor(H * 0.9));
+ const maxLeftRight = Math.max(20, Math.floor(W * 0.9));
 
   const pathStr = useMemo(
     () => buildBentRectPath(W, H, bt, br, bb, bl),
@@ -39,6 +41,11 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
     const inv = grp.getAbsoluteTransform().copy().invert();
     return inv.point(abs);
   };
+  const toAbs = (loc: Konva.Vector2d) => {
+   const grp = grpRef.current;
+    if (!grp) return loc;
+    return grp.getAbsoluteTransform().point(loc);
+  };
 
   const setCursor = (e: any, cursor: string) => {
     const stage: Konva.Stage | null = e.target.getStage();
@@ -50,19 +57,19 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
   // обновления со снапом
   const updateTop = (abs: Konva.Vector2d) => {
     const p = toLocal(abs);
-    setZone((z) => ({ ...z, bendTop: clamp(snap(p.y, gridSize), -maxB, maxB) }));
+    setZone((z) => ({ ...z, bendTop: clamp(snap(p.y, gs), -maxTopBottom, maxTopBottom) }));
   };
   const updateBottom = (abs: Konva.Vector2d) => {
     const p = toLocal(abs);
-    setZone((z) => ({ ...z, bendBottom: clamp(snap(p.y - H, gridSize), -maxB, maxB) }));
+    setZone((z) => ({ ...z, bendBottom: clamp(snap(p.y - H, gs), -maxTopBottom, maxTopBottom) }));
   };
   const updateRight = (abs: Konva.Vector2d) => {
     const p = toLocal(abs);
-    setZone((z) => ({ ...z, bendRight: clamp(snap(p.x - W, gridSize), -maxB, maxB) }));
+    setZone((z) => ({ ...z, bendRight: clamp(snap(p.x - W, gs), -maxLeftRight, maxLeftRight) }));
   };
   const updateLeft = (abs: Konva.Vector2d) => {
     const p = toLocal(abs);
-    setZone((z) => ({ ...z, bendLeft: clamp(snap(-p.x, gridSize), -maxB, maxB) }));
+    setZone((z) => ({ ...z, bendLeft: clamp(snap(-p.x, gs), -maxLeftRight, maxLeftRight) }));
   };
 
   const handles = [
@@ -84,6 +91,7 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
         fillEnabled={false}
         perfectDrawEnabled={false}
         hitStrokeWidth={10}
+        strokeScaleEnabled={false}
       />
 
       {handles.map((handle) => (
@@ -96,7 +104,26 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
           stroke="#2563EB"
           strokeWidth={1.5}
           draggable
-          onDragStart={(e) => setCursor(e, "grabbing")}
+          strokeScaleEnabled={false}
+             dragBoundFunc={(abs) => {
+           // Работаем в ЛОКАЛЬНЫХ координатах группы, затем обратно в абсолютные
+            const p = toLocal(abs);
+            let nx = p.x, ny = p.y;
+            switch (handle.key) {
+              case "top":
+              case "bottom":
+                nx = W / 2;
+                ny = snap(clamp(ny, -maxTopBottom, H + maxTopBottom), gs);
+                break;
+              case "left":
+              case "right":
+                ny = H / 2;
+                nx = snap(clamp(nx, -maxLeftRight, W + maxLeftRight), gs);
+                break;
+            }
+           return toAbs({ x: nx, y: ny });
+          }}
+         onDragStart={(e) => setCursor(e, "grabbing")}
           onDragMove={(e) => handle.drag(e.target.getAbsolutePosition())}
           onDragEnd={(e) => {
             setCursor(e, "grab");
@@ -105,16 +132,16 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
             let newZone = zone;
             switch (handle.key) {
               case "top":
-                newZone = { ...zone, bendTop: clamp(snap(p.y, gridSize), -maxB, maxB) };
+                 newZone = { ...zone, bendTop: clamp(snap(p.y, gs), -maxTopBottom, maxTopBottom) };
                 break;
               case "bottom":
-                newZone = { ...zone, bendBottom: clamp(snap(p.y - H, gridSize), -maxB, maxB) };
+                newZone = { ...zone, bendBottom: clamp(snap(p.y - H, gs), -maxTopBottom, maxTopBottom) };
                 break;
               case "right":
-                newZone = { ...zone, bendRight: clamp(snap(p.x - W, gridSize), -maxB, maxB) };
+                newZone = { ...zone, bendRight: clamp(snap(p.x - W, gs), -maxLeftRight, maxLeftRight) };
                 break;
               case "left":
-                newZone = { ...zone, bendLeft: clamp(snap(-p.x, gridSize), -maxB, maxB) };
+newZone = { ...zone, bendLeft: clamp(snap(-p.x, gs), -maxLeftRight, maxLeftRight) };
                 break;
             }
             setZone(() => newZone);

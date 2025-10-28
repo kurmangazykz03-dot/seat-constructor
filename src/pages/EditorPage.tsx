@@ -27,6 +27,7 @@ const DESIGN = {
 const WORK_W = DESIGN.TOOLBAR_W + DESIGN.GAP + DESIGN.CANVAS_W + DESIGN.GAP + DESIGN.PROPS_W; // 1918
 const WORK_H = DESIGN.TOPBAR_H + DESIGN.GAP + DESIGN.CANVAS_H + DESIGN.GAP; // 844
 
+
 export interface SeatmapState {
   hallName: string;
   backgroundImage?: string | null;
@@ -143,6 +144,9 @@ const [currentTool, setCurrentTool] = useState<
   bendRight: Number(z.bendRight ?? 0),
   bendBottom: Number(z.bendBottom ?? 0),
   bendLeft: Number(z.bendLeft ?? 0),
+  // ✅ интервалы с дефолтом 30
+  seatSpacingX: Number(z.seatSpacingX ?? 30),
+  seatSpacingY: Number(z.seatSpacingY ?? 30),
     }));
 
     const rows: Row[] = [];
@@ -241,6 +245,8 @@ const [currentTool, setCurrentTool] = useState<
         height: zone.height,
         transparent: !!zone.transparent,
         fillOpacity: zone.fillOpacity ?? 1,
+        seatSpacingX: zone.seatSpacingX ?? 30,
+  seatSpacingY: zone.seatSpacingY ?? 30,
         // ✅ bends
   bendTop: zone.bendTop ?? 0,
   bendRight: zone.bendRight ?? 0,

@@ -78,6 +78,7 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
         stroke={strokeColor}
         strokeWidth={strokeWidth}
         strokeScaleEnabled={false}
+        hitStrokeWidth={12} 
       />
 
       <Text

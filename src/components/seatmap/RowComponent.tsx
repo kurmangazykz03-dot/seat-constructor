@@ -5,6 +5,8 @@ import type Konva from "konva";
 import { SeatmapState } from "../../pages/EditorPage";
 import { Row, Seat } from "../../types/types";
 import SeatComponent from "./SeatComponent";
+import { crisp, crispSize } from "../../utils/crisp";
+
 
 interface RowComponentProps {
   row: Row;
@@ -15,6 +17,7 @@ interface RowComponentProps {
   currentTool: string;
   isViewerMode?: boolean;
   onSeatDragEnd?: (seatAfterDrag: Seat) => void;
+  scale:number
 }
 
 const seatRadius = 12;
@@ -31,6 +34,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
   currentTool,
   isViewerMode = false,
   onSeatDragEnd,
+  scale
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
   // ✅ Разрешаем тащить сразу в режиме Select (не требуем предварительного выделения)
@@ -70,8 +74,8 @@ const RowComponent: React.FC<RowComponentProps> = ({
   return (
     <Group
       key={row.id}
-      x={row.x}
-      y={row.y}
+      x={crisp(row.x, scale)}   // ← было row.x
+  y={crisp(row.y, scale)}   // ← было row.y
       draggable={canDrag}
       // гасим всплытие, чтобы зона не перехватывала
       onMouseDown={(e) => (e.cancelBubble = true)}
@@ -151,7 +155,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
       {/* Сиденья ряда */}
       {rowSeats.map((seat) => (
         <SeatComponent
-          key={seat.id}
+           key={seat.id}
           seat={seat}
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={isRowSelected}
@@ -160,6 +164,8 @@ const RowComponent: React.FC<RowComponentProps> = ({
           offsetX={row.x}
           offsetY={row.y}
           isViewerMode={isViewerMode}
+          currentTool={currentTool}
+          scale={scale}          // ← передаём сюда
         />
       ))}
     </Group>

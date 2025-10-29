@@ -1,12 +1,15 @@
+// SeatComponent.tsx
 import React from "react";
 import { Circle, Group, Text } from "react-konva";
 import { Seat } from "../../types/types";
+import { crisp, crispSize } from "../../utils/crisp";
 
 const STATUS_COLORS: Record<string, string> = {
   available: "#22c55e",
   occupied: "#ef4444",
   disabled: "#9ca3af",
 };
+
 interface SeatComponentProps {
   seat: Seat;
   isSelected: boolean;
@@ -17,6 +20,7 @@ interface SeatComponentProps {
   offsetY?: number;
   isViewerMode?: boolean;
   currentTool?: string;
+  scale: number;
 }
 
 const SeatComponent: React.FC<SeatComponentProps> = ({
@@ -29,29 +33,28 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
   offsetY = 0,
   isViewerMode = false,
   currentTool = "select",
+  scale,
 }) => {
-  // В Viewer берём цвет из статуса, в Editor — из seat.fill
   const visualFill = isViewerMode
     ? (STATUS_COLORS[seat.status ?? "available"] ?? "#22c55e")
     : (seat.fill ?? "#1f2937");
+
   const strokeColor = isSelected ? "blue" : isRowSelected ? "#99CCFF" : "transparent";
   const strokeWidth = isSelected ? 2 : isRowSelected ? 1 : 0;
 
-  const x = Math.round(seat.x - offsetX);
-  const y = Math.round(seat.y - offsetY);
+  // Группа в локальных координатах ряда/зоны
+  const gx = Math.round(seat.x - offsetX);
+  const gy = Math.round(seat.y - offsetY);
   const label = String(seat.label ?? "");
+  const fontSize = Math.round(12);
 
   return (
     <Group
-      x={x}
-      y={y}
+      x={gx}
+      y={gy}
       draggable={!isViewerMode && currentTool === "select"}
-      onDragStart={(e) => {
-        e.cancelBubble = true;
-      }}
-      onDragMove={(e) => {
-        e.cancelBubble = true;
-      }}
+      onDragStart={(e) => (e.cancelBubble = true)}
+      onDragMove={(e) => (e.cancelBubble = true)}
       onDragEnd={(e) => {
         e.cancelBubble = true;
         if (!isViewerMode && onDragEnd) {
@@ -63,34 +66,30 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
           onDragEnd(e, newSeat);
         }
       }}
-      onClick={(e) => {
-        e.cancelBubble = true;
-        onClick(seat.id, e);
-      }}
-      onTap={(e) => {
-        e.cancelBubble = true;
-        onClick(seat.id, e);
-      }}
+      onClick={(e) => { e.cancelBubble = true; onClick(seat.id, e); }}
+      onTap={(e) => { e.cancelBubble = true; onClick(seat.id, e); }}
     >
       <Circle
-        radius={seat.radius ?? 12}
+        x={crisp(0, scale)}
+        y={crisp(0, scale)}
+        radius={crispSize(seat.radius ?? 12, scale)}
         fill={visualFill}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
         strokeScaleEnabled={false}
-        hitStrokeWidth={12} 
+        hitStrokeWidth={12}
       />
 
       <Text
-  text={label}
-  fontSize={12}
-  fill="white"
-  x={0}
-  y={0}
-  offsetX={Math.round((label.length * 6) / 2)}
-  offsetY={6}
-  listening={false}
-/>
+        text={label}
+        fontSize={fontSize}
+        fill="white"
+        x={crisp(0, scale)}
+        y={crisp(0, scale)}
+        offsetX={Math.round((label.length * 6) / 2)}
+        offsetY={Math.round(fontSize / 2)}
+        listening={false}
+      />
     </Group>
   );
 };

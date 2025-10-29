@@ -22,9 +22,61 @@ import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts";
 import ZoneComponent from "../seatmap/ZoneComponent";
 import ZoomControls from "../seatmap/ZoomControls";
 import ZoneBendOverlay from "../seatmap/ZoneBendOverlay";
+import SeatComponent from '../seatmap/SeatComponent';
 
 import { SeatmapState } from "../../pages/EditorPage";
+// где-нибудь до первого рендера Stage (App.tsx или SeatmapCanvas.tsx — над компонентом)
+import { crisp, crispRect,crispSize } from "../../utils/crisp";
+
+(Konva as any).pixelRatio = Math.max(window.devicePixelRatio || 1, 1);
+
 type KonvaPointerEvt = KonvaEventObject<MouseEvent | TouchEvent>;
+
+
+function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16) {
+  const rowsZ  = rows.filter(r => r.zoneId === zone.id);
+  const seatsZ = seats.filter(s => s.zoneId === zone.id);
+  if (!rowsZ.length && !seatsZ.length) return zone;
+
+  let minX =  Infinity;
+  let maxX = -Infinity;
+
+  // ряды считаем как тонкие «строки» (центр), ширину даёт распределение сидений
+  for (const s of seatsZ) {
+    const rad = s.radius ?? 12;
+    minX = Math.min(minX, s.x - rad);
+    maxX = Math.max(maxX, s.x + rad);
+  }
+
+  // если в зоне пока нет сидений — ориентируемся по рядам
+  if (!Number.isFinite(minX)) {
+    for (const r of rowsZ) {
+      minX = Math.min(minX, r.x);
+      maxX = Math.max(maxX, r.x);
+    }
+  }
+
+  if (!Number.isFinite(minX)) return zone; // пусто
+
+  // если контент ушёл в отрицательную область — смещаем зону влево
+  const shiftX = Math.min(0, Math.floor(minX - pad));
+  // левая грань с учетом паддинга (<= 0 — значит зона сместится влево)
+const leftEdge  = Math.min(0, Math.floor(minX - pad));
+// правая грань с учетом паддинга в локальных координатах после сдвига
+const rightEdge = Math.ceil(maxX + pad);
+// итоговая ширина — от leftEdge до rightEdge
+const neededWidth = rightEdge - leftEdge;
+
+
+  // новая зона
+  return {
+  ...zone,
+  x: zone.x + leftEdge,           // leftEdge ≤ 0
+  width: Math.max(zone.width, neededWidth),
+};
+
+}
+
 function useHTMLImage(src: string | null) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -47,6 +99,12 @@ function rectsIntersect(a: {x:number;y:number;width:number;height:number}, b: {x
   const bx2 = b.x + b.width, by2 = b.y + b.height;
   return !(ax2 < b.x || a.x > bx2 || ay2 < b.y || a.y > by2);
 }
+const dist2 = (a:{x:number;y:number}, b:{x:number;y:number}) => {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return dx*dx + dy*dy;
+};
+const NEAR_R2 = 10*10; // пикселей^2 — радиус попадания в первую точку
+
 
 interface SeatmapCanvasProps {
   seats: Seat[];
@@ -129,7 +187,12 @@ const stageRef = useRef<Konva.Stage | null>(null);
 
   const shapeRefs = useRef<Record<string, Konva.Group | null>>({});
   const [shapeDraft, setShapeDraft] = useState<ShapeObject | null>(null);
-  const [polyDraft, setPolyDraft] = useState<{ id: string; points: { x: number; y: number }[] } | null>(null);
+const [polyDraft, setPolyDraft] = useState<{
+  id: string;
+  points: { x: number; y: number }[];
+  hoverFirst?: boolean;
+} | null>(null);
+
 
   const normRect = (x1: number, y1: number, x2: number, y2: number) => {
     const x = Math.min(x1, x2);
@@ -151,48 +214,72 @@ const stageRef = useRef<Konva.Stage | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!polyDraft) return;
-      if (e.key === "Escape") setPolyDraft(null);
-      if (e.key === "Enter") finishPolygon();
-    };
+  if (!polyDraft) return;
+  if (e.key === "Escape") setPolyDraft(null);
+  if (e.key === "Enter") finishPolygon();
+  if (e.key === "Backspace") {
+    e.preventDefault();
+    setPolyDraft((prev) => {
+      if (!prev) return null;
+      const pts = prev.points.slice(0, -1);
+      return pts.length ? { ...prev, points: pts } : null;
+    });
+  }
+};
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [polyDraft]);
 
-  const finishPolygon = () => {
-    if (!polyDraft || polyDraft.points.length < 3) {
-      setPolyDraft(null);
-      return;
-    }
-    const pts = polyDraft.points;
-    const minX = Math.min(...pts.map((p) => p.x));
-    const minY = Math.min(...pts.map((p) => p.y));
-    const maxX = Math.max(...pts.map((p) => p.x));
-    const maxY = Math.max(...pts.map((p) => p.y));
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const localPts = pts.map((p) => ({ x: p.x - minX, y: p.y - minY }));
-
-    const newShape: ShapeObject = {
-      id: `shape-${crypto.randomUUID()}`,
-      kind: "polygon",
-      x: minX,
-      y: minY,
-      width,
-      height,
-      points: localPts,
-      fill: "#ffffff",
-      stroke: "#111827",
-      strokeWidth: 1,
-      opacity: 1,
-      rotation: 0,
-      flipX: false,
-      flipY: false,
-    };
-    setState((prev) => ({ ...prev, shapes: [...prev.shapes, newShape] }));
-    setSelectedIds([newShape.id]);
+ const finishPolygon = () => {
+  if (!polyDraft || polyDraft.points.length < 3) {
     setPolyDraft(null);
+    return;
+  }
+  // защита: одинаковые точки подряд / нулевая площадь
+  const pts = polyDraft.points;
+  const uniq = pts.filter((p, i) => i === 0 || dist2(p, pts[i-1]) > 0);
+  if (uniq.length < 3) {
+    setPolyDraft(null);
+    return;
+  }
+
+  
+
+
+  const minX = Math.min(...uniq.map((p) => p.x));
+  const minY = Math.min(...uniq.map((p) => p.y));
+  const maxX = Math.max(...uniq.map((p) => p.x));
+  const maxY = Math.max(...uniq.map((p) => p.y));
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (width < 2 || height < 2) {
+    setPolyDraft(null);
+    return;
+  }
+  const localPts = uniq.map((p) => ({ x: p.x - minX, y: p.y - minY }));
+
+  const newShape: ShapeObject = {
+    id: `shape-${crypto.randomUUID()}`,
+    kind: "polygon",
+    x: minX,
+    y: minY,
+    width,
+    height,
+    points: localPts,
+    fill: "#ffffff",
+    stroke: "#111827",
+    strokeWidth: 1,
+    opacity: 1,
+    rotation: 0,
+    flipX: false,
+    flipY: false,
   };
+  setState((prev) => ({ ...prev, shapes: [...prev.shapes, newShape] }));
+  setSelectedIds([newShape.id]);
+  setPolyDraft(null);
+};
+
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -279,78 +366,28 @@ const stageRef = useRef<Konva.Stage | null>(null);
     const h = Math.abs(dy);
     setMarquee((m) => ({ ...m, x, y, w, h }));
   };
-  const finishMarquee = (append: boolean) => {
-    if (!marquee.active) return;
-    const rx2 = marquee.x + marquee.w,
-      ry2 = marquee.y + marquee.h;
-    const selected: string[] = [];
+ // finishMarquee: выбираем ТОЛЬКО сиденья
+const finishMarquee = (append: boolean) => {
+  if (!marquee.active) return;
+  const rx2 = marquee.x + marquee.w, ry2 = marquee.y + marquee.h;
+  const selected: string[] = [];
 
-    
-
-    const R = 12,
-      PAD = 8;
-    for (const r of rows) {
-      const z = zones.find((zz) => zz.id === r.zoneId);
-      if (!z) continue;
-      const rowSeats = seats.filter((s) => s.rowId === r.id);
-      let x1, x2, y1, y2;
-      if (rowSeats.length) {
-        const lefts = rowSeats.map((s) => z.x + s.x - (s.radius ?? R));
-        const rights = rowSeats.map((s) => z.x + s.x + (s.radius ?? R));
-        x1 = Math.min(...lefts) - PAD;
-        x2 = Math.max(...rights) + PAD;
-        y1 = z.y + r.y - (R + PAD);
-        y2 = z.y + r.y + (R + PAD);
-      } else {
-        x1 = z.x + r.x - (R + PAD);
-        x2 = z.x + r.x + (R + PAD);
-        y1 = z.y + r.y - (R + PAD);
-        y2 = z.y + r.y + (R + PAD);
-      }
-      const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
-      if (intersect) selected.push(r.id);
-    }
-
-    for (const s of seats) {
-      const r = s.radius ?? 12;
-      const z = s.zoneId ? zones.find((zz) => zz.id === s.zoneId) : null;
-      const cx = z ? z.x + s.x : s.x;
-      const cy = z ? z.y + s.y : s.y;
-      const x1 = cx - r,
-        x2 = cx + r,
-        y1 = cy - r,
-        y2 = cy + r;
-      const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
-      if (intersect) selected.push(s.id);
-    }
-    for (const sh of shapes) {
-      const x1 = sh.x,
-        y1 = sh.y,
-        x2 = sh.x + sh.width,
-        y2 = sh.y + sh.height;
-      const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
-      if (intersect) selected.push(sh.id);
-    }
-    const marqueeRect = { x: marquee.x, y: marquee.y, width: marquee.w, height: marquee.h };
-
-for (const z of zones) {
-  const node = zoneRefs.current[z.id];
-  if (node) {
-    const zr = node.getClientRect({ skipTransform: false });
-    if (rectsIntersect(zr, marqueeRect)) selected.push(z.id);
-  } else {
-    const zx2 = z.x + z.width, zy2 = z.y + z.height;
-    const intersect = !(zx2 < marquee.x || z.x > marqueeRect.x + marqueeRect.width || zy2 < marquee.y || z.y > marqueeRect.y + marqueeRect.height);
-    if (intersect) selected.push(z.id);
+  for (const s of seats) {
+    const r = s.radius ?? 12;
+    const z = s.zoneId ? zones.find((zz) => zz.id === s.zoneId) : null;
+    const cx = z ? z.x + s.x : s.x;
+    const cy = z ? z.y + s.y : s.y;
+    const x1 = cx - r, x2 = cx + r, y1 = cy - r, y2 = cy + r;
+    const intersect = !(x2 < marquee.x || x1 > rx2 || y2 < marquee.y || y1 > ry2);
+    if (intersect) selected.push(s.id);
   }
-}
 
-   // финальный uniq всегда
-    const uniq = Array.from(new Set(selected));
-    setSelectedIds(prev => (append ? Array.from(new Set([...prev, ...uniq])) : uniq));
-    setMarquee({ active: false, x: 0, y: 0, w: 0, h: 0 });
-    dragStartRef.current = null;
-  };
+  const uniq = Array.from(new Set(selected));
+  setSelectedIds(prev => (append ? Array.from(new Set([...prev, ...uniq])) : uniq));
+  setMarquee({ active: false, x: 0, y: 0, w: 0, h: 0 });
+  dragStartRef.current = null;
+};
+
 
   const bgNodeRef = useRef<Konva.Image | null>(null);
   const bgTrRef = useRef<Konva.Transformer | null>(null);
@@ -420,6 +457,9 @@ for (const z of zones) {
   }));
   return { row, seats: newSeats };
 };
+const snapCenter = (v: number) =>
+  Math.floor(v / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
+
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
     const isEmpty = e.target === stage;
@@ -433,30 +473,32 @@ for (const z of zones) {
     }
 
     if (currentTool === "add-seat") {
-      if (isSpacePressed) return;
-      const p = stage.getPointerPosition();
-      if (!p) return;
-      const world = toWorldPoint(stage, p);
-      const snappedX = Math.round(world.x / GRID_SIZE) * GRID_SIZE;
-      const snappedY = Math.round(world.y / GRID_SIZE) * GRID_SIZE;
+  if (isSpacePressed) return;
+  const p = stage.getPointerPosition();
+  if (!p) return;
+  const w = toWorldPoint(stage, p);
+const useSnap = e.evt.altKey; // Alt — включить снап
+const x = useSnap ? snapCenter(w.x) : Math.round(w.x);
+const y = useSnap ? snapCenter(w.y) : Math.round(w.y);
 
-      const newSeat: Seat = {
-        id: `seat-${crypto.randomUUID()}`,
-        x: snappedX,
-        y: snappedY,
-        radius: SEAT_RADIUS,
-        fill: "#22C55E",
-        label: "1",
-        status: "available",
-        category: "standard",
-        zoneId: null,
-        rowId: null,
-        colIndex: 1,
-      };
-      setState((prev) => ({ ...prev, seats: [...prev.seats, newSeat] }));
-      setSelectedIds([newSeat.id]);
-      return;
-    }
+
+  const newSeat: Seat = {
+    id: `seat-${crypto.randomUUID()}`,
+    x, y,
+    radius: SEAT_RADIUS,
+    fill: "#22C55E",
+    label: "1",
+    status: "available",
+    category: "standard",
+    zoneId: null,
+    rowId: null,
+    colIndex: 1,
+  };
+  setState((prev) => ({ ...prev, seats: [...prev.seats, newSeat] }));
+  setSelectedIds([newSeat.id]);
+  return;
+}
+
 
     if (currentTool === "add-zone" && isEmpty) {
       const pointer = stage.getPointerPosition();
@@ -526,20 +568,34 @@ for (const z of zones) {
       return;
     }
 
-    if (currentTool === "add-polygon") {
-      if (isSpacePressed) return;
-      const p = stage.getPointerPosition();
-      if (!p) return;
-      const w = toWorldPoint(stage, p);
-      const px = Math.round(w.x / GRID_SIZE) * GRID_SIZE;
-      const py = Math.round(w.y / GRID_SIZE) * GRID_SIZE;
+ if (currentTool === "add-polygon") {
+  if (isSpacePressed) return;
+  const p = stage.getPointerPosition();
+  if (!p) return;
+  const w = toWorldPoint(stage, p);
 
-      setPolyDraft((prev) => {
-        if (!prev) return { id: `poly-temp`, points: [{ x: px, y: py }] };
-        return { ...prev, points: [...prev.points, { x: px, y: py }] };
-      });
-      return;
+  // Alt — без снапа; иначе снап к сетке
+  const px = e.evt.altKey ? w.x : Math.round(w.x / GRID_SIZE) * GRID_SIZE;
+  const py = e.evt.altKey ? w.y : Math.round(w.y / GRID_SIZE) * GRID_SIZE;
+
+  setPolyDraft((prev) => {
+    if (!prev) return { id: `poly-temp`, points: [{ x: px, y: py }], hoverFirst: false };
+
+    const last = prev.points[prev.points.length - 1];
+    // защита от «той же точки»
+    if (last && dist2(last, { x: px, y: py }) < 1) return prev;
+
+    // клик по первой точке — замыкаем, если точек >= 3
+    if (prev.points.length >= 3 && dist2(prev.points[0], { x: px, y: py }) <= NEAR_R2) {
+      finishPolygon();
+      return null;
     }
+
+    return { ...prev, points: [...prev.points, { x: px, y: py }], hoverFirst: false };
+  });
+  return;
+}
+
   };
 
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
@@ -571,6 +627,19 @@ for (const z of zones) {
       const r = normRect(shapeDraft.x, shapeDraft.y, ex, ey);
       setShapeDraft((sd) => (sd ? { ...sd, ...r } : null));
     }
+    if (polyDraft) {
+  const w = toWorldPoint(stage, p);
+  const px = w.x, py = w.y; // для резинки не снапаем — выглядит живее
+
+  // показываем ховер по первой точке
+  const showHover =
+    polyDraft.points.length >= 3 &&
+    dist2(polyDraft.points[0], { x: px, y: py }) <= NEAR_R2;
+
+  setPolyDraft((prev) => (prev ? { ...prev, hoverFirst: showHover } : null));
+  return;
+}
+
   };
 
   const handleStageMouseUp = (e: KonvaEventObject<MouseEvent>) => {
@@ -720,7 +789,15 @@ const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent|TouchEven
     setStagePos((pos) => ({ x: pos.x - dx, y: pos.y - dy }));
   }
 };
-const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" && selectedIds.length === 1);
+// в bend тоже можно кликать по зонам (чтобы быстро переключать таргет)
+const canInteractZones = currentTool !== "add-seat";
+useEffect(() => {
+  if (currentTool !== "bend") return;
+  const hasZoneSelected = selectedIds.some(id => zones.some(z => z.id === id));
+  if (!hasZoneSelected && zones.length > 0) {
+    setSelectedIds([zones[0].id]);
+  }
+}, [currentTool, zones, selectedIds, setSelectedIds]);
 
 
   return (
@@ -873,6 +950,7 @@ const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" 
         setHoveredZoneId={setHoveredZoneId}
         handleElementClick={handleElementClick}
         isViewerMode={false}
+        scale={scale} 
       />
     )),
     <DrawingZone
@@ -885,12 +963,17 @@ const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" 
 />
 
         {/* SHAPES */}
-     <Layer
+    <Layer
   listening={currentTool === "select" && !isSpacePressed}
   children={[
     ...shapes.map((sh) => {
       const cx = sh.x + sh.width / 2;
       const cy = sh.y + sh.height / 2;
+
+      // снэп центра группы — чтобы вся фигура ложилась на пиксели
+      const cxS = crisp(cx, scale);
+      const cyS = crisp(cy, scale);
+
       const scaleX = sh.flipX ? -1 : 1;
       const scaleY = sh.flipY ? -1 : 1;
 
@@ -898,8 +981,8 @@ const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" 
         <Group
           key={sh.id}
           ref={(node) => { shapeRefs.current[sh.id] = node; }}
-          x={cx}
-          y={cy}
+          x={cxS}
+          y={cyS}
           offsetX={sh.width / 2}
           offsetY={sh.height / 2}
           rotation={sh.rotation ?? 0}
@@ -919,107 +1002,184 @@ const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" 
             }));
           }}
         >
-          {sh.kind === "rect" && (
-            <Rect x={0} y={0} width={sh.width} height={sh.height} fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} />
-          )}
+          {sh.kind === "rect" && (() => {
+            const r = crispRect(0, 0, sh.width, sh.height, scale);
+            return (
+              <Rect
+                x={r.x} y={r.y} width={r.width} height={r.height}
+                fill={sh.fill ?? "#fff"}
+                stroke={sh.stroke ?? "#111827"}
+                strokeWidth={sh.strokeWidth ?? 1}
+                strokeScaleEnabled={false}    // ← обводка не размывается при масштабе
+              />
+            );
+          })()}
           {sh.kind === "ellipse" && (
-            <Ellipse x={sh.width / 2} y={sh.height / 2} radiusX={sh.width / 2} radiusY={sh.height / 2} fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} />
+            <Ellipse
+              x={crisp(sh.width / 2, scale)}
+              y={crisp(sh.height / 2, scale)}
+              radiusX={crispSize(sh.width / 2, scale)}
+              radiusY={crispSize(sh.height / 2, scale)}
+              fill={sh.fill ?? "#fff"}
+              stroke={sh.stroke ?? "#111827"}
+              strokeWidth={sh.strokeWidth ?? 1}
+              strokeScaleEnabled={false}
+            />
           )}
           {sh.kind === "polygon" && (
-            <Line x={0} y={0} points={(sh.points ?? []).flatMap((p) => [p.x, p.y])} closed fill={sh.fill ?? "#fff"} stroke={sh.stroke ?? "#111827"} strokeWidth={sh.strokeWidth ?? 1} lineJoin="round" />
+            <Line
+              x={0}
+              y={0}
+              points={(sh.points ?? []).flatMap((p) => [crisp(p.x, scale), crisp(p.y, scale)])}
+              closed
+              fill={sh.fill ?? "#fff"}
+              stroke={sh.stroke ?? "#111827"}
+              strokeWidth={sh.strokeWidth ?? 1}
+              lineJoin="round"
+              strokeScaleEnabled={false}
+            />
           )}
         </Group>
       );
     }),
 
-    // draft(s)
+    // draft — тоже можно чутка «снэпнуть»
     shapeDraft ? (
       <Group
         key="shape-draft"
-        x={shapeDraft.x + shapeDraft.width / 2}
-        y={shapeDraft.y + shapeDraft.height / 2}
+        x={crisp(shapeDraft.x + shapeDraft.width / 2, scale)}
+        y={crisp(shapeDraft.y + shapeDraft.height / 2, scale)}
         offsetX={shapeDraft.width / 2}
         offsetY={shapeDraft.height / 2}
         opacity={0.7}
         listening={false}
       >
         {shapeDraft.kind === "rect" ? (
-          <Rect x={0} y={0} width={shapeDraft.width} height={shapeDraft.height} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
+          <Rect
+            x={0} y={0}
+            width={crispSize(shapeDraft.width, scale)}
+            height={crispSize(shapeDraft.height, scale)}
+            fill="rgba(0,0,0,0.03)"
+            stroke="#3B82F6"
+            dash={[6, 4]}
+            strokeScaleEnabled={false}
+          />
         ) : (
-          <Ellipse x={shapeDraft.width / 2} y={shapeDraft.height / 2} radiusX={shapeDraft.width / 2} radiusY={shapeDraft.height / 2} fill="rgba(0,0,0,0.03)" stroke="#3B82F6" dash={[6, 4]} />
+          <Ellipse
+            x={crisp(shapeDraft.width / 2, scale)}
+            y={crisp(shapeDraft.height / 2, scale)}
+            radiusX={crispSize(shapeDraft.width / 2, scale)}
+            radiusY={crispSize(shapeDraft.height / 2, scale)}
+            fill="rgba(0,0,0,0.03)"
+            stroke="#3B82F6"
+            dash={[6, 4]}
+            strokeScaleEnabled={false}
+          />
         )}
       </Group>
     ) : null,
-
-    polyDraft ? (
-      <Line
-        key="poly-draft"
-        points={polyDraft.points.flatMap((p) => [p.x, p.y])}
-        stroke="#3B82F6"
-        strokeWidth={1}
-        dash={[6, 4]}
-        closed={false}
-        listening={false}
-      />
-    ) : null,
   ]}
 />
+{/* POLYGON DRAFT OVERLAY */}
+{currentTool === "add-polygon" && polyDraft ? (
+  <Layer listening>
+    {/* линия-резинка: существующие точки + курсор */}
+    <Line
+      x={0}
+      y={0}
+      points={[
+        ...polyDraft.points.flatMap((p) => [p.x, p.y]),
+        ...(lastPointerRef.current && stageRef.current
+          ? (() => {
+              const w = stageRef.current!.getAbsoluteTransform().copy().invert().point(lastPointerRef.current!);
+              return [w.x, w.y];
+            })()
+          : [])
+      ]}
+      closed={false}
+      stroke="#3B82F6"
+      dash={[6, 4]}
+      strokeWidth={1}
+      lineJoin="round"
+      listening={false}
+    />
 
+    {/* «магнит» на первой точке для замыкания */}
+    {polyDraft.points.length > 0 && (
+      <Circle
+        x={polyDraft.points[0].x}
+        y={polyDraft.points[0].y}
+        radius={polyDraft.hoverFirst ? 7 : 5}
+        fill={polyDraft.hoverFirst ? "#10B981" : "#111827"}
+        opacity={polyDraft.hoverFirst ? 0.8 : 0.6}
+        stroke="#FFFFFF"
+        strokeWidth={1}
+        onClick={() => {
+          if (polyDraft.points.length >= 3) finishPolygon();
+        }}
+      />
+    )}
+
+    {/* маленькие узлы уже поставленных точек */}
+    {polyDraft.points.map((p, i) => (
+      <Circle key={i} x={p.x} y={p.y} radius={3} fill="#111827" opacity={0.6} listening={false} />
+    ))}
+  </Layer>
+) : null}
 
         {/* Свободные сиденья (вне зон) */}
-        <Layer listening={currentTool === "select" && !isSpacePressed}>
-          {seats
-            .filter((s) => !s.zoneId)
-            .map((s) => (
-              <Circle
-                key={s.id}
-                x={s.x}
-                y={s.y}
-                radius={s.radius ?? SEAT_RADIUS}
-                fill={s.fill}
-                stroke="#0F172A"
-                strokeWidth={0.5}
-                opacity={1}
-                hitStrokeWidth={12}
-                draggable={currentTool === "select" && !isSpacePressed}
-                onClick={(e: KonvaEventObject<MouseEvent>) => handleElementClick(s.id, e)}
-                onDragEnd={(e: KonvaEventObject<MouseEvent>) => {
-                  const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
-                  const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
-                  setState((prev) => ({
-                    ...prev,
-                    seats: prev.seats.map((ss) => (ss.id === s.id ? { ...ss, x: nx, y: ny } : ss)),
-                  }));
-                }}
-              />
-            ))}
-        </Layer>
+       <Layer listening={currentTool === "select" && !isSpacePressed}>
+  {seats.filter((s) => !s.zoneId).map((s) => (
+    <SeatComponent
+      key={s.id}
+      seat={s}
+      isSelected={selectedIds.includes(s.id)}
+      isRowSelected={false}
+      onClick={handleElementClick}
+      onDragEnd={(_e, seatAfterDrag) => {
+        // по желанию: оставляем снап ПОСЛЕ перетаскивания
+        const nx = Math.round(seatAfterDrag.x / GRID_SIZE) * GRID_SIZE;
+        const ny = Math.round(seatAfterDrag.y / GRID_SIZE) * GRID_SIZE;
+        setState((prev) => ({
+          ...prev,
+          seats: prev.seats.map((ss) => (ss.id === s.id ? { ...ss, x: nx, y: ny } : ss)),
+        }));
+      }}
+      offsetX={0}
+      offsetY={0}
+      isViewerMode={false}
+      currentTool={currentTool}
+      scale={scale}
+    />
+  ))}
+</Layer>
+
 
         {/* Тексты */}
-       <Layer
+<Layer
   listening={currentTool === "select" && !isSpacePressed}
   children={[
-    ...seats.filter((s) => !s.zoneId).map((s) => (
-      <Circle
-        key={s.id}
-        x={s.x}
-        y={s.y}
-        radius={s.radius ?? SEAT_RADIUS}
-        fill={s.fill}
-        stroke="#0F172A"
-        strokeWidth={0.5}
-        opacity={1}
-        hitStrokeWidth={12}
-        draggable={currentTool === "select" && !isSpacePressed}
-        onClick={(e) => handleElementClick(s.id, e)}
+    ...texts.map((t) => (
+      <KonvaText
+        key={t.id}
+        ref={(node) => { textRefs.current[t.id] = node; }}
+        x={crisp(t.x, scale)}
+  y={crisp(t.y, scale)}
+  text={t.text}
+  fontSize={Math.round((t.fontSize ?? 18))} // целый размер
+  fill={t.fill ?? "#111827"}
+  rotation={t.rotation ?? 0}
+  draggable={currentTool === "select" && !isSpacePressed}
+        onClick={(e) => handleElementClick(t.id, e)}
         onDragEnd={(e) => {
-          const nx = Math.round(e.target.x() / GRID_SIZE) * GRID_SIZE;
-          const ny = Math.round(e.target.y() / GRID_SIZE) * GRID_SIZE;
-          setState((prev) => ({
-            ...prev,
-            seats: prev.seats.map((ss) => (ss.id === s.id ? { ...ss, x: nx, y: ny } : ss)),
-          }));
-        }}
+  const nx = snapCenter(e.target.x());
+  const ny = snapCenter(e.target.y());
+  setState(prev => ({
+    ...prev,
+    seats: prev.seats.map(ss => ss.id === s.id ? { ...ss, x: nx, y: ny } : ss),
+  }));
+}}
+
       />
     )),
   ]}
@@ -1072,12 +1232,29 @@ const canInteractZones = currentTool !== "add-seat" && !(currentTool === "bend" 
               zones: prev.zones.map((one) => (one.id === z.id ? updater(one) : one)),
             }))
           }
-          onCommit={(zoneAfter) => {
-            setState((prev) => {
-              const { rows, seats } = applyBendToZoneContent(prev, zoneAfter);
-              return { ...prev, rows, seats };
-            });
-          }}
+        onCommit={(zoneAfter) => {
+  setState((prev) => {
+    // применяем изгиб к контенту
+    const { rows, seats } = applyBendToZoneContent(prev, zoneAfter);
+
+    // подгоняем ТОЛЬКО ширину (и x) зоны под фактическое содержимое
+    const oldZone  = prev.zones.find(zz => zz.id === zoneAfter.id)!;
+    const nextZone = fitZoneWidthToContent(zoneAfter, rows, seats, 16);
+
+    // если зона сдвинулась по X, компенсируем локальные координаты X у рядов/мест
+    const dx = nextZone.x - oldZone.x;
+    const rowsAdj  = dx ? rows.map(r => r.zoneId === nextZone.id ? { ...r, x: r.x - dx } : r) : rows;
+    const seatsAdj = dx ? seats.map(s => s.zoneId === nextZone.id ? { ...s, x: s.x - dx } : s) : seats;
+
+    return {
+      ...prev,
+      zones: prev.zones.map(zz => zz.id === nextZone.id ? nextZone : zz),
+      rows: rowsAdj,
+      seats: seatsAdj,
+    };
+  });
+}}
+
         />,
       ]}
     />

@@ -148,18 +148,22 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 /* ------------------------------ group model ------------------------------ */
 type GroupId = "select" | "draw" | "zones" | "transform";
+
 const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]> = {
-  select: [{ id: "select", title: "Select (V)", icon: IconSelect }],
+  select: [
+    { id: "select", title: "Select (V)", icon: IconSelect },
+  ],
   draw: [
     { id: "add-rect",    title: "Rectangle (M)", icon: IconRect },
     { id: "add-ellipse", title: "Ellipse (E)",   icon: IconEllipse },
     { id: "add-polygon", title: "Polygon (P)",   icon: IconPolygon },
     { id: "add-text",    title: "Text (T)",      icon: IconText },
-    { id: "add-seat",    title: "Seat (S)",      icon: IconSeat },
+    // ⛔️ убрали add-seat из DRAW
   ],
   zones: [
     { id: "add-zone", title: "Add Zone (Z)", icon: IconZone },
     { id: "add-row",  title: "Add Row (R)",  icon: IconRow },
+    { id: "add-seat", title: "Seat (S)",     icon: IconSeat }, // ✅ перенесён сюда
   ],
   transform: [
     { id: "rotate", title: "Rotate (O)", icon: IconRotate },
@@ -169,14 +173,14 @@ const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]
 
 function groupOf(tool: Tool): GroupId {
   if (tool === "select") return "select";
-  if (["add-rect","add-ellipse","add-polygon","add-text","add-seat"].includes(tool)) return "draw";
-  if (["add-zone","add-row"].includes(tool)) return "zones";
+  if (["add-rect","add-ellipse","add-polygon","add-text"].includes(tool)) return "draw"; // ✅ без add-seat
+  if (["add-zone","add-row","add-seat"].includes(tool)) return "zones";                  // ✅ с add-seat
   return "transform";
 }
 
 /* ------------------------------ Group button ----------------------------- */
 function GroupButton({
-  groupId, currentTool, lastUsed, setLastUsed, onPick, label,
+  groupId, currentTool, lastUsed, setLastUsed, onPick, label,isOpen, onToggle,     
 }: {
   groupId: GroupId;
   currentTool: Tool;
@@ -184,6 +188,8 @@ function GroupButton({
   setLastUsed: React.Dispatch<React.SetStateAction<Partial<Record<GroupId, Tool>>>>;
   onPick: (t: Tool) => void;
   label: string;
+   isOpen: boolean;                              // ✅ новое
+  onToggle: () => void;     
 }) {
   const [open, setOpen] = useState(false);
   const items = GROUP_ITEMS[groupId];
@@ -191,24 +197,28 @@ function GroupButton({
   const last = lastUsed[groupId] ?? items[0].id;
   const LastIcon = (items.find(i => i.id === last) ?? items[0]).icon;
 
+  const single = items.length === 1; // ✅ единственный инструмент в группе (например, Select)
+
   const pick = (t: Tool) => {
     onPick(t);
     setLastUsed(prev => ({ ...prev, [groupId]: t }));
     setOpen(false);
   };
-
-  return (
+return (
     <div className="flex flex-col items-center gap-1 relative">
       <SectionLabel>{label}</SectionLabel>
       <Button
-        title={items.find(i => i.id === last)?.title}
+        title={(items.find(i => i.id === last) ?? items[0]).title}
         active={activeInGroup}
-        onClick={() => setOpen(v => !v)}
+        onClick={() => {
+          if (single) pick(items[0].id);
+          else onToggle();                        // ✅ переключаем только эту группу
+        }}
       >
         <LastIcon />
       </Button>
 
-      {open && (
+      {!single && isOpen && (                     // ✅ управление открытием извне
         <div
           role="menu"
           aria-label={`${label} palette`}
@@ -219,7 +229,7 @@ function GroupButton({
               key={id}
               title={title}
               active={currentTool === id}
-              onClick={() => pick(id)}
+              onClick={() => pick(id)}            // ✅ выбор инструмента закрывает меню
             >
               <Icon />
             </Button>
@@ -229,6 +239,7 @@ function GroupButton({
     </div>
   );
 }
+
 
 /* -------------------------------- Toolbar -------------------------------- */
 export default function Toolbar({
@@ -244,7 +255,9 @@ export default function Toolbar({
   setBackgroundMode,
   backgroundFit,
   setBackgroundFit,
+  
 }: ToolbarProps) {
+
   const [alignOpen, setAlignOpen] = useState(false);
   const [lastUsed, setLastUsed] = useState<Partial<Record<GroupId, Tool>>>({
     [groupOf(currentTool)]: currentTool,
@@ -266,42 +279,62 @@ export default function Toolbar({
     };
     reader.readAsDataURL(f);
   };
+// 1) Добавляем состояние открытой группы
+const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
+
+// 2) Когда выбираем инструмент — закрываем палитру
+const handlePick = (t: Tool, groupId: GroupId) => {
+  setCurrentTool(t);
+  setLastUsed(prev => ({ ...prev, [groupId]: t }));
+  setOpenGroup(null);
+};
 
   return (
     <aside className="w-[72px] bg-white border-r border-gray-200 flex flex-col items-center py-3 gap-4">
       {/* Groups */}
       <GroupButton
-        groupId="select"
-        label="SELECT"
-        currentTool={currentTool}
-        lastUsed={lastUsed}
-        setLastUsed={setLastUsed}
-        onPick={(t) => setCurrentTool(t)}
-      />
-      <GroupButton
-        groupId="draw"
-        label="DRAW"
-        currentTool={currentTool}
-        lastUsed={lastUsed}
-        setLastUsed={setLastUsed}
-        onPick={(t) => setCurrentTool(t)}
-      />
-      <GroupButton
-        groupId="zones"
-        label="ZONES"
-        currentTool={currentTool}
-        lastUsed={lastUsed}
-        setLastUsed={setLastUsed}
-        onPick={(t) => setCurrentTool(t)}
-      />
-      <GroupButton
-        groupId="transform"
-        label="TRANSFORM"
-        currentTool={currentTool}
-        lastUsed={lastUsed}
-        setLastUsed={setLastUsed}
-        onPick={(t) => setCurrentTool(t)}
-      />
+  groupId="select"
+  label="SELECT"
+  currentTool={currentTool}
+  lastUsed={lastUsed}
+  setLastUsed={setLastUsed}
+  onPick={(t) => handlePick(t, "select")}
+  isOpen={openGroup === "select"}
+  onToggle={() => setOpenGroup(g => g === "select" ? null : "select")}
+/>
+
+<GroupButton
+  groupId="draw"
+  label="DRAW"
+  currentTool={currentTool}
+  lastUsed={lastUsed}
+  setLastUsed={setLastUsed}
+  onPick={(t) => handlePick(t, "draw")}
+  isOpen={openGroup === "draw"}
+  onToggle={() => setOpenGroup(g => g === "draw" ? null : "draw")}
+/>
+
+<GroupButton
+  groupId="zones"
+  label="ZONES"
+  currentTool={currentTool}
+  lastUsed={lastUsed}
+  setLastUsed={setLastUsed}
+  onPick={(t) => handlePick(t, "zones")}
+  isOpen={openGroup === "zones"}
+  onToggle={() => setOpenGroup(g => g === "zones" ? null : "zones")}
+/>
+
+<GroupButton
+  groupId="transform"
+  label="TRANSFORM"
+  currentTool={currentTool}
+  lastUsed={lastUsed}
+  setLastUsed={setLastUsed}
+  onPick={(t) => handlePick(t, "transform")}
+  isOpen={openGroup === "transform"}
+  onToggle={() => setOpenGroup(g => g === "transform" ? null : "transform")}
+/>
 
       <div className="w-8 h-px bg-gray-200 my-1" />
 

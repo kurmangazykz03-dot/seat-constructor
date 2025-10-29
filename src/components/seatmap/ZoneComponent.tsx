@@ -14,6 +14,7 @@ import { buildBentRectPath, hasBends } from "./zonePath";
 import { warpPointLocal } from "./zoneWarp";
 
 import type { KonvaEventObject } from "konva/lib/Node";
+import { crisp, crispRect,crispSize,crispStrokeRect} from "../../utils/crisp";
 
 interface ZoneComponentProps {
   zone: Zone;
@@ -22,6 +23,7 @@ interface ZoneComponentProps {
   selectedIds: string[];
   currentTool: string;
   hoveredZoneId: string | null;
+   scale: number; // ← НОВОЕ
 
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -37,6 +39,7 @@ interface ZoneComponentProps {
 }
 
 const seatRadius = 12;
+
 
 const createRowWithSeats = (
   zoneId: string,
@@ -90,6 +93,7 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   handleElementClick,
   setGroupRef,
   isSelected: isSelectedProp,
+  scale
 }) => {
   const ROW_LABEL_W = 28; // ширина колонки, px
   const ROW_LABEL_GAP = 6; // зазор от зоны
@@ -297,12 +301,21 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
           zone.bendLeft ?? 0
         )
       : null;
+const sw = strokeWidth; // 1 или 2 у тебя
+const r = crispStrokeRect(0, 0, zone.width, zone.height, scale, sw);
 
+const col = {
+  x: 0,
+  y: 0,
+  w: ROW_LABEL_W,
+  h: zone.height,
+};
+const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
   return (
     <Group
       ref={handleGroupRef}
-      x={zone.x}
-      y={zone.y}
+      x={crisp(zone.x, scale)}
+  y={crisp(zone.y, scale)}
       rotation={zone.rotation ?? 0}
       onMouseEnter={() => setHoveredZoneId(zone.id)}
       onMouseLeave={() => setHoveredZoneId(null)}
@@ -311,39 +324,41 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       onDragEnd={handleZoneDragEnd}
     >
       {bendPath ? (
-        <Path
-          data={bendPath}
-          fill={zone.fill}
-          fillEnabled={!zone.transparent}
-          fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          hitStrokeWidth={12}
-          strokeScaleEnabled={false}
-        />
-      ) : (
-        <Rect
-          width={zone.width}
-          height={zone.height}
-          fill={zone.fill}
-          fillEnabled={!zone.transparent}
-          fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          hitStrokeWidth={12}
-          strokeScaleEnabled={false}
-        />
-      )}
+    <Path
+      data={bendPath}
+      fill={zone.fill}
+      fillEnabled={!zone.transparent}
+      fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+      stroke={strokeColor}
+      strokeWidth={strokeWidth}
+      strokeScaleEnabled={false}   // ←
+      hitStrokeWidth={12}
+    />
+  ) : (
+    <Rect
+      x={r.x}
+  y={r.y}
+  width={r.width}
+  height={r.height}
+      fill={zone.fill}
+      fillEnabled={!zone.transparent}
+      fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+      stroke={strokeColor}
+      strokeWidth={sw}
+  strokeScaleEnabled={false}  // ←
+      hitStrokeWidth={12}
+    />
+  )}
 
-      <Text
-        text={zone.label}
-        x={zone.width / 2}
-        y={-18}
-        fontSize={14}
-        fill="black"
-        align="center"
-        offsetX={(zone.label.length * 7) / 2}
-      />
+<Text
+  text={zone.label}
+  x={crisp(zone.width / 2, scale)}   // ← центр зоны
+  y={crisp(-18, scale)}              // ← над зоной, как было
+  fontSize={14}
+  fill="black"
+  align="center"
+  offsetX={(zone.label.length * 7) / 2}
+/>
 
       {/* НОВОЕ: колонка номеров рядов */}
       {rowsRender.length > 0 && (
@@ -358,13 +373,14 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
         >
           {/* фон колонки */}
           <Rect
-            x={0}
-            y={0}
-            width={ROW_LABEL_W}
-            height={zone.height}
+             x={colR.x}
+  y={colR.y}
+  width={colR.width}
+  height={colR.height}
             fill="#ffffff"
             stroke="#CBD5E1"
-            strokeWidth={1}
+             strokeWidth={1}
+  strokeScaleEnabled={false}
           />
 
           {/* сами ярлыки рядов — берём label из row */}
@@ -392,11 +408,13 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       {seatsWithoutRowRender.map((seat) => (
         <SeatComponent
           key={seat.id}
-          seat={seat}
-          isSelected={selectedIds.includes(seat.id)}
-          onClick={handleElementClick}
-          isViewerMode={isViewerMode || currentTool === "bend"} // во время Bend — запрет на drag
-          onDragEnd={(_e, s) => onSeatDragEnd(s)}
+    seat={seat}
+    isSelected={selectedIds.includes(seat.id)}
+    isRowSelected={false}            // ← добавили
+    onClick={handleElementClick}
+    isViewerMode={isViewerMode || currentTool === "bend"}
+    onDragEnd={(_e, s) => onSeatDragEnd(s)}
+    scale={scale}
         />
       ))}
 
@@ -411,6 +429,7 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
           currentTool={currentTool}
           isViewerMode={isViewerMode || currentTool === "bend"}
           onSeatDragEnd={onSeatDragEnd}
+          scale={scale}
         />
       ))}
     </Group>

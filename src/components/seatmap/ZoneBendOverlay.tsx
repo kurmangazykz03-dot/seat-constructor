@@ -1,9 +1,12 @@
 // src/components/seatmap/ZoneBendOverlay.tsx
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Group, Path, Circle } from "react-konva";
 import Konva from "konva";
 import { Zone } from "../../types/types";
 import { buildBentRectPath } from "./zonePath";
+
+
+type Edge = "top" | "right" | "bottom" | "left";
 
 type Props = {
   zone: Zone;
@@ -16,11 +19,20 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 const snap = (n: number, step?: number) => (step ? Math.round(n / step) * step : n);
 
 export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: Props) {
+
+const [drag, setDrag] = useState<{
+  edge: Edge | null;
+  start: { x: number; y: number };  // точка старта в ЛОКАЛЬНЫХ координатах
+  base: { bt: number; br: number; bb: number; bl: number }; // значения bend на момент старта
+} | null>(null);
+
+
   const gs = gridSize ?? 1;
   const grpRef = useRef<Konva.Group>(null);
 
-  const W = zone.width;
-  const H = zone.height;
+ const W = Math.max(1, zone.width);
+const H = Math.max(1, zone.height);
+
 
   const bt = zone.bendTop ?? 0;
   const br = zone.bendRight ?? 0;
@@ -28,7 +40,8 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit }: P
   const bl = zone.bendLeft ?? 0;
 
 const maxTopBottom = Math.max(20, Math.floor(H * 0.9));
- const maxLeftRight = Math.max(20, Math.floor(W * 0.9));
+const maxLeftRight = Math.max(20, Math.floor(W * 0.9));
+
 
   const pathStr = useMemo(
     () => buildBentRectPath(W, H, bt, br, bb, bl),
@@ -113,40 +126,74 @@ const maxTopBottom = Math.max(20, Math.floor(H * 0.9));
               case "top":
               case "bottom":
                 nx = W / 2;
-                ny = snap(clamp(ny, -maxTopBottom, H + maxTopBottom), gs);
+                ny = clamp(ny, -maxTopBottom, H + maxTopBottom);
                 break;
               case "left":
               case "right":
                 ny = H / 2;
-                nx = snap(clamp(nx, -maxLeftRight, W + maxLeftRight), gs);
+                nx = clamp(nx, -maxLeftRight, W + maxLeftRight);
                 break;
             }
            return toAbs({ x: nx, y: ny });
           }}
-         onDragStart={(e) => setCursor(e, "grabbing")}
-          onDragMove={(e) => handle.drag(e.target.getAbsolutePosition())}
-          onDragEnd={(e) => {
-            setCursor(e, "grab");
-            const p = toLocal(e.target.getAbsolutePosition());
+         onDragStart={(e) => {
+  setCursor(e, "grabbing");
+  const p = toLocal(e.target.getAbsolutePosition());
+  setDrag({
+    edge: handle.key,
+    start: { x: p.x, y: p.y },
+    base: { bt, br, bb, bl },
+  });
+}}
 
-            let newZone = zone;
-            switch (handle.key) {
-              case "top":
-                 newZone = { ...zone, bendTop: clamp(snap(p.y, gs), -maxTopBottom, maxTopBottom) };
-                break;
-              case "bottom":
-                newZone = { ...zone, bendBottom: clamp(snap(p.y - H, gs), -maxTopBottom, maxTopBottom) };
-                break;
-              case "right":
-                newZone = { ...zone, bendRight: clamp(snap(p.x - W, gs), -maxLeftRight, maxLeftRight) };
-                break;
-              case "left":
-newZone = { ...zone, bendLeft: clamp(snap(-p.x, gs), -maxLeftRight, maxLeftRight) };
-                break;
-            }
-            setZone(() => newZone);
-            onCommit?.(newZone);
-          }}
+          onDragMove={(e) => {
+  const p = toLocal(e.target.getAbsolutePosition());
+  setZone((z) => {
+    if (!drag) return z;
+
+    const dx = p.x - drag.start.x;
+    const dy = p.y - drag.start.y;
+
+    let nt = drag.base.bt;
+    let nr = drag.base.br;
+    let nb = drag.base.bb;
+    let nl = drag.base.bl;
+
+    switch (drag.edge) {
+      case "top":    nt = clamp(drag.base.bt + dy, -maxTopBottom,  maxTopBottom);  break;
+      case "bottom": nb = clamp(drag.base.bb + (dy), -maxTopBottom,  maxTopBottom); break;
+      case "right":  nr = clamp(drag.base.br + (dx), -maxLeftRight,  maxLeftRight); break;
+      case "left":   nl = clamp(drag.base.bl + (-dx),-maxLeftRight,  maxLeftRight); break;
+    }
+    return { ...z, bendTop: nt, bendRight: nr, bendBottom: nb, bendLeft: nl };
+  });
+}}
+
+          onDragEnd={(e) => {
+  setCursor(e, "grab");
+  const p = toLocal(e.target.getAbsolutePosition());
+
+  let newZone = zone;
+  switch (handle.key) {
+    case "top":
+      newZone = { ...zone, bendTop:   clamp(snap(p.y,     gs), -maxTopBottom, maxTopBottom) };
+      break;
+    case "bottom":
+      newZone = { ...zone, bendBottom: clamp(snap(p.y - H, gs), -maxTopBottom, maxTopBottom) };
+      break;
+    case "right":
+      newZone = { ...zone, bendRight:  clamp(snap(p.x - W, gs), -maxLeftRight, maxLeftRight) };
+      break;
+    case "left":
+      newZone = { ...zone, bendLeft:   clamp(snap(-p.x,    gs), -maxLeftRight, maxLeftRight) };
+      break;
+  }
+
+  setZone(() => newZone);
+  setDrag(null);
+  onCommit?.(newZone);
+}}
+
           onMouseEnter={(e) => setCursor(e, "grab")}
           onMouseLeave={(e) => setCursor(e, "default")}
           shadowBlur={2}

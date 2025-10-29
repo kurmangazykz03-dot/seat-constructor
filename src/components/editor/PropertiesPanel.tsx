@@ -139,7 +139,7 @@ const StepperNumber: React.FC<{
         step={step}
         onChange={(e) => onChange(clamp(toInt(e.target.value, value), min, max))}
         onBlur={onBlur}
-        className="w-full border-t border-b border-gray-300 px-2.5 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+        className="w-full border-t border-b border-gray-300 px-2.5 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-center text-black"
       />
       <button type="button" onClick={inc} className="px-2 border border-gray-300 rounded-r-lg text-gray-600 hover:bg-gray-50">
         +
@@ -573,26 +573,7 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
         </div>
       </div>
 
-      <Panel>
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-gray-600">Auto reflow by spacing</div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={autoReflow ? "true" : "false"}
-            onClick={() => setAutoReflow((v) => !v)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300 ${
-              autoReflow ? "bg-blue-600" : "bg-gray-300"
-            }`}
-          >
-            <span
-              className={`pointer-events-none absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-white shadow ring-1 ring-gray-300 transition-all ${
-                autoReflow ? "left-4" : "left-1"
-              }`}
-            />
-          </button>
-        </div>
-      </Panel>
+
 
       {/* ------------------------------- SHAPES -------------------------------- */}
       {selectedShapes.length > 1 && (
@@ -771,7 +752,7 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
             </Field>
           </div>
 
-          {sh.kind === "polygon" && <p className="text-xs text-gray-500 mt-2">Точки полигона — в будущем обновлении.</p>}
+          
         </Panel>
       ))}
 
@@ -784,29 +765,31 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
             <TextInput type="text" value={t.text} placeholder="Введите текст" onChange={(e) => updateText(t.id, { text: e.target.value })} />
           </Field>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Font size">
-              <StepperNumber
-                value={Math.round(t.fontSize)}
-                min={8}
-                max={256}
-                step={1}
-                onChange={(v) => updateText(t.id, { fontSize: clamp(v, 8, 256) })}
-              />
-            </Field>
-            <Field label="Font family" hint="Напр.: Inter, Roboto, Arial">
-              <TextInput
-                type="text"
-                value={t.fontFamily ?? ""}
-                onChange={(e) => updateText(t.id, { fontFamily: e.target.value || undefined })}
-              />
-            </Field>
+          <div className="grid grid-cols-2 gap-2 text-black">
+           <Field label="Font size">
+
+  <StepperNumber
+    value={Math.round(t.fontSize)}
+    min={8}
+    max={256}
+    step={1}
+    onChange={(v) => updateText(t.id, { fontSize: clamp(v, 8, 256) })}
+  />
+</Field>
+
+<Field label="Rotation (°)">
+  <StepperNumber
+    value={Math.round(t.rotation ?? 0)}
+    step={1}
+    onChange={(v) => updateText(t.id, { rotation: v })}
+  />
+</Field>
+
+         
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Rotation (°)">
-              <StepperNumber value={Math.round(t.rotation ?? 0)} step={1} onChange={(v) => updateText(t.id, { rotation: v })} />
-            </Field>
+           
             <Field label="Fill">
               <div className="flex items-center gap-2">
                 <input
@@ -924,15 +907,16 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
                 onBlur={() => reflowZoneBySpacing(zone.id)}
               />
             </Field>
-            <Field label="Height">
-              <StepperNumber
-                value={Math.round(zone.height)}
-                min={10}
-                step={1}
-                onChange={(v) => updateZone(zone.id, { height: Math.max(10, v) })}
-                onBlur={() => reflowZone(zone.id)}
-              />
-            </Field>
+           <Field label="Height">
+  <StepperNumber
+    value={Math.round(zone.height)}
+    min={10}
+    step={1}
+    onChange={(v) => updateZone(zone.id, { height: Math.max(10, v) })}
+    onBlur={() => reflowZoneBySpacing(zone.id)}  // ⬅ сохраняем seatSpacingY
+  />
+</Field>
+
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2">

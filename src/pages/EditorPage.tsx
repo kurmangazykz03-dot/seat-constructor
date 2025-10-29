@@ -147,6 +147,9 @@ const [currentTool, setCurrentTool] = useState<
   // ✅ интервалы с дефолтом 30
   seatSpacingX: Number(z.seatSpacingX ?? 30),
   seatSpacingY: Number(z.seatSpacingY ?? 30),
+  // внутри map зоны
+rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
+
     }));
 
     const rows: Row[] = [];
@@ -233,6 +236,7 @@ const [currentTool, setCurrentTool] = useState<
       backgroundFit: s.backgroundFit ?? "contain",
       backgroundMode: s.backgroundMode ?? "auto",
       backgroundRect: s.backgroundRect ?? null,
+      
 
       zones: s.zones.map((zone) => ({
         id: zone.id,
@@ -252,7 +256,9 @@ const [currentTool, setCurrentTool] = useState<
   bendRight: zone.bendRight ?? 0,
   bendBottom: zone.bendBottom ?? 0,
   bendLeft: zone.bendLeft ?? 0,
+  rowLabelSide: zone.rowLabelSide ?? "left",
         rows: s.rows
+        
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
             id: row.id,
@@ -271,6 +277,7 @@ const [currentTool, setCurrentTool] = useState<
                 radius: seat.radius,
                 status: seat.status ?? "available",
                 category: seat.category ?? "standard",
+                
               })),
           })),
       })),

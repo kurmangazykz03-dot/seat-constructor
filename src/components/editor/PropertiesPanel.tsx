@@ -22,6 +22,9 @@ const SHAPE_PRESETS: ShapePreset[] = [
   { key: "transparent", label: "Transparent", fill: undefined, stroke: undefined, strokeWidth: 0, opacity: 0.25 },
 ];
 
+
+
+
 // Небольшой визуальный свотч пресета
 const PresetSwatch: React.FC<{ preset: ShapePreset }> = ({ preset }) => {
   const borderW = Math.max(1, preset.strokeWidth ?? 1);
@@ -178,6 +181,44 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
   const selectedSeatIdSet = React.useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats]);
 
   /* ---------------------------- state update helpers ---------------------------- */
+
+
+const selectedZoneIds = React.useMemo(
+  () => selectedZones.map(z => z.id),
+  [selectedZones]
+);
+
+// агрегированное состояние стороны (left | right | mixed)
+const rowLabelSideAgg: "left" | "right" | "mixed" = React.useMemo(() => {
+  if (!selectedZones.length) return "left";
+  const left  = selectedZones.some(z => (z.rowLabelSide ?? "left") === "left");
+  const right = selectedZones.some(z => (z.rowLabelSide ?? "left") === "right");
+  return left && right ? "mixed" : (left ? "left" : "right");
+}, [selectedZones]);
+
+// массово установить сторону всем выбранным зонам
+const setZonesRowLabelSide = (side: "left" | "right") => {
+  setState(prev => ({
+    ...prev,
+    zones: prev.zones.map(z =>
+      selectedZoneIds.includes(z.id) ? { ...z, rowLabelSide: side } : z
+    ),
+  }));
+};
+
+// массово «перевернуть» сторону
+const flipZonesRowLabelSide = () => {
+  setState(prev => ({
+    ...prev,
+    zones: prev.zones.map(z =>
+      selectedZoneIds.includes(z.id)
+        ? { ...z, rowLabelSide: (z.rowLabelSide === "right" ? "left" : "right") }
+        : z
+    ),
+  }));
+};
+
+
 
   const updateZone = (zoneId: string, patch: Partial<Zone>, opts?: { maybeReflowBySpacing?: boolean }) => {
     setState((prev) => {
@@ -816,72 +857,61 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
       ))}
 
       {/* -------------------------------- ZONES -------------------------------- */}
-      {selectedZones.length > 0 && (
-        <Panel>
-          <h3 className="text-sm font-semibold text-blue-700 mb-3">Apply to all seats in selected zones</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Status">
-              <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateAllSeatsOfSelectedZones({ status: e.currentTarget.value as Seat["status"] })}>
-                <option value="">— keep —</option>
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Category">
-              <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateAllSeatsOfSelectedZones({ category: e.currentTarget.value })}>
-                <option value="">— keep —</option>
-                {CATEGORY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <Field label="Radius">
-              <StepperNumber value={12} min={RADIUS_MIN} max={RADIUS_MAX} step={1} onChange={(v) => updateAllSeatsOfSelectedZones({ radius: v })} />
-            </Field>
-            <Field label="Color">
-              <div className="flex gap-2">
-                {COLOR_OPTIONS.map((c) => (
-                  <button
-                    key={c}
-                    style={{ backgroundColor: c }}
-                    className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition"
-                    onClick={() => updateAllSeatsOfSelectedZones({ fill: c })}
-                    title={c}
-                  />
-                ))}
-              </div>
-            </Field>
-          </div>
-        </Panel>
-      )}
-
+      
+  
       {selectedZones.map((zone) => (
+        
         <Panel key={zone.id}>
           <h3 className="text-base font-semibold text-blue-700 mb-3">Zone: {zone.label}</h3>
           
  <Field label="Row labels side">
-   <div className="flex gap-2">
-     <button
-       className={`px-3 py-1.5 text-sm rounded-lg border ${ (zone.rowLabelSide ?? 'left') === 'left' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white' }`}
-       onClick={() => updateZone(zone.id, { rowLabelSide: 'left' })}
-     >
-       Left
-     </button>
-     <button
-       className={`px-3 py-1.5 text-sm rounded-lg border ${ (zone.rowLabelSide ?? 'left') === 'right' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white' }`}
-       onClick={() => updateZone(zone.id, { rowLabelSide: 'right' })}
-     >
-       Right
-     </button>
-   </div>
- </Field>
+  <div className="flex items-center gap-2">
+    <button
+      type="button"
+      aria-pressed={(zone.rowLabelSide ?? 'left') === 'left'}
+      disabled={(zone.rowLabelSide ?? 'left') === 'left'}
+      className={`px-3 py-1.5 text-sm rounded-lg border transition ${
+        (zone.rowLabelSide ?? 'left') === 'left'
+          ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm cursor-default'
+          : 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50'
+      }`}
+      onClick={() => updateZone(zone.id, { rowLabelSide: 'left' })}
+      title="Place row labels on the left"
+    >
+      Left
+    </button>
+
+    <button
+      type="button"
+      aria-pressed={(zone.rowLabelSide ?? 'left') === 'right'}
+      disabled={(zone.rowLabelSide ?? 'left') === 'right'}
+      className={`px-3 py-1.5 text-sm rounded-lg border transition ${
+        (zone.rowLabelSide ?? 'left') === 'right'
+          ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-sm cursor-default'
+          : 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50'
+      }`}
+      onClick={() => updateZone(zone.id, { rowLabelSide: 'right' })}
+      title="Place row labels on the right"
+    >
+      Right
+    </button>
+
+    {/* Быстрое переключение */}
+    <button
+      type="button"
+      className="ml-1 px-3 py-1.5 text-sm rounded-lg border bg-white hover:bg-gray-50"
+      onClick={() =>
+        updateZone(zone.id, {
+          rowLabelSide: (zone.rowLabelSide ?? 'left') === 'left' ? 'right' : 'left',
+        })
+      }
+      title="Flip L↔R"
+    >
+      Flip L↔R
+    </button>
+  </div>
+</Field>
+
 
 
           <Field label="Zone Label">
@@ -987,6 +1017,7 @@ const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
               placeholder="e.g. -45"
             />
           </Field>
+          
 
           <Field label="Фон зоны">
             <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg border border-gray-200 bg-white">

@@ -18,6 +18,7 @@ import {
   Stage,
 } from "react-konva";
 import useImage from "use-image";
+import SeatComponent from '../seatmap/SeatComponent'
 
 interface ViewerCanvasProps {
   state: SeatmapState;
@@ -285,6 +286,27 @@ const SeatmapViewerCanvas: React.FC<ViewerCanvasProps> = ({
             />
           ))}
         </Layer>
+
+        <Layer listening>
+  {state.seats
+    .filter((s) => !s.zoneId) // только свободные
+    .map((s) => (
+      <SeatComponent
+        key={s.id}
+        seat={s}
+        isSelected={selectedSeatId === s.id}
+        isRowSelected={false}
+        onClick={(_id) => onSeatSelect(state.seats.find(ss => ss.id === _id) ?? null)}
+        onDragEnd={() => { /* viewer read-only */ }}
+        offsetX={0}
+        offsetY={0}
+        isViewerMode={true}
+        currentTool={"select" as const}
+        scale={scale}
+      />
+    ))}
+</Layer>
+
       </Stage>
 
       <ZoomControls scale={scale} setScale={handleSetScale} />

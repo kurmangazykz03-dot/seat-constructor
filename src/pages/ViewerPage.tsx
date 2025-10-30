@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Row, Seat, Zone } from "../types/types";
+
 import { SeatmapState } from "./EditorPage";
 
 import { AlertTriangle } from "lucide-react";
@@ -7,6 +7,7 @@ import { SeatInfoPanel } from "../components/viewer/SeatInfoPanel";
 import SeatmapViewerCanvas from "../components/viewer/SeatmapViewerCanvas";
 import { ViewerTopBar } from "../components/viewer/ViewerTopBar";
 import { useAutoScale } from "../hooks/useAutoScale";
+import type { Row, Seat, Zone, TextObject, ShapeObject } from "../types/types";
 
 // —— константы дизайн-рамки ——
 const TOPBAR_H = 60;
@@ -38,18 +39,24 @@ function importFromV2(json: any): SeatmapState {
     rotation: Number(z.rotation ?? 0),
     transparent: Boolean(z.transparent ?? false),
     fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+
+    // изгибы
     bendTop: Number(z.bendTop ?? 0),
     bendRight: Number(z.bendRight ?? 0),
     bendBottom: Number(z.bendBottom ?? 0),
     bendLeft: Number(z.bendLeft ?? 0),
+
+    // интервалы и сторона метки ряда
     seatSpacingX: Number(z.seatSpacingX ?? 30),
     seatSpacingY: Number(z.seatSpacingY ?? 30),
-    rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
+    rowLabelSide:
+      z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
   }));
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
 
+  // вложенные ряды/места
   (json.zones || []).forEach((z: any) => {
     (z.rows || []).forEach((r: any, rIdx: number) => {
       const rowId = String(r.id);
@@ -80,9 +87,28 @@ function importFromV2(json: any): SeatmapState {
     });
   });
 
-  const texts = Array.isArray(json.texts)
+  // свободные места (если приходят отдельно)
+  if (Array.isArray(json.freeSeats)) {
+    json.freeSeats.forEach((s: any) => {
+      seats.push({
+        id: String(s.id ?? crypto.randomUUID()),
+        x: Number(s.x ?? 0),
+        y: Number(s.y ?? 0),
+        radius: Number(s.radius ?? 12),
+        fill: String(s.fill ?? "#1f2937"),
+        label: String(s.label ?? ""),
+        zoneId: null,
+        rowId: null,
+        colIndex: null,
+        status: (s.status as any) ?? "available",
+        category: s.category ?? "standard",
+      });
+    });
+  }
+
+  const texts: TextObject[] = Array.isArray(json.texts)
     ? json.texts.map((t: any) => ({
-        id: String(t.id),
+        id: String(t.id ?? crypto.randomUUID()),
         text: String(t.text ?? "Text"),
         x: Number(t.x ?? 0),
         y: Number(t.y ?? 0),
@@ -93,9 +119,9 @@ function importFromV2(json: any): SeatmapState {
       }))
     : [];
 
-  const shapes = Array.isArray(json.shapes)
+  const shapes: ShapeObject[] = Array.isArray(json.shapes)
     ? json.shapes.map((s: any) => ({
-        id: String(s.id),
+        id: String(s.id ?? crypto.randomUUID()),
         kind: (s.kind as any) ?? "rect",
         x: Number(s.x ?? 0),
         y: Number(s.y ?? 0),
@@ -128,6 +154,7 @@ function importFromV2(json: any): SeatmapState {
     stage: { scale: 1, x: 0, y: 0 },
   };
 }
+
 
 function ViewerPage() {
   const [state, setState] = useState<SeatmapState | null>(null);

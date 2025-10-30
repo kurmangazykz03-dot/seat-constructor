@@ -131,188 +131,216 @@ function EditorPage() {
       }));
     }
   };
+function importFromV2(json: any): SeatmapState {
+  const zones: Zone[] = (json.zones || []).map((z: any) => ({
+    id: String(z.id),
+    x: Number(z.x ?? 0),
+    y: Number(z.y ?? 0),
+    width: Number(z.width ?? 200),
+    height: Number(z.height ?? 120),
+    fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+    label: String(z.name ?? z.label ?? ""),
+    color: z.color ?? undefined,
+    rotation: Number(z.rotation ?? 0),
+    transparent: Boolean(z.transparent ?? false),
+    fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+    bendTop: Number(z.bendTop ?? 0),
+    bendRight: Number(z.bendRight ?? 0),
+    bendBottom: Number(z.bendBottom ?? 0),
+    bendLeft: Number(z.bendLeft ?? 0),
+    seatSpacingX: Number(z.seatSpacingX ?? 30),
+    seatSpacingY: Number(z.seatSpacingY ?? 30),
+    rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
+  }));
 
-  function importFromV2(json: any): SeatmapState {
-    const zones: Zone[] = (json.zones || []).map((z: any) => ({
-      id: String(z.id),
-      x: Number(z.x ?? 0),
-      y: Number(z.y ?? 0),
-      width: Number(z.width ?? 200),
-      height: Number(z.height ?? 120),
-      fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-      label: String(z.name ?? z.label ?? ""),
-      color: z.color ?? undefined,
-      rotation: Number(z.rotation ?? 0),
-      transparent: Boolean(z.transparent ?? false),
-      fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
-      bendTop: Number(z.bendTop ?? 0),
-      bendRight: Number(z.bendRight ?? 0),
-      bendBottom: Number(z.bendBottom ?? 0),
-      bendLeft: Number(z.bendLeft ?? 0),
+  const rows: Row[] = [];
+  const seats: Seat[] = [];
 
-      seatSpacingX: Number(z.seatSpacingX ?? 30),
-      seatSpacingY: Number(z.seatSpacingY ?? 30),
+  (json.zones || []).forEach((z: any) => {
+    (z.rows || []).forEach((r: any, rIdx: number) => {
+      const rowId = String(r.id);
+      rows.push({
+        id: rowId,
+        zoneId: String(z.id),
+        index: Number(rIdx),
+        label: String(r.label ?? ""),
+        x: Number(r.x ?? 0),
+        y: Number(r.y ?? 0),
+      });
 
-      rowLabelSide:
-        z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
-    }));
-
-    const rows: Row[] = [];
-    const seats: Seat[] = [];
-
-    (json.zones || []).forEach((z: any) => {
-      (z.rows || []).forEach((r: any, rIdx: number) => {
-        const rowId = String(r.id);
-        rows.push({
-          id: rowId,
+      (r.seats || []).forEach((s: any, cIdx: number) => {
+        seats.push({
+          id: String(s.id),
+          x: Number(s.x ?? 0),
+          y: Number(s.y ?? 0),
+          radius: Number(s.radius ?? 12),
+          fill: String(s.fill ?? "#1f2937"),
+          label: String(s.label ?? ""),
           zoneId: String(z.id),
-          index: Number(rIdx),
-          label: String(r.label ?? ""),
-          x: Number(r.x ?? 0),
-          y: Number(r.y ?? 0),
-        });
-        (r.seats || []).forEach((s: any, cIdx: number) => {
-          seats.push({
-            id: String(s.id),
-            x: Number(s.x ?? 0),
-            y: Number(s.y ?? 0),
-            radius: Number(s.radius ?? 12),
-            fill: String(s.fill ?? "#1f2937"),
-            label: String(s.label ?? ""),
-            zoneId: String(z.id),
-            rowId: rowId,
-            colIndex: Number(cIdx),
-            status: (s.status as any) ?? "available",
-            category: s.category ?? "standard",
-          });
+          rowId,
+          colIndex: Number(cIdx),
+          status: (s.status as any) ?? "available",
+          category: s.category ?? "standard",
         });
       });
     });
+  });
 
-    const texts: TextObject[] = (json.texts || []).map((t: any) => ({
-      id: String(t.id ?? crypto.randomUUID()),
-      text: String(t.text ?? "Text"),
-      x: Number(t.x ?? 0),
-      y: Number(t.y ?? 0),
-      fontSize: Number(t.fontSize ?? 18),
-      rotation: Number(t.rotation ?? 0),
+  // 🆕 подхватываем свободные сиденья (если есть)
+  if (Array.isArray(json.freeSeats)) {
+    json.freeSeats.forEach((s: any) => {
+      seats.push({
+        id: String(s.id ?? crypto.randomUUID()),
+        x: Number(s.x ?? 0),
+        y: Number(s.y ?? 0),
+        radius: Number(s.radius ?? 12),
+        fill: String(s.fill ?? "#1f2937"),
+        label: String(s.label ?? ""),
+        zoneId: null,          // вне зоны
+        rowId: null,           // вне ряда
+        colIndex: null,
+        status: (s.status as any) ?? "available",
+        category: s.category ?? "standard",
+      });
+    });
+  }
+
+  const texts: TextObject[] = (json.texts || []).map((t: any) => ({
+    id: String(t.id ?? crypto.randomUUID()),
+    text: String(t.text ?? "Text"),
+    x: Number(t.x ?? 0),
+    y: Number(t.y ?? 0),
+    fontSize: Number(t.fontSize ?? 18),
+    rotation: Number(t.rotation ?? 0),
+    fill: t.fill ?? "#111827",
+    fontFamily: t.fontFamily ?? undefined,
+  }));
+
+  const shapes: ShapeObject[] = (json.shapes || []).map((s: any) => ({
+    id: String(s.id ?? crypto.randomUUID()),
+    kind: (s.kind as any) ?? "rect",
+    x: Number(s.x ?? 0),
+    y: Number(s.y ?? 0),
+    width: Number(s.width ?? 100),
+    height: Number(s.height ?? 60),
+    fill: s.fill ?? "#ffffff",
+    stroke: s.stroke ?? "#111827",
+    strokeWidth: Number(s.strokeWidth ?? 1),
+    opacity: s.opacity != null ? Number(s.opacity) : 1,
+    rotation: Number(s.rotation ?? 0),
+    flipX: !!s.flipX,
+    flipY: !!s.flipY,
+    points: Array.isArray(s.points)
+      ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
+      : undefined,
+  }));
+
+  return {
+    hallName: String(json.hallName ?? "Зал 1"),
+    backgroundImage: json.backgroundImage ?? null,
+    zones, rows, seats, texts, shapes,
+    stage: { scale: 1, x: 0, y: 0 },
+    backgroundFit: json.backgroundFit ?? "contain",
+    backgroundMode: json.backgroundMode ?? "auto",
+    backgroundRect: json.backgroundRect ?? null,
+  };
+}
+
+
+ function exportToV2(s: SeatmapState) {
+  return {
+    version: 2,
+    hallName: s.hallName,
+    backgroundImage: s.backgroundImage ?? null,
+    backgroundFit: s.backgroundFit ?? "contain",
+    backgroundMode: s.backgroundMode ?? "auto",
+    backgroundRect: s.backgroundRect ?? null,
+
+    zones: s.zones.map((zone) => ({
+      id: zone.id,
+      name: zone.label,
+      color: zone.color ?? zone.fill,
+      rotation: zone.rotation ?? 0,
+      x: zone.x,
+      y: zone.y,
+      width: zone.width,
+      height: zone.height,
+      transparent: !!zone.transparent,
+      fillOpacity: zone.fillOpacity ?? 1,
+      seatSpacingX: zone.seatSpacingX ?? 30,
+      seatSpacingY: zone.seatSpacingY ?? 30,
+      bendTop: zone.bendTop ?? 0,
+      bendRight: zone.bendRight ?? 0,
+      bendBottom: zone.bendBottom ?? 0,
+      bendLeft: zone.bendLeft ?? 0,
+      rowLabelSide: zone.rowLabelSide ?? "left",
+      rows: s.rows
+        .filter((row) => row.zoneId === zone.id)
+        .map((row) => ({
+          id: row.id,
+          label: row.label,
+          x: row.x,
+          y: row.y,
+          seats: s.seats
+            .filter((seat) => seat.rowId === row.id)
+            .sort((a, b) => (a.colIndex ?? 0) - (b.colIndex ?? 0))
+            .map((seat) => ({
+              id: seat.id,
+              label: seat.label,
+              x: seat.x,
+              y: seat.y,
+              fill: seat.fill,
+              radius: seat.radius,
+              status: seat.status ?? "available",
+              category: seat.category ?? "standard",
+            })),
+        })),
+    })),
+
+    texts: (s.texts || []).map((t) => ({
+      id: t.id,
+      text: t.text,
+      x: t.x,
+      y: t.y,
+      fontSize: t.fontSize,
+      rotation: t.rotation ?? 0,
       fill: t.fill ?? "#111827",
-      fontFamily: t.fontFamily ?? undefined,
-    }));
-    const shapes: ShapeObject[] = (json.shapes || []).map((s: any) => ({
-      id: String(s.id ?? crypto.randomUUID()),
-      kind: (s.kind as any) ?? "rect",
-      x: Number(s.x ?? 0),
-      y: Number(s.y ?? 0),
-      width: Number(s.width ?? 100),
-      height: Number(s.height ?? 60),
-      fill: s.fill ?? "#ffffff",
-      stroke: s.stroke ?? "#111827",
-      strokeWidth: Number(s.strokeWidth ?? 1),
-      opacity: s.opacity != null ? Number(s.opacity) : 1,
-      rotation: Number(s.rotation ?? 0),
-      flipX: !!s.flipX,
-      flipY: !!s.flipY,
-      points: Array.isArray(s.points)
-        ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
-        : undefined,
-    }));
+      fontFamily: t.fontFamily ?? null,
+    })),
 
-    return {
-      hallName: String(json.hallName ?? "Зал 1"),
-      backgroundImage: json.backgroundImage ?? null,
-      zones,
-      rows,
-      seats,
-      texts,
-      shapes, // ← НОВОЕ
-      stage: { scale: 1, x: 0, y: 0 },
-      backgroundFit: json.backgroundFit ?? "contain",
-      backgroundMode: json.backgroundMode ?? "auto",
-      backgroundRect: json.backgroundRect ?? null,
-    };
-  }
+    shapes: (s.shapes || []).map((sh) => ({
+      id: sh.id,
+      kind: sh.kind,
+      x: sh.x,
+      y: sh.y,
+      width: sh.width,
+      height: sh.height,
+      fill: sh.fill ?? "#ffffff",
+      stroke: sh.stroke ?? "#111827",
+      strokeWidth: sh.strokeWidth ?? 1,
+      opacity: sh.opacity ?? 1,
+      rotation: sh.rotation ?? 0,
+      flipX: !!sh.flipX,
+      flipY: !!sh.flipY,
+      points: sh.points?.map((p) => ({ x: p.x, y: p.y })) ?? null,
+    })),
 
-  function exportToV2(s: SeatmapState) {
-    return {
-      version: 2,
-      hallName: s.hallName,
-      backgroundImage: s.backgroundImage ?? null,
-      backgroundFit: s.backgroundFit ?? "contain",
-      backgroundMode: s.backgroundMode ?? "auto",
-      backgroundRect: s.backgroundRect ?? null,
-
-      zones: s.zones.map((zone) => ({
-        id: zone.id,
-        name: zone.label,
-        color: zone.color ?? zone.fill,
-        rotation: zone.rotation ?? 0,
-        x: zone.x,
-        y: zone.y,
-        width: zone.width,
-        height: zone.height,
-        transparent: !!zone.transparent,
-        fillOpacity: zone.fillOpacity ?? 1,
-        seatSpacingX: zone.seatSpacingX ?? 30,
-        seatSpacingY: zone.seatSpacingY ?? 30,
-        // ✅ bends
-        bendTop: zone.bendTop ?? 0,
-        bendRight: zone.bendRight ?? 0,
-        bendBottom: zone.bendBottom ?? 0,
-        bendLeft: zone.bendLeft ?? 0,
-        rowLabelSide: zone.rowLabelSide ?? "left",
-        rows: s.rows
-
-          .filter((row) => row.zoneId === zone.id)
-          .map((row) => ({
-            id: row.id,
-            label: row.label,
-            x: row.x,
-            y: row.y,
-            seats: s.seats
-              .filter((seat) => seat.rowId === row.id)
-              .sort((a, b) => (a.colIndex ?? 0) - (b.colIndex ?? 0))
-              .map((seat) => ({
-                id: seat.id,
-                label: seat.label,
-                x: seat.x,
-                y: seat.y,
-                fill: seat.fill,
-                radius: seat.radius,
-                status: seat.status ?? "available",
-                category: seat.category ?? "standard",
-              })),
-          })),
+    // 🆕 свободные сиденья (вне зон/рядов)
+    freeSeats: (s.seats || [])
+      .filter((seat) => !seat.zoneId || !seat.rowId)
+      .map((seat) => ({
+        id: seat.id,
+        label: seat.label,
+        x: seat.x,
+        y: seat.y,
+        fill: seat.fill,
+        radius: seat.radius,
+        status: seat.status ?? "available",
+        category: seat.category ?? "standard",
       })),
-      texts: (s.texts || []).map((t) => ({
-        // ← НОВОЕ
-        id: t.id,
-        text: t.text,
-        x: t.x,
-        y: t.y,
-        fontSize: t.fontSize,
-        rotation: t.rotation ?? 0,
-        fill: t.fill ?? "#111827",
-        fontFamily: t.fontFamily ?? null,
-      })),
-      shapes: (s.shapes || []).map((sh) => ({
-        id: sh.id,
-        kind: sh.kind,
-        x: sh.x,
-        y: sh.y,
-        width: sh.width,
-        height: sh.height,
-        fill: sh.fill ?? "#ffffff",
-        stroke: sh.stroke ?? "#111827",
-        strokeWidth: sh.strokeWidth ?? 1,
-        opacity: sh.opacity ?? 1,
-        rotation: sh.rotation ?? 0,
-        flipX: !!sh.flipX,
-        flipY: !!sh.flipY,
-        points: sh.points?.map((p) => ({ x: p.x, y: p.y })) ?? null,
-      })),
-    };
-  }
+  };
+}
+
 
   const handleExport = () => {
     const exportData = exportToV2(state);
@@ -434,7 +462,6 @@ function EditorPage() {
               canRedo={canRedo}
             />
           </div>
-
           <div
             className="mt-4 flex"
             style={{

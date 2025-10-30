@@ -21,11 +21,9 @@ export function buildBentRectPath(
   ].join(" ");
 }
 
-export function hasBends(z: {
-  bendTop?: number;
-  bendRight?: number;
-  bendBottom?: number;
-  bendLeft?: number;
-}) {
-  return !!(z.bendTop || z.bendRight || z.bendBottom || z.bendLeft);
+export function hasBends(z:{bendTop?:number;bendRight?:number;bendBottom?:number;bendLeft?:number}) {
+  const EPS = 0.5; // пикселей достаточно
+  const abs = (v?: number) => Math.abs(v ?? 0);
+  return abs(z.bendTop) > EPS || abs(z.bendRight) > EPS || abs(z.bendBottom) > EPS || abs(z.bendLeft) > EPS;
 }
+

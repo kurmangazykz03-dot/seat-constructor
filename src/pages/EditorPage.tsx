@@ -327,19 +327,52 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
   };
 
   const handleDelete = () => {
-    if (selectedIds.length === 0) return;
+  // Если НИЧЕГО не выделено — удаляем фон (и сбрасываем manual-рект/режим)
+  if (selectedIds.length === 0) {
+    if (state.backgroundImage) {
+      setState(prev => ({
+        ...prev,
+        backgroundImage: null,
+        backgroundRect: null,
+        backgroundMode: "auto",
+      }));
+    }
+    return;
+  }
 
-    setState((prev) => ({
+  // КАСКАДНОЕ удаление зон → рядов → мест + тексты/шейпы
+  setState(prev => {
+    const sel = new Set(selectedIds);
+
+    const delZoneIds = new Set(prev.zones.filter(z => sel.has(z.id)).map(z => z.id));
+
+    const delRowsDirect = prev.rows.filter(r => sel.has(r.id)).map(r => r.id);
+    const delRowsFromZones = prev.rows.filter(r => delZoneIds.has(r.zoneId)).map(r => r.id);
+    const delRowIds = new Set([...delRowsDirect, ...delRowsFromZones]);
+
+    const delSeatsDirect = prev.seats.filter(s => sel.has(s.id)).map(s => s.id);
+    const delSeatsFromRows = prev.seats.filter(s => s.rowId && delRowIds.has(s.rowId)).map(s => s.id);
+    const delSeatsFromZones = prev.seats.filter(s => s.zoneId && delZoneIds.has(s.zoneId)).map(s => s.id);
+    const delSeatIds = new Set([...delSeatsDirect, ...delSeatsFromRows, ...delSeatsFromZones]);
+
+    const prevTexts  = prev.texts  ?? [];
+    const prevShapes = prev.shapes ?? [];
+    const delTextIds  = new Set(prevTexts.filter(t  => sel.has(t.id)).map(t  => t.id));
+    const delShapeIds = new Set(prevShapes.filter(sh => sel.has(sh.id)).map(sh => sh.id));
+
+    return {
       ...prev,
-      seats: prev.seats.filter((s) => !selectedIds.includes(s.id)),
-      rows: prev.rows.filter((r) => !selectedIds.includes(r.id)),
-      zones: prev.zones.filter((z) => !selectedIds.includes(z.id)),
-      texts: prev.texts.filter((t) => !selectedIds.includes(t.id)), // ← удаляем тексты
-       shapes: prev.shapes.filter((sh) => !selectedIds.includes(sh.id)),  // ✅
-    }));
+      zones:  prev.zones.filter(z => !delZoneIds.has(z.id)),
+      rows:   prev.rows.filter(r => !delRowIds.has(r.id)),
+      seats:  prev.seats.filter(s => !delSeatIds.has(s.id)),
+      texts:  prevTexts.filter(t => !delTextIds.has(t.id)),
+      shapes: prevShapes.filter(sh => !delShapeIds.has(sh.id)),
+    };
+  });
 
-    setSelectedIds([]);
-  };
+  setSelectedIds([]);
+};
+
 
   type AlignDirection = "left" | "center" | "right";
 
@@ -427,26 +460,33 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
               style={{ width: DESIGN.CANVAS_W, height: DESIGN.CANVAS_H }}
             >
               <SeatmapCanvas
-                seats={state.seats}
-                rows={state.rows}
-                zones={state.zones}
-                texts={state.texts}       
-                 shapes={state.shapes}                 
-                setState={setState}
-                selectedIds={selectedIds}
-                setSelectedIds={setSelectedIds}
-                currentTool={currentTool}
-                backgroundImage={state.backgroundImage ?? null}
-                showGrid={showGrid}
-                setShowGrid={setShowGrid}
-                onDuplicate={handleDuplicate}
-                backgroundFit={state.backgroundFit}
-                setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
-                backgroundMode={state.backgroundMode}
-                backgroundRect={state.backgroundRect ?? undefined}
-                setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
-                setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
-              />
+  seats={state.seats}
+  rows={state.rows}
+  zones={state.zones}
+  texts={state.texts}
+  shapes={state.shapes}
+  setState={setState}
+  selectedIds={selectedIds}
+  setSelectedIds={setSelectedIds}
+  currentTool={currentTool}
+
+  showGrid={showGrid}
+  setShowGrid={setShowGrid}
+  onDuplicate={handleDuplicate}
+
+  backgroundFit={state.backgroundFit}
+  setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+
+  backgroundMode={state.backgroundMode}
+  backgroundRect={state.backgroundRect ?? undefined}
+  setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+  setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
+
+  backgroundImage={state.backgroundImage}
+   // 👇 ВАЖНО: пробрасываем сеттер, чтобы внутри канвы (по клавише Delete) тоже гасить фон
+  setBackgroundImage={(v) => setState(prev => ({ ...prev, backgroundImage: v }))}
+/>
+
             </div>
 
             <div style={{ width: DESIGN.PROPS_W, height: DESIGN.CANVAS_H }}>

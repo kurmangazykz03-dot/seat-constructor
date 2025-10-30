@@ -138,7 +138,10 @@ interface SeatmapCanvasProps {
   setBackgroundRect?: (r: { x: number; y: number; width: number; height: number }) => void;
   texts: TextObject[];
   shapes: ShapeObject[];
+  setBackgroundImage?: (v: string | null) => void;
+
 }
+
 
 const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
@@ -146,6 +149,9 @@ const SEAT_SPACING_Y = 30;
 const GRID_SIZE = 30;
 const CANVAS_WIDTH = 1486;
 const CANVAS_HEIGHT = 752;
+
+
+
 
 function containRect(imgW: number, imgH: number, boxW: number, boxH: number) {
   if (imgW === 0 || imgH === 0) {
@@ -178,6 +184,7 @@ function SeatmapCanvas({
   setBackgroundRect,
   texts,
   shapes,
+  setBackgroundImage
 }: SeatmapCanvasProps) {
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
@@ -230,6 +237,7 @@ const [polyDraft, setPolyDraft] = useState<{
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [polyDraft]);
+  
 
  const finishPolygon = () => {
   if (!polyDraft || polyDraft.points.length < 3) {
@@ -391,6 +399,43 @@ const finishMarquee = (append: boolean) => {
 
   const bgNodeRef = useRef<Konva.Image | null>(null);
   const bgTrRef = useRef<Konva.Transformer | null>(null);
+  const [bgSelected, setBgSelected] = useState(false);
+useEffect(() => {
+  const onDel = (e: KeyboardEvent) => {
+    const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || (document.activeElement as any)?.isContentEditable) return;
+
+    const isDel = e.key === "Delete" || e.key === "Backspace";
+    if (!isDel) return;
+
+    // ✅ можно удалять:
+    //   1) если фон выделен (manual)
+    //   2) или если фон есть, инструмент select и ничего не выделено (auto)
+    const canDeleteBg =
+      bgSelected ||
+      (!!backgroundImage && currentTool === "select" && selectedIds.length === 0);
+
+    if (!canDeleteBg) return;
+
+    e.preventDefault();
+    setBackgroundImage?.(null); 
+    setBackgroundRect?.({ x: 0, y: 0, width: 0, height: 0 });
+    setBackgroundMode?.("auto");
+    setBgSelected(false);
+  };
+
+  window.addEventListener("keydown", onDel);
+  return () => window.removeEventListener("keydown", onDel);
+}, [
+  bgSelected,
+  backgroundImage,
+  currentTool,
+  selectedIds.length,
+  setState,
+  setBackgroundRect,
+  setBackgroundMode,
+]);
+
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const setScaleFromButtons = (nextScale: number) => {
@@ -424,7 +469,7 @@ const finishMarquee = (append: boolean) => {
   useKeyboardShortcuts({
     selectedIds,
     setSelectedIds,
-    state: { seats, rows, zones },
+    state: { seats, rows, zones,texts, shapes },
     setState,
     onDuplicate,
   });
@@ -461,11 +506,15 @@ const snapCenter = (v: number) =>
   Math.floor(v / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
 
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
-    const stage: Konva.Stage = e.target.getStage();
-    const isEmpty = e.target === stage;
-
+    const stage = e.target.getStage();
+const isEmpty =
+  e.target === stage ||
+  e.target?.name?.() === "zone-bg" ||
+  e.target?.name?.() === "zone-ui";   // 👈 добавили
+if (isEmpty) setBgSelected(false);
     const p = stage.getPointerPosition();
     if (p) lastPointerRef.current = p;
+    
 
     if (currentTool === "select" && isEmpty && !isSpacePressed) {
       const p = stage.getPointerPosition();
@@ -870,48 +919,45 @@ useEffect(() => {
     listening={currentTool === "select" && !isSpacePressed}
     children={[
       <KonvaImage
-        key="bg"
-        ref={bgNodeRef}
-        image={bgImg}
-        x={backgroundRect.x}
-        y={backgroundRect.y}
-        width={backgroundRect.width}
-        height={backgroundRect.height}
-        opacity={0.95}
-        draggable={currentTool === "select" && !isSpacePressed}
-        onDragEnd={(e) => {
-          const node = e.target as unknown as Konva.Image;
-          setBackgroundRect?.({
-            x: node.x(),
-            y: node.y(),
-            width: node.width(),
-            height: node.height(),
-          });
-        }}
-        onTransformEnd={() => {
-          const node = bgNodeRef.current!;
-          const w = node.width() * node.scaleX();
-          const h = node.height() * node.scaleY();
-          const x = node.x();
-          const y = node.y();
-          node.scaleX(1);
-          node.scaleY(1);
-          setBackgroundRect?.({ x, y, width: w, height: h });
-        }}
-      />,
+  key="bg"
+  ref={bgNodeRef}
+  image={bgImg}
+  x={backgroundRect.x}
+  y={backgroundRect.y}
+  width={backgroundRect.width}
+  height={backgroundRect.height}
+  opacity={0.95}
+  draggable={currentTool === "select" && !isSpacePressed}
+  onClick={(e) => { e.cancelBubble = true; setBgSelected(true); }}
+  onDragStart={() => setBgSelected(true)}
+  onDragEnd={(e) => {
+    const node = e.target as unknown as Konva.Image;
+    setBackgroundRect?.({ x: node.x(), y: node.y(), width: node.width(), height: node.height() });
+  }}
+  onTransformEnd={() => {
+    const node = bgNodeRef.current!;
+    const w = node.width() * node.scaleX();
+    const h = node.height() * node.scaleY();
+    const x = node.x();
+    const y = node.y();
+    node.scaleX(1); node.scaleY(1);
+    setBackgroundRect?.({ x, y, width: w, height: h });
+  }}
+/>
+,
       <Transformer
-        key="bgTr"
-        ref={bgTrRef}
-        nodes={bgNodeRef.current ? [bgNodeRef.current] : []}
-        rotateEnabled={false}
-        keepRatio
-        enabledAnchors={[
-          "top-left","top-center","top-right",
-          "middle-left","middle-right",
-          "bottom-left","bottom-center","bottom-right",
-        ]}
-        boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
-      />,
+  key="bgTr"
+  ref={bgTrRef}
+  nodes={bgSelected && bgNodeRef.current ? [bgNodeRef.current] : []} // ← только при выделении
+  rotateEnabled={false}
+  keepRatio
+  enabledAnchors={[
+    "top-left","top-center","top-right",
+    "middle-left","middle-right",
+    "bottom-left","bottom-center","bottom-right",
+  ]}
+  boundBoxFunc={(oldBox, nb) => (nb.width < 20 || nb.height < 20 ? oldBox : nb)}
+/>,
     ]}
   />
 ) : null}
@@ -1171,14 +1217,17 @@ useEffect(() => {
   rotation={t.rotation ?? 0}
   draggable={currentTool === "select" && !isSpacePressed}
         onClick={(e) => handleElementClick(t.id, e)}
-        onDragEnd={(e) => {
+      onDragEnd={(e) => {
   const nx = snapCenter(e.target.x());
   const ny = snapCenter(e.target.y());
   setState(prev => ({
     ...prev,
-    seats: prev.seats.map(ss => ss.id === s.id ? { ...ss, x: nx, y: ny } : ss),
+    texts: (prev.texts || []).map(tt =>
+      tt.id === t.id ? { ...tt, x: nx, y: ny } : tt
+    ),
   }));
 }}
+
 
       />
     )),
@@ -1223,6 +1272,7 @@ useEffect(() => {
     <Layer
       children={[
         <ZoneBendOverlay
+         scale={scale} 
           key="bend"
           zone={z}
           gridSize={GRID_SIZE}
@@ -1231,6 +1281,7 @@ useEffect(() => {
               ...prev,
               zones: prev.zones.map((one) => (one.id === z.id ? updater(one) : one)),
             }))
+            
           }
         onCommit={(zoneAfter) => {
   setState((prev) => {
@@ -1260,6 +1311,32 @@ useEffect(() => {
     />
   ) : null;
 })() : null}
+{/* ✅ Выделение (рамка) для text/shape/zone в режиме select */}
+{currentTool === "select" && selectedIds.length > 0 ? (() => {
+  // соберём конва-ноды по выбранным id: shape -> text -> zone
+  const nodes = selectedIds
+    .map(id => shapeRefs.current[id] || textRefs.current[id] || zoneRefs.current[id])
+    .filter(Boolean);
+
+  return nodes.length ? (
+    <Layer
+      listening={false}
+      children={[
+        <Transformer
+          key="select-tr"
+          nodes={nodes}
+          // без ручек — только рамка
+          enabledAnchors={[]}
+          rotateEnabled={false}
+          borderStroke="#3B82F6"
+          borderDash={[6, 4]}
+          padding={4}
+        />,
+      ]}
+    />
+  ) : null;
+})() : null}
+
 
 
         {/* Рамка выделения */}

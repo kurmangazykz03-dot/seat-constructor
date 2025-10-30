@@ -242,14 +242,19 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
       setSelectedIds([zone.id]);
     }
   };
+const handleZoneClickLocal = (e: any) => {
+  const nm = e.target?.name?.();
+  if (nm === "zone-bg" || nm === "zone-ui") {
+    // не cancelBubble: пусть событие дойдёт до Stage для старта marquee
+    return;
+  }
+  if (isViewerMode) {
+    e.cancelBubble = true;
+    return;
+  }
+  handleZoneClick(e);
+};
 
-  const handleZoneClickLocal = (e: any) => {
-    if (isViewerMode) {
-      e.cancelBubble = true;
-      return;
-    }
-    handleZoneClick(e);
-  };
 
   const handleZoneDragEnd = (e: any) => {
     e.cancelBubble = true;
@@ -325,6 +330,7 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
     >
       {bendPath ? (
     <Path
+    name="zone-bg"    
       data={bendPath}
       fill={zone.fill}
       fillEnabled={!zone.transparent}
@@ -333,6 +339,7 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
       strokeWidth={strokeWidth}
       strokeScaleEnabled={false}   // ←
       hitStrokeWidth={12}
+      perfectDrawEnabled={false}
     />
   ) : (
     <Rect
@@ -347,6 +354,8 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
       strokeWidth={sw}
   strokeScaleEnabled={false}  // ←
       hitStrokeWidth={12}
+name="zone-ui"  
+perfectDrawEnabled={false}
     />
   )}
 

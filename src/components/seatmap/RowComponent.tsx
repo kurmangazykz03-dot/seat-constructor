@@ -125,7 +125,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
         height={bboxH}
         fillEnabled={false}
         strokeEnabled={false}
-        listening
+      
         hitStrokeWidth={12}
         onMouseDown={(e) => {
           e.cancelBubble = true;

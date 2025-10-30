@@ -1,5 +1,5 @@
 // src/pages/ViewerPage.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Row, Seat, Zone } from "../types/types";
 import { SeatmapState } from "./EditorPage";
 
@@ -27,6 +27,7 @@ const ToolbarPlaceholder = () => (
   <div className="bg-gray-50 border-r border-gray-200 flex-shrink-0" style={{ width: LEFT_W }} />
 );
 
+// Импорт из v2-схемы в плоское состояние Viewer’а
 function importFromV2(json: any): SeatmapState {
   const zones: Zone[] = (json.zones || []).map((z: any) => ({
     id: String(z.id),
@@ -35,15 +36,23 @@ function importFromV2(json: any): SeatmapState {
     width: Number(z.width ?? 200),
     height: Number(z.height ?? 120),
     fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-    label: String(z.name ?? z.label ?? ""),
     color: z.color ?? undefined,
+    label: String(z.name ?? z.label ?? ""),
     rotation: Number(z.rotation ?? 0),
     transparent: Boolean(z.transparent ?? false),
     fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+    bendTop: Number(z.bendTop ?? 0),
+    bendRight: Number(z.bendRight ?? 0),
+    bendBottom: Number(z.bendBottom ?? 0),
+    bendLeft: Number(z.bendLeft ?? 0),
+    seatSpacingX: Number(z.seatSpacingX ?? 30),
+    seatSpacingY: Number(z.seatSpacingY ?? 30),
+    rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
   }));
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
+
   (json.zones || []).forEach((z: any) => {
     (z.rows || []).forEach((r: any, rIdx: number) => {
       const rowId = String(r.id);
@@ -55,6 +64,7 @@ function importFromV2(json: any): SeatmapState {
         x: Number(r.x ?? 0),
         y: Number(r.y ?? 0),
       });
+
       (r.seats || []).forEach((s: any, cIdx: number) => {
         seats.push({
           id: String(s.id),
@@ -73,6 +83,34 @@ function importFromV2(json: any): SeatmapState {
     });
   });
 
+  const texts = Array.isArray(json.texts) ? json.texts.map((t: any) => ({
+    id: String(t.id),
+    text: String(t.text ?? "Text"),
+    x: Number(t.x ?? 0),
+    y: Number(t.y ?? 0),
+    fontSize: Number(t.fontSize ?? 18),
+    rotation: Number(t.rotation ?? 0),
+    fill: t.fill ?? "#111827",
+    fontFamily: t.fontFamily ?? undefined,
+  })) : [];
+
+  const shapes = Array.isArray(json.shapes) ? json.shapes.map((s: any) => ({
+    id: String(s.id),
+    kind: (s.kind as any) ?? "rect",
+    x: Number(s.x ?? 0),
+    y: Number(s.y ?? 0),
+    width: Number(s.width ?? 100),
+    height: Number(s.height ?? 60),
+    fill: s.fill ?? "#ffffff",
+    stroke: s.stroke ?? "#111827",
+    strokeWidth: Number(s.strokeWidth ?? 1),
+    opacity: s.opacity != null ? Number(s.opacity) : 1,
+    rotation: Number(s.rotation ?? 0),
+    flipX: !!s.flipX,
+    flipY: !!s.flipY,
+    points: Array.isArray(s.points) ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) })) : undefined,
+  })) : [];
+
   return {
     hallName: String(json.hallName ?? "Hall"),
     backgroundImage: json.backgroundImage ?? null,
@@ -80,6 +118,7 @@ function importFromV2(json: any): SeatmapState {
     backgroundMode: json.backgroundMode ?? "auto",
     backgroundRect: json.backgroundRect ?? null,
     zones, rows, seats,
+    texts, shapes,
     stage: { scale: 1, x: 0, y: 0 },
   };
 }
@@ -89,7 +128,8 @@ function ViewerPage() {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
- const { ref: hostRef, scale } = useAutoScale(DESIGN_W, DESIGN_H, { min: 0.5, max: 1 });
+  // Автомасштаб всей дизайн-рамки
+  const { ref: hostRef, scale: layoutScale } = useAutoScale(DESIGN_W, DESIGN_H, { min: 0.5, max: 1 });
 
   useEffect(() => {
     try {
@@ -116,7 +156,7 @@ function ViewerPage() {
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
-            transform: `scale(${scale})`,
+            transform: `scale(${layoutScale})`,
             transformOrigin: "top left",
           }}
           className="mx-auto"
@@ -131,6 +171,7 @@ function ViewerPage() {
                 height: DESIGN_H - TOPBAR_H, // оставшаяся высота под контент
                 padding: PAD,
                 gap: GAP,
+                // ⚠️ ВАЖНО: тут больше НЕ масштабируем (без второго transform)
               }}
             >
               <ToolbarPlaceholder />

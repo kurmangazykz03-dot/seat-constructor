@@ -21,8 +21,8 @@ const snap = (n: number, step?: number) => (step ? Math.round(n / step) * step :
 export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit,scale }: Props) {
   const [drag, setDrag] = useState<{
     edge: Edge | null;
-    start: { x: number; y: number };     // старт в ЛОКАЛЬНЫХ координатах
-    base: { bt: number; br: number; bb: number; bl: number }; // bend-значения на момент старта
+    start: { x: number; y: number };     
+    base: { bt: number; br: number; bb: number; bl: number }; 
   } | null>(null);
 
   const gs = gridSize ?? 1;
@@ -61,7 +61,7 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit,scal
     if (el) el.style.cursor = cursor;
   };
 
-  // обновления со снапом
+
   const updateTop = (abs: Konva.Vector2d) => {
     const p = toLocal(abs);
     setZone((z) => ({ ...z, bendTop: clamp(snap(p.y, gs), -maxTopBottom, maxTopBottom) }));
@@ -116,7 +116,7 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit,scal
           draggable
           strokeScaleEnabled={false}
           dragBoundFunc={(abs) => {
-    // ограничиваем и СНАПИМ в ЛОКАЛЬНЫХ координатах, возвращаем в абсолютные
+
     const p = toLocal(abs);
     let nx = p.x, ny = p.y;
 
@@ -151,15 +151,15 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit,scal
             onDragMove={(e) => {
     const p = toLocal(e.target.getAbsolutePosition());
 
-    // сразу считаем dx/dy от старта, но применяем СНАП к целевому значению бенда
+
     setZone((z) => {
       if (!drag) return z;
 
-      // «сырые» сдвиги
+
       const dx = p.x - drag.start.x;
       const dy = p.y - drag.start.y;
 
-      // кандидаты
+
       let nt = drag.base.bt;
       let nr = drag.base.br;
       let nb = drag.base.bb;
@@ -182,7 +182,7 @@ export default function ZoneBendOverlay({ zone, setZone, gridSize, onCommit,scal
           break;
         }
         case "left": {
-          const raw = drag.base.bl - dx; // влево — «+»
+          const raw = drag.base.bl - dx; 
           nl = clamp(snap(raw, gs), -maxLeftRight, maxLeftRight);
           break;
         }

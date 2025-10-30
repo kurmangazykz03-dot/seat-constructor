@@ -10,7 +10,7 @@ export function useAutoScale(designW: number, designH: number, opts?: { min?: nu
     const ro = new ResizeObserver(([e]) => {
       const { width, height } = e.contentRect;
       const s = Math.min(width / designW, height / designH);
-      // чуть «притупим» для чёткости, чтобы не было мутной дроби
+
       const rounded = Math.round(Math.max(min, Math.min(max, s || 1)) * 100) / 100;
       setScale(rounded);
     });

@@ -1,5 +1,4 @@
-// src/pages/ViewerPage.tsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Row, Seat, Zone } from "../types/types";
 import { SeatmapState } from "./EditorPage";
 
@@ -11,23 +10,21 @@ import { useAutoScale } from "../hooks/useAutoScale";
 
 // —— константы дизайн-рамки ——
 const TOPBAR_H = 60;
-const PAD = 16;           // p-4
-const GAP = 12;           // gap-3
+const PAD = 16;
+const GAP = 12;
 const LEFT_W = 60;
 const MAIN_W = 1486;
 const MAIN_H = 752;
 const RIGHT_W = 320;
 
-// ширина: left + main + right + 2*gaps + 2*padding
-const DESIGN_W = LEFT_W + MAIN_W + RIGHT_W + (2 * GAP) + (2 * PAD);
-// высота: topbar + main + 2*padding (по вертикали)
-const DESIGN_H = TOPBAR_H + MAIN_H + (2 * PAD);
+const DESIGN_W = LEFT_W + MAIN_W + RIGHT_W + 2 * GAP + 2 * PAD;
+
+const DESIGN_H = TOPBAR_H + MAIN_H + 2 * PAD;
 
 const ToolbarPlaceholder = () => (
   <div className="bg-gray-50 border-r border-gray-200 flex-shrink-0" style={{ width: LEFT_W }} />
 );
 
-// Импорт из v2-схемы в плоское состояние Viewer’а
 function importFromV2(json: any): SeatmapState {
   const zones: Zone[] = (json.zones || []).map((z: any) => ({
     id: String(z.id),
@@ -47,7 +44,7 @@ function importFromV2(json: any): SeatmapState {
     bendLeft: Number(z.bendLeft ?? 0),
     seatSpacingX: Number(z.seatSpacingX ?? 30),
     seatSpacingY: Number(z.seatSpacingY ?? 30),
-    rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
+    rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
   }));
 
   const rows: Row[] = [];
@@ -83,33 +80,39 @@ function importFromV2(json: any): SeatmapState {
     });
   });
 
-  const texts = Array.isArray(json.texts) ? json.texts.map((t: any) => ({
-    id: String(t.id),
-    text: String(t.text ?? "Text"),
-    x: Number(t.x ?? 0),
-    y: Number(t.y ?? 0),
-    fontSize: Number(t.fontSize ?? 18),
-    rotation: Number(t.rotation ?? 0),
-    fill: t.fill ?? "#111827",
-    fontFamily: t.fontFamily ?? undefined,
-  })) : [];
+  const texts = Array.isArray(json.texts)
+    ? json.texts.map((t: any) => ({
+        id: String(t.id),
+        text: String(t.text ?? "Text"),
+        x: Number(t.x ?? 0),
+        y: Number(t.y ?? 0),
+        fontSize: Number(t.fontSize ?? 18),
+        rotation: Number(t.rotation ?? 0),
+        fill: t.fill ?? "#111827",
+        fontFamily: t.fontFamily ?? undefined,
+      }))
+    : [];
 
-  const shapes = Array.isArray(json.shapes) ? json.shapes.map((s: any) => ({
-    id: String(s.id),
-    kind: (s.kind as any) ?? "rect",
-    x: Number(s.x ?? 0),
-    y: Number(s.y ?? 0),
-    width: Number(s.width ?? 100),
-    height: Number(s.height ?? 60),
-    fill: s.fill ?? "#ffffff",
-    stroke: s.stroke ?? "#111827",
-    strokeWidth: Number(s.strokeWidth ?? 1),
-    opacity: s.opacity != null ? Number(s.opacity) : 1,
-    rotation: Number(s.rotation ?? 0),
-    flipX: !!s.flipX,
-    flipY: !!s.flipY,
-    points: Array.isArray(s.points) ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) })) : undefined,
-  })) : [];
+  const shapes = Array.isArray(json.shapes)
+    ? json.shapes.map((s: any) => ({
+        id: String(s.id),
+        kind: (s.kind as any) ?? "rect",
+        x: Number(s.x ?? 0),
+        y: Number(s.y ?? 0),
+        width: Number(s.width ?? 100),
+        height: Number(s.height ?? 60),
+        fill: s.fill ?? "#ffffff",
+        stroke: s.stroke ?? "#111827",
+        strokeWidth: Number(s.strokeWidth ?? 1),
+        opacity: s.opacity != null ? Number(s.opacity) : 1,
+        rotation: Number(s.rotation ?? 0),
+        flipX: !!s.flipX,
+        flipY: !!s.flipY,
+        points: Array.isArray(s.points)
+          ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
+          : undefined,
+      }))
+    : [];
 
   return {
     hallName: String(json.hallName ?? "Hall"),
@@ -117,8 +120,11 @@ function importFromV2(json: any): SeatmapState {
     backgroundFit: json.backgroundFit ?? "contain",
     backgroundMode: json.backgroundMode ?? "auto",
     backgroundRect: json.backgroundRect ?? null,
-    zones, rows, seats,
-    texts, shapes,
+    zones,
+    rows,
+    seats,
+    texts,
+    shapes,
     stage: { scale: 1, x: 0, y: 0 },
   };
 }
@@ -128,8 +134,10 @@ function ViewerPage() {
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Автомасштаб всей дизайн-рамки
-  const { ref: hostRef, scale: layoutScale } = useAutoScale(DESIGN_W, DESIGN_H, { min: 0.5, max: 1 });
+  const { ref: hostRef, scale: layoutScale } = useAutoScale(DESIGN_W, DESIGN_H, {
+    min: 0.5,
+    max: 1,
+  });
 
   useEffect(() => {
     try {
@@ -149,9 +157,7 @@ function ViewerPage() {
 
   return (
     <div className="w-full h-screen bg-gray-100">
-      {/* Внешний контейнер, который мы измеряем */}
       <div ref={hostRef} className="w-full h-full overflow-auto">
-        {/* Внутренняя «дизайн-рамка», которую масштабируем целиком */}
         <div
           style={{
             width: DESIGN_W,
@@ -161,17 +167,15 @@ function ViewerPage() {
           }}
           className="mx-auto"
         >
-          {/* Весь контент внутри — с фиксированными размерами макета */}
           <div className="flex flex-col" style={{ width: DESIGN_W, height: DESIGN_H }}>
             <ViewerTopBar />
 
             <div
               className="flex overflow-hidden"
               style={{
-                height: DESIGN_H - TOPBAR_H, // оставшаяся высота под контент
+                height: DESIGN_H - TOPBAR_H,
                 padding: PAD,
                 gap: GAP,
-                // ⚠️ ВАЖНО: тут больше НЕ масштабируем (без второго transform)
               }}
             >
               <ToolbarPlaceholder />

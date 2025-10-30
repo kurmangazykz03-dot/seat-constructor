@@ -16,7 +16,7 @@ export function usePanZoom(opts?: {
   const [position, setPosition] = useState<Pos>({ x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  // Space = hand tool
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
@@ -27,7 +27,7 @@ export function usePanZoom(opts?: {
         e.preventDefault();
         setIsSpacePressed(true);
       } else if (e.key === "Escape") {
-        // просто пробрасываем наверх — тут ничего
+
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -41,7 +41,7 @@ export function usePanZoom(opts?: {
     };
   }, []);
 
-  // Ctrl/⌘ + колесо = зум к курсору
+
   const onWheel = useCallback((e: any) => {
     const stage = stageRef.current ?? e.target?.getStage?.();
     if (!stage) return;

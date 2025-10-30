@@ -194,7 +194,7 @@ const StepperNumber: React.FC<{
         className="w-full border-t border-b border-gray-300 px-2.5 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-center text-black"
 onKeyDown={(e) => {
     stopHotkeys(e);
-    // твоя текущая логика onChange/onBlur — без изменений
+
   }}
       />
       <button type="button" onClick={inc} className="px-2 border border-gray-300 rounded-r-lg text-gray-600 hover:bg-gray-50">
@@ -203,12 +203,11 @@ onKeyDown={(e) => {
     </div>
   );
 };
-  const sanitizeRotation = <T extends { rotation?: number }>(patch: T): T => {
-  if ("rotation" in patch) {
-    return { ...patch, rotation: toNum(patch.rotation, 0) };
-  }
+
+function sanitizeRotation<T extends { rotation?: number }>(patch: T): T {
+  if ("rotation" in patch) return { ...patch, rotation: toNum(patch.rotation, 0) };
   return patch;
-};
+}
 
 const PresetSwatch: React.FC<{ preset: ShapePreset }> = ({ preset }) => {
   const borderW = Math.max(1, preset.strokeWidth ?? 1);

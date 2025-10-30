@@ -9,7 +9,6 @@ import { Row, Seat, Zone } from "../../types/types";
 import { applySeatDrop } from "../../utils/seatSnap";
 import RowComponent from "./RowComponent";
 import SeatComponent from "./SeatComponent";
-// import ZoneBendOverlay from "./ZoneBendOverlay"; // не используется здесь — можно удалить импорт
 import { buildBentRectPath, hasBends } from "./zonePath";
 import { warpPointLocal } from "./zoneWarp";
 
@@ -23,7 +22,7 @@ interface ZoneComponentProps {
   selectedIds: string[];
   currentTool: string;
   hoveredZoneId: string | null;
-   scale: number; // ← НОВОЕ
+   scale: number; 
 
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
@@ -352,7 +351,7 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
       fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
       stroke={strokeColor}
       strokeWidth={sw}
-  strokeScaleEnabled={false}  // ←
+  strokeScaleEnabled={false}
       hitStrokeWidth={12}
 name="zone-ui"  
 perfectDrawEnabled={false}
@@ -361,15 +360,15 @@ perfectDrawEnabled={false}
 
 <Text
   text={zone.label}
-  x={crisp(zone.width / 2, scale)}   // ← центр зоны
-  y={crisp(-18, scale)}              // ← над зоной, как было
+  x={crisp(zone.width / 2, scale)}   
+  y={crisp(-18, scale)}              
   fontSize={14}
   fill="black"
   align="center"
   offsetX={(zone.label.length * 7) / 2}
 />
 
-      {/* НОВОЕ: колонка номеров рядов */}
+
       {rowsRender.length > 0 && (
         <Group
           x={

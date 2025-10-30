@@ -25,13 +25,10 @@ import ZoneBendOverlay from "../seatmap/ZoneBendOverlay";
 import SeatComponent from '../seatmap/SeatComponent';
 
 import { SeatmapState } from "../../pages/EditorPage";
-// где-нибудь до первого рендера Stage (App.tsx или SeatmapCanvas.tsx — над компонентом)
+
 import { crisp, crispRect,crispSize } from "../../utils/crisp";
 
 (Konva as any).pixelRatio = Math.max(window.devicePixelRatio || 1, 1);
-
-type KonvaPointerEvt = KonvaEventObject<MouseEvent | TouchEvent>;
-
 
 function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16) {
   const rowsZ  = rows.filter(r => r.zoneId === zone.id);
@@ -41,14 +38,14 @@ function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16)
   let minX =  Infinity;
   let maxX = -Infinity;
 
-  // ряды считаем как тонкие «строки» (центр), ширину даёт распределение сидений
+
   for (const s of seatsZ) {
     const rad = s.radius ?? 12;
     minX = Math.min(minX, s.x - rad);
     maxX = Math.max(maxX, s.x + rad);
   }
 
-  // если в зоне пока нет сидений — ориентируемся по рядам
+
   if (!Number.isFinite(minX)) {
     for (const r of rowsZ) {
       minX = Math.min(minX, r.x);
@@ -56,22 +53,22 @@ function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16)
     }
   }
 
-  if (!Number.isFinite(minX)) return zone; // пусто
+  if (!Number.isFinite(minX)) return zone; 
 
-  // если контент ушёл в отрицательную область — смещаем зону влево
+
   const shiftX = Math.min(0, Math.floor(minX - pad));
-  // левая грань с учетом паддинга (<= 0 — значит зона сместится влево)
+
 const leftEdge  = Math.min(0, Math.floor(minX - pad));
-// правая грань с учетом паддинга в локальных координатах после сдвига
+
 const rightEdge = Math.ceil(maxX + pad);
-// итоговая ширина — от leftEdge до rightEdge
+
 const neededWidth = rightEdge - leftEdge;
 
 
-  // новая зона
+
   return {
   ...zone,
-  x: zone.x + leftEdge,           // leftEdge ≤ 0
+  x: zone.x + leftEdge,           
   width: Math.max(zone.width, neededWidth),
 };
 
@@ -103,7 +100,7 @@ const dist2 = (a:{x:number;y:number}, b:{x:number;y:number}) => {
   const dx = a.x - b.x, dy = a.y - b.y;
   return dx*dx + dy*dy;
 };
-const NEAR_R2 = 10*10; // пикселей^2 — радиус попадания в первую точку
+const NEAR_R2 = 10*10; 
 
 
 interface SeatmapCanvasProps {
@@ -244,7 +241,7 @@ const [polyDraft, setPolyDraft] = useState<{
     setPolyDraft(null);
     return;
   }
-  // защита: одинаковые точки подряд / нулевая площадь
+
   const pts = polyDraft.points;
   const uniq = pts.filter((p, i) => i === 0 || dist2(p, pts[i-1]) > 0);
   if (uniq.length < 3) {
@@ -725,7 +722,6 @@ const newZone: Zone = {
   rowLabelSide: 'left',
 };
 
-// ✅ используем шаги зоны, а не константы напрямую
 const stepX = newZone.seatSpacingX ?? SEAT_SPACING_X;
 const stepY = newZone.seatSpacingY ?? SEAT_SPACING_Y;
 
@@ -744,8 +740,8 @@ for (let r = 0; r < rowsCount; r++) {
     cols,
     offsetX,
     offsetY,
-    stepX,    // ← передаём шаг по X
-    stepY     // ← передаём шаг по Y
+    stepX,    
+    stepY     
   );
   allNewRows.push(row);
   allNewSeats.push(...rowSeats);
@@ -799,7 +795,6 @@ const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent|TouchEven
   if (currentTool === "add-seat" || currentTool === "add-text") return;
   e.cancelBubble = true;
 
-  // ⬇️ Зажми Alt/Ctrl/Meta и кликни по ряду/месту — выберется родительская зона
   if (e.evt.altKey || e.evt.ctrlKey || e.evt.metaKey) {
     const zid = parentZoneIdOf(id);
     if (zid) setSelectedIds([zid]);
@@ -823,7 +818,7 @@ const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent|TouchEven
   if (!pointer) return;
   lastPointerRef.current = pointer;
 
-  const mode = e.evt.deltaMode; // 0: pixels, 1: lines, 2: pages
+  const mode = e.evt.deltaMode; 
   const line = 40, page = 800;
   const dx = mode === 1 ? e.evt.deltaX * line : mode === 2 ? e.evt.deltaX * page : e.evt.deltaX;
   const dy = mode === 1 ? e.evt.deltaY * line : mode === 2 ? e.evt.deltaY * page : e.evt.deltaY;
@@ -838,7 +833,7 @@ const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent|TouchEven
     setStagePos((pos) => ({ x: pos.x - dx, y: pos.y - dy }));
   }
 };
-// в bend тоже можно кликать по зонам (чтобы быстро переключать таргет)
+
 const canInteractZones = currentTool !== "add-seat";
 useEffect(() => {
   if (currentTool !== "bend") return;
@@ -1056,7 +1051,7 @@ useEffect(() => {
                 fill={sh.fill ?? "#fff"}
                 stroke={sh.stroke ?? "#111827"}
                 strokeWidth={sh.strokeWidth ?? 1}
-                strokeScaleEnabled={false}    // ← обводка не размывается при масштабе
+                strokeScaleEnabled={false}    
               />
             );
           })()}
@@ -1089,7 +1084,7 @@ useEffect(() => {
       );
     }),
 
-    // draft — тоже можно чутка «снэпнуть»
+
     shapeDraft ? (
       <Group
         key="shape-draft"
@@ -1311,7 +1306,7 @@ useEffect(() => {
     />
   ) : null;
 })() : null}
-{/* ✅ Выделение (рамка) для text/shape/zone в режиме select */}
+{/* Выделение (рамка) для text/shape/zone в режиме select */}
 {currentTool === "select" && selectedIds.length > 0 ? (() => {
   // соберём конва-ноды по выбранным id: shape -> text -> zone
   const nodes = selectedIds

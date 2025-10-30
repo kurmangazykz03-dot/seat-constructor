@@ -158,12 +158,11 @@ const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]
     { id: "add-ellipse", title: "Ellipse (E)",   icon: IconEllipse },
     { id: "add-polygon", title: "Polygon (P)",   icon: IconPolygon },
     { id: "add-text",    title: "Text (T)",      icon: IconText },
-    // ⛔️ убрали add-seat из DRAW
   ],
   zones: [
     { id: "add-zone", title: "Add Zone (Z)", icon: IconZone },
     { id: "add-row",  title: "Add Row (R)",  icon: IconRow },
-    { id: "add-seat", title: "Seat (S)",     icon: IconSeat }, // ✅ перенесён сюда
+    { id: "add-seat", title: "Seat (S)",     icon: IconSeat }, 
   ],
   transform: [
     { id: "rotate", title: "Rotate (O)", icon: IconRotate },
@@ -173,8 +172,8 @@ const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]
 
 function groupOf(tool: Tool): GroupId {
   if (tool === "select") return "select";
-  if (["add-rect","add-ellipse","add-polygon","add-text"].includes(tool)) return "draw"; // ✅ без add-seat
-  if (["add-zone","add-row","add-seat"].includes(tool)) return "zones";                  // ✅ с add-seat
+  if (["add-rect","add-ellipse","add-polygon","add-text"].includes(tool)) return "draw"; 
+  if (["add-zone","add-row","add-seat"].includes(tool)) return "zones";                  
   return "transform";
 }
 
@@ -188,7 +187,7 @@ function GroupButton({
   setLastUsed: React.Dispatch<React.SetStateAction<Partial<Record<GroupId, Tool>>>>;
   onPick: (t: Tool) => void;
   label: string;
-   isOpen: boolean;                              // ✅ новое
+   isOpen: boolean;                              
   onToggle: () => void;     
 }) {
   const [open, setOpen] = useState(false);
@@ -197,7 +196,7 @@ function GroupButton({
   const last = lastUsed[groupId] ?? items[0].id;
   const LastIcon = (items.find(i => i.id === last) ?? items[0]).icon;
 
-  const single = items.length === 1; // ✅ единственный инструмент в группе (например, Select)
+  const single = items.length === 1; 
 
   const pick = (t: Tool) => {
     onPick(t);
@@ -212,13 +211,13 @@ return (
         active={activeInGroup}
         onClick={() => {
           if (single) pick(items[0].id);
-          else onToggle();                        // ✅ переключаем только эту группу
+          else onToggle();                        
         }}
       >
         <LastIcon />
       </Button>
 
-      {!single && isOpen && (                     // ✅ управление открытием извне
+      {!single && isOpen && (
         <div
           role="menu"
           aria-label={`${label} palette`}
@@ -229,7 +228,7 @@ return (
               key={id}
               title={title}
               active={currentTool === id}
-              onClick={() => pick(id)}            // ✅ выбор инструмента закрывает меню
+              onClick={() => pick(id)}            
             >
               <Icon />
             </Button>

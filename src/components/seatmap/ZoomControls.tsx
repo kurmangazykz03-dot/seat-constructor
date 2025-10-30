@@ -3,9 +3,9 @@ import React from "react";
 interface ZoomControlsProps {
   scale: number;
   setScale: (newScale: number) => void;
-  /** необязательный: что показывать в лейбле (например, outerScale * scale) */
+
   labelScale?: number;
-  /** границы масштаба */
+
   min?: number;
   max?: number;
 }

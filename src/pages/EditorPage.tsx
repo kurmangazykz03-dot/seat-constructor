@@ -1,4 +1,3 @@
-// src/pages/EditorPage.tsx
 import { useState } from "react";
 
 import PropertiesPanel from "../components/editor/PropertiesPanel";
@@ -8,11 +7,11 @@ import TopBar from "../components/editor/TopBar";
 
 import { useHistory } from "../hooks/useHistory";
 
-import { Row, Seat, Zone, TextObject, ShapeObject } from "../types/types";
+import { Row, Seat, ShapeObject, TextObject, Zone } from "../types/types";
 
+import { useAutoScale } from "../hooks/useAutoScale";
 import { duplicateSelected } from "../utils/duplicate";
 import { alignRows, alignSeats } from "../utils/seatmapCommands";
-import { useAutoScale } from '../hooks/useAutoScale'
 
 const LS_KEY = "seatmap_schema";
 const DESIGN = {
@@ -27,14 +26,13 @@ const DESIGN = {
 const WORK_W = DESIGN.TOOLBAR_W + DESIGN.GAP + DESIGN.CANVAS_W + DESIGN.GAP + DESIGN.PROPS_W; // 1918
 const WORK_H = DESIGN.TOPBAR_H + DESIGN.GAP + DESIGN.CANVAS_H + DESIGN.GAP; // 844
 
-
 export interface SeatmapState {
   hallName: string;
   backgroundImage?: string | null;
   zones: Zone[];
   rows: Row[];
   seats: Seat[];
-  texts: TextObject[];                 // ← НОВОЕ
+  texts: TextObject[]; // ← НОВОЕ
   stage: {
     scale: number;
     x: number;
@@ -52,7 +50,7 @@ const INITIAL_STATE: SeatmapState = {
   zones: [],
   rows: [],
   seats: [],
-  texts: [],                            // ← НОВОЕ
+  texts: [], // ← НОВОЕ
   stage: {
     scale: 1,
     x: 0,
@@ -61,7 +59,7 @@ const INITIAL_STATE: SeatmapState = {
   backgroundFit: "contain",
   backgroundMode: "auto",
   backgroundRect: null,
-    shapes: [],  
+  shapes: [],
 };
 
 function EditorPage() {
@@ -69,12 +67,19 @@ function EditorPage() {
     useHistory<SeatmapState>(INITIAL_STATE);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  // src/pages/EditorPage.tsx
-const [currentTool, setCurrentTool] = useState<
-  | "select" | "add-seat" | "add-row" | "add-zone" | "rotate" | "add-text"
-  | "add-rect" | "add-ellipse" | "add-polygon" | "bend"   // ✅ добавили
->("select");
 
+  const [currentTool, setCurrentTool] = useState<
+    | "select"
+    | "add-seat"
+    | "add-row"
+    | "add-zone"
+    | "rotate"
+    | "add-text"
+    | "add-rect"
+    | "add-ellipse"
+    | "add-polygon"
+    | "bend"
+  >("select");
 
   const [showGrid, setShowGrid] = useState(true);
   const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.5, max: 1 });
@@ -117,8 +122,8 @@ const [currentTool, setCurrentTool] = useState<
         zones: [],
         rows: [],
         seats: [],
-        texts: [],  
-         shapes: [],                     // ← очистка текстов
+        texts: [],
+        shapes: [], // ← очистка текстов
         stage: { scale: 1, x: 0, y: 0 },
         backgroundFit: "contain",
         backgroundMode: "auto",
@@ -141,15 +146,15 @@ const [currentTool, setCurrentTool] = useState<
       transparent: Boolean(z.transparent ?? false),
       fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
       bendTop: Number(z.bendTop ?? 0),
-  bendRight: Number(z.bendRight ?? 0),
-  bendBottom: Number(z.bendBottom ?? 0),
-  bendLeft: Number(z.bendLeft ?? 0),
-  // ✅ интервалы с дефолтом 30
-  seatSpacingX: Number(z.seatSpacingX ?? 30),
-  seatSpacingY: Number(z.seatSpacingY ?? 30),
-  // внутри map зоны
-rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
+      bendRight: Number(z.bendRight ?? 0),
+      bendBottom: Number(z.bendBottom ?? 0),
+      bendLeft: Number(z.bendLeft ?? 0),
 
+      seatSpacingX: Number(z.seatSpacingX ?? 30),
+      seatSpacingY: Number(z.seatSpacingY ?? 30),
+
+      rowLabelSide:
+        z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
     }));
 
     const rows: Row[] = [];
@@ -195,23 +200,23 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
       fontFamily: t.fontFamily ?? undefined,
     }));
     const shapes: ShapeObject[] = (json.shapes || []).map((s: any) => ({
-  id: String(s.id ?? crypto.randomUUID()),
-  kind: (s.kind as any) ?? "rect",
-  x: Number(s.x ?? 0),
-  y: Number(s.y ?? 0),
-  width: Number(s.width ?? 100),
-  height: Number(s.height ?? 60),
-  fill: s.fill ?? "#ffffff",
-  stroke: s.stroke ?? "#111827",
-  strokeWidth: Number(s.strokeWidth ?? 1),
-  opacity: s.opacity != null ? Number(s.opacity) : 1,
-  rotation: Number(s.rotation ?? 0),
-  flipX: !!s.flipX,
-  flipY: !!s.flipY,
-  points: Array.isArray(s.points)
-    ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
-    : undefined,
-}));
+      id: String(s.id ?? crypto.randomUUID()),
+      kind: (s.kind as any) ?? "rect",
+      x: Number(s.x ?? 0),
+      y: Number(s.y ?? 0),
+      width: Number(s.width ?? 100),
+      height: Number(s.height ?? 60),
+      fill: s.fill ?? "#ffffff",
+      stroke: s.stroke ?? "#111827",
+      strokeWidth: Number(s.strokeWidth ?? 1),
+      opacity: s.opacity != null ? Number(s.opacity) : 1,
+      rotation: Number(s.rotation ?? 0),
+      flipX: !!s.flipX,
+      flipY: !!s.flipY,
+      points: Array.isArray(s.points)
+        ? s.points.map((p: any) => ({ x: Number(p.x ?? 0), y: Number(p.y ?? 0) }))
+        : undefined,
+    }));
 
     return {
       hallName: String(json.hallName ?? "Зал 1"),
@@ -219,8 +224,8 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
       zones,
       rows,
       seats,
-      texts,     
-      shapes,                            // ← НОВОЕ
+      texts,
+      shapes, // ← НОВОЕ
       stage: { scale: 1, x: 0, y: 0 },
       backgroundFit: json.backgroundFit ?? "contain",
       backgroundMode: json.backgroundMode ?? "auto",
@@ -236,7 +241,6 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
       backgroundFit: s.backgroundFit ?? "contain",
       backgroundMode: s.backgroundMode ?? "auto",
       backgroundRect: s.backgroundRect ?? null,
-      
 
       zones: s.zones.map((zone) => ({
         id: zone.id,
@@ -250,15 +254,15 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
         transparent: !!zone.transparent,
         fillOpacity: zone.fillOpacity ?? 1,
         seatSpacingX: zone.seatSpacingX ?? 30,
-  seatSpacingY: zone.seatSpacingY ?? 30,
+        seatSpacingY: zone.seatSpacingY ?? 30,
         // ✅ bends
-  bendTop: zone.bendTop ?? 0,
-  bendRight: zone.bendRight ?? 0,
-  bendBottom: zone.bendBottom ?? 0,
-  bendLeft: zone.bendLeft ?? 0,
-  rowLabelSide: zone.rowLabelSide ?? "left",
+        bendTop: zone.bendTop ?? 0,
+        bendRight: zone.bendRight ?? 0,
+        bendBottom: zone.bendBottom ?? 0,
+        bendLeft: zone.bendLeft ?? 0,
+        rowLabelSide: zone.rowLabelSide ?? "left",
         rows: s.rows
-        
+
           .filter((row) => row.zoneId === zone.id)
           .map((row) => ({
             id: row.id,
@@ -277,11 +281,11 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
                 radius: seat.radius,
                 status: seat.status ?? "available",
                 category: seat.category ?? "standard",
-                
               })),
           })),
       })),
-      texts: (s.texts || []).map((t) => ({   // ← НОВОЕ
+      texts: (s.texts || []).map((t) => ({
+        // ← НОВОЕ
         id: t.id,
         text: t.text,
         x: t.x,
@@ -292,22 +296,21 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
         fontFamily: t.fontFamily ?? null,
       })),
       shapes: (s.shapes || []).map((sh) => ({
-    id: sh.id,
-    kind: sh.kind,
-    x: sh.x,
-    y: sh.y,
-    width: sh.width,
-    height: sh.height,
-    fill: sh.fill ?? "#ffffff",
-    stroke: sh.stroke ?? "#111827",
-    strokeWidth: sh.strokeWidth ?? 1,
-    opacity: sh.opacity ?? 1,
-    rotation: sh.rotation ?? 0,
-    flipX: !!sh.flipX,
-    flipY: !!sh.flipY,
-    points: sh.points?.map((p) => ({ x: p.x, y: p.y })) ?? null,
-  })),
-  
+        id: sh.id,
+        kind: sh.kind,
+        x: sh.x,
+        y: sh.y,
+        width: sh.width,
+        height: sh.height,
+        fill: sh.fill ?? "#ffffff",
+        stroke: sh.stroke ?? "#111827",
+        strokeWidth: sh.strokeWidth ?? 1,
+        opacity: sh.opacity ?? 1,
+        rotation: sh.rotation ?? 0,
+        flipX: !!sh.flipX,
+        flipY: !!sh.flipY,
+        points: sh.points?.map((p) => ({ x: p.x, y: p.y })) ?? null,
+      })),
     };
   }
 
@@ -327,52 +330,53 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
   };
 
   const handleDelete = () => {
-  // Если НИЧЕГО не выделено — удаляем фон (и сбрасываем manual-рект/режим)
-  if (selectedIds.length === 0) {
-    if (state.backgroundImage) {
-      setState(prev => ({
-        ...prev,
-        backgroundImage: null,
-        backgroundRect: null,
-        backgroundMode: "auto",
-      }));
+    if (selectedIds.length === 0) {
+      if (state.backgroundImage) {
+        setState((prev) => ({
+          ...prev,
+          backgroundImage: null,
+          backgroundRect: null,
+          backgroundMode: "auto",
+        }));
+      }
+      return;
     }
-    return;
-  }
 
-  // КАСКАДНОЕ удаление зон → рядов → мест + тексты/шейпы
-  setState(prev => {
-    const sel = new Set(selectedIds);
+    setState((prev) => {
+      const sel = new Set(selectedIds);
 
-    const delZoneIds = new Set(prev.zones.filter(z => sel.has(z.id)).map(z => z.id));
+      const delZoneIds = new Set(prev.zones.filter((z) => sel.has(z.id)).map((z) => z.id));
 
-    const delRowsDirect = prev.rows.filter(r => sel.has(r.id)).map(r => r.id);
-    const delRowsFromZones = prev.rows.filter(r => delZoneIds.has(r.zoneId)).map(r => r.id);
-    const delRowIds = new Set([...delRowsDirect, ...delRowsFromZones]);
+      const delRowsDirect = prev.rows.filter((r) => sel.has(r.id)).map((r) => r.id);
+      const delRowsFromZones = prev.rows.filter((r) => delZoneIds.has(r.zoneId)).map((r) => r.id);
+      const delRowIds = new Set([...delRowsDirect, ...delRowsFromZones]);
 
-    const delSeatsDirect = prev.seats.filter(s => sel.has(s.id)).map(s => s.id);
-    const delSeatsFromRows = prev.seats.filter(s => s.rowId && delRowIds.has(s.rowId)).map(s => s.id);
-    const delSeatsFromZones = prev.seats.filter(s => s.zoneId && delZoneIds.has(s.zoneId)).map(s => s.id);
-    const delSeatIds = new Set([...delSeatsDirect, ...delSeatsFromRows, ...delSeatsFromZones]);
+      const delSeatsDirect = prev.seats.filter((s) => sel.has(s.id)).map((s) => s.id);
+      const delSeatsFromRows = prev.seats
+        .filter((s) => s.rowId && delRowIds.has(s.rowId))
+        .map((s) => s.id);
+      const delSeatsFromZones = prev.seats
+        .filter((s) => s.zoneId && delZoneIds.has(s.zoneId))
+        .map((s) => s.id);
+      const delSeatIds = new Set([...delSeatsDirect, ...delSeatsFromRows, ...delSeatsFromZones]);
 
-    const prevTexts  = prev.texts  ?? [];
-    const prevShapes = prev.shapes ?? [];
-    const delTextIds  = new Set(prevTexts.filter(t  => sel.has(t.id)).map(t  => t.id));
-    const delShapeIds = new Set(prevShapes.filter(sh => sel.has(sh.id)).map(sh => sh.id));
+      const prevTexts = prev.texts ?? [];
+      const prevShapes = prev.shapes ?? [];
+      const delTextIds = new Set(prevTexts.filter((t) => sel.has(t.id)).map((t) => t.id));
+      const delShapeIds = new Set(prevShapes.filter((sh) => sel.has(sh.id)).map((sh) => sh.id));
 
-    return {
-      ...prev,
-      zones:  prev.zones.filter(z => !delZoneIds.has(z.id)),
-      rows:   prev.rows.filter(r => !delRowIds.has(r.id)),
-      seats:  prev.seats.filter(s => !delSeatIds.has(s.id)),
-      texts:  prevTexts.filter(t => !delTextIds.has(t.id)),
-      shapes: prevShapes.filter(sh => !delShapeIds.has(sh.id)),
-    };
-  });
+      return {
+        ...prev,
+        zones: prev.zones.filter((z) => !delZoneIds.has(z.id)),
+        rows: prev.rows.filter((r) => !delRowIds.has(r.id)),
+        seats: prev.seats.filter((s) => !delSeatIds.has(s.id)),
+        texts: prevTexts.filter((t) => !delTextIds.has(t.id)),
+        shapes: prevShapes.filter((sh) => !delShapeIds.has(sh.id)),
+      };
+    });
 
-  setSelectedIds([]);
-};
-
+    setSelectedIds([]);
+  };
 
   type AlignDirection = "left" | "center" | "right";
 
@@ -460,33 +464,27 @@ rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowL
               style={{ width: DESIGN.CANVAS_W, height: DESIGN.CANVAS_H }}
             >
               <SeatmapCanvas
-  seats={state.seats}
-  rows={state.rows}
-  zones={state.zones}
-  texts={state.texts}
-  shapes={state.shapes}
-  setState={setState}
-  selectedIds={selectedIds}
-  setSelectedIds={setSelectedIds}
-  currentTool={currentTool}
-
-  showGrid={showGrid}
-  setShowGrid={setShowGrid}
-  onDuplicate={handleDuplicate}
-
-  backgroundFit={state.backgroundFit}
-  setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
-
-  backgroundMode={state.backgroundMode}
-  backgroundRect={state.backgroundRect ?? undefined}
-  setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
-  setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
-
-  backgroundImage={state.backgroundImage}
-   // 👇 ВАЖНО: пробрасываем сеттер, чтобы внутри канвы (по клавише Delete) тоже гасить фон
-  setBackgroundImage={(v) => setState(prev => ({ ...prev, backgroundImage: v }))}
-/>
-
+                seats={state.seats}
+                rows={state.rows}
+                zones={state.zones}
+                texts={state.texts}
+                shapes={state.shapes}
+                setState={setState}
+                selectedIds={selectedIds}
+                setSelectedIds={setSelectedIds}
+                currentTool={currentTool}
+                showGrid={showGrid}
+                setShowGrid={setShowGrid}
+                onDuplicate={handleDuplicate}
+                backgroundFit={state.backgroundFit}
+                setBackgroundFit={(fit) => setState((prev) => ({ ...prev, backgroundFit: fit }))}
+                backgroundMode={state.backgroundMode}
+                backgroundRect={state.backgroundRect ?? undefined}
+                setBackgroundMode={(m) => setState((prev) => ({ ...prev, backgroundMode: m }))}
+                setBackgroundRect={(r) => setState((prev) => ({ ...prev, backgroundRect: r }))}
+                backgroundImage={state.backgroundImage}
+                setBackgroundImage={(v) => setState((prev) => ({ ...prev, backgroundImage: v }))}
+              />
             </div>
 
             <div style={{ width: DESIGN.PROPS_W, height: DESIGN.CANVAS_H }}>

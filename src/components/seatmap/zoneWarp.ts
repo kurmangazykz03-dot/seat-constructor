@@ -1,4 +1,4 @@
-// src/components/seatmap/zoneWarp.ts
+
 import { Row, Seat, Zone } from "../../types/types";
 
 type V = { x: number; y: number };

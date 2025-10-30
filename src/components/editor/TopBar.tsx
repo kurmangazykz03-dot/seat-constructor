@@ -22,7 +22,7 @@ const ghost = "inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-
 const ghostIcon = "inline-flex items-center justify-center h-9 w-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition";
 const ghostDisabled = "opacity-40 cursor-not-allowed hover:bg-white active:bg-white";
 
-// 🔴 Акцент бренда (YouTicket): #ef4444 — можно подстроить при желании (#f43f5e, #dc2626)
+
 const primary = "inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-blue-600 text-white rounded-[8px] hover:bg-blue-700 transition-colors ";
 const danger = "inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 active:bg-red-100 transition";
 

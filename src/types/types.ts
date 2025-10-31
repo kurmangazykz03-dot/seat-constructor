@@ -40,28 +40,27 @@ export interface Seat {
   category?: string;
 }
 // types/types.ts
-export type Zone = {
+export interface Zone {
   id: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  label: string;
-  fill?: string;
   rotation?: number;
+  fill?: string;
   transparent?: boolean;
   fillOpacity?: number;
+  // НОВОЕ: клиновой bend (два угла из нижних углов, в градусах)
+  angleLeftDeg?: number;
+  angleRightDeg?: number;
 
-  // новые поля для bend-инструмента
-  bendTop?: number;
-  bendRight?: number;
-  bendBottom?: number;
-  bendLeft?: number;
-  seatSpacingX?: number; // px, по умолчанию 30
-  seatSpacingY?: number; // px, по умолчанию 30
+  // ваши поля
+  label?: string;
+  seatSpacingX?: number;
+  seatSpacingY?: number;
+  rowLabelSide?: "left" | "right";
+}
 
-  rowLabelSide?: 'left' | 'right'; // default: 'left
-};
 
 
 // src/types/types.ts

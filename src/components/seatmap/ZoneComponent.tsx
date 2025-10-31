@@ -9,7 +9,8 @@ import { Row, Seat, Zone } from "../../types/types";
 import { applySeatDrop } from "../../utils/seatSnap";
 import RowComponent from "./RowComponent";
 import SeatComponent from "./SeatComponent";
-import { buildBentRectPath, hasBends } from "./zonePath";
+
+import { buildAngleWedgePathClamped } from "./zonePath";
 import { warpPointLocal } from "./zoneWarp";
 
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -117,8 +118,14 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
     setGroupRef?.(node);
   };
 
-  const warpIf = (p: { x: number; y: number }) =>
-    currentTool === "bend" ? warpPointLocal(p.x, p.y, zone) : p;
+const hasAngles =
+   Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
+
+ // ЕДИНАЯ логика: если углы заданы — показываем контент уже ИЗОГНУТЫМ
+ const warpIf = (p: { x: number; y: number }) =>
+   hasAngles ? warpPointLocal(p.x, p.y, zone) : p;
+
+
 
   const rowsRender = useMemo(
     () => zoneRows.map((r) => ({ ...r, ...warpIf({ x: r.x, y: r.y }) })),
@@ -294,17 +301,19 @@ const handleZoneClickLocal = (e: any) => {
 
   const strokeWidth = isSelected || hoveredZoneId === zone.id ? 2 : 1;
 
-  const bendPath =
-    hasBends(zone) || currentTool === "bend"
-      ? buildBentRectPath(
-          zone.width,
-          zone.height,
-          zone.bendTop ?? 0,
-          zone.bendRight ?? 0,
-          zone.bendBottom ?? 0,
-          zone.bendLeft ?? 0
-        )
-      : null;
+  const hasCone =
+   Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
+ // Форму зоны (клин) рисуем ВСЕГДА, если углы заданы
+ const showConeFill = hasCone;
+ const bendPath = showConeFill
+   ? buildAngleWedgePathClamped(
+       zone.width,
+       zone.height,
+       zone.angleLeftDeg as number,
+       zone.angleRightDeg as number
+     )
+   : null;
+
 const sw = strokeWidth; // 1 или 2 у тебя
 const r = crispStrokeRect(0, 0, zone.width, zone.height, scale, sw);
 
@@ -327,36 +336,25 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
       onClick={handleZoneClickLocal}
       onDragEnd={handleZoneDragEnd}
     >
-      {bendPath ? (
-    <Path
-    name="zone-bg"    
-      data={bendPath}
-      fill={zone.fill}
-      fillEnabled={!zone.transparent}
-      fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-      stroke={strokeColor}
-      strokeWidth={strokeWidth}
-      strokeScaleEnabled={false}   // ←
-      hitStrokeWidth={12}
-      perfectDrawEnabled={false}
-    />
-  ) : (
-    <Rect
-      x={r.x}
-  y={r.y}
-  width={r.width}
-  height={r.height}
-      fill={zone.fill}
-      fillEnabled={!zone.transparent}
-      fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-      stroke={strokeColor}
-      strokeWidth={sw}
-  strokeScaleEnabled={false}
-      hitStrokeWidth={12}
-name="zone-ui"  
-perfectDrawEnabled={false}
-    />
-  )}
+       {showConeFill ? (
+  <Path
+    data={bendPath!}
+    name="zone-ui"
+    fill={zone.fill} fillEnabled={!zone.transparent}
+    fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+    stroke={strokeColor} strokeWidth={strokeWidth}
+    strokeScaleEnabled={false} hitStrokeWidth={12} perfectDrawEnabled={false}
+  />
+) : (
+  <Rect
+    x={r.x} y={r.y} width={r.width} height={r.height}
+    name="zone-ui"
+    fill={zone.fill} fillEnabled={!zone.transparent}
+    fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
+    stroke={strokeColor} strokeWidth={sw}
+    strokeScaleEnabled={false} hitStrokeWidth={12} perfectDrawEnabled={false}
+  />
+)}
 
 <Text
   text={zone.label}

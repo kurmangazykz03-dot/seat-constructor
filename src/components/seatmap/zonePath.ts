@@ -1,25 +1,36 @@
+const toRad = (deg: number) => (deg * Math.PI) / 180;
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export function buildBentRectPath(
+/** Клин, верх в пределах [0..w], устойчив к углам близким к 0°/180°. */
+export function buildAngleWedgePathClamped(
   w: number,
   h: number,
-  bt: number,
-  br: number,
-  bb: number,
-  bl: number
+  angleLeftDeg: number,
+  angleRightDeg: number
 ) {
-  return [
-    `M 0 0`,
-    `Q ${w / 2} ${bt} ${w} 0`,
-    `Q ${w + br} ${h / 2} ${w} ${h}`,
-    `Q ${w / 2} ${h + bb} 0 ${h}`,
-    `Q ${-bl} ${h / 2} 0 0`,
-    `Z`,
-  ].join(" ");
-}
+  const aL = toRad(angleLeftDeg);
+  const aR = toRad(angleRightDeg);
 
-export function hasBends(z:{bendTop?:number;bendRight?:number;bendBottom?:number;bendLeft?:number}) {
-  const EPS = 0.5; // пикселей достаточно
-  const abs = (v?: number) => Math.abs(v ?? 0);
-  return abs(z.bendTop) > EPS || abs(z.bendRight) > EPS || abs(z.bendBottom) > EPS || abs(z.bendLeft) > EPS;
-}
+  const safeCot = (a: number) => {
+    const s = Math.sin(a);
+    if (Math.abs(s) < 1e-6) return 1e6 * Math.sign(Math.cos(a) || 1);
+    return Math.cos(a) / s;
+  };
 
+  let dxL = h * safeCot(aL);
+  let dxR = h * safeCot(aR);
+
+  dxL = clamp(dxL, 0, w - 1);
+  dxR = clamp(dxR, 0, w - 1);
+
+  if (dxL + dxR > w - 1) {
+    const k = (w - 1) / (dxL + dxR);
+    dxL *= k;
+    dxR *= k;
+  }
+
+  const TLx = dxL;
+  const TRx = w - dxR;
+
+  return `M 0 ${h} L ${w} ${h} L ${TRx} 0 L ${TLx} 0 Z`;
+}

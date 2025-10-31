@@ -1,42 +1,47 @@
+// src/components/seatmap/zoneWarp.ts
+import type { Zone, Row, Seat } from "../../types/types";
 
-import { Row, Seat, Zone } from "../../types/types";
-
-type V = { x: number; y: number };
+const toRad = (deg: number) => (deg * Math.PI) / 180;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const qbez = (p0: V, p1: V, p2: V, t: number): V => {
-  const mt = 1 - t;
-  return {
-    x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
-    y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
-  };
-};
+const lp = (A: { x: number; y: number }, B: { x: number; y: number }, t: number) => ({
+  x: lerp(A.x, B.x, t),
+  y: lerp(A.y, B.y, t),
+});
 
-export function warpPointLocal(x: number, y: number, z: Zone): V {
+function rayHitY(x0: number, y0: number, dx: number, dy: number, yLine: number) {
+  const EPS = 1e-6;
+  const t = Math.abs(dy) < EPS ? 1e9 : (yLine - y0) / dy;
+  return { x: x0 + dx * t, y: yLine };
+}
+
+/** Варп для клиновой зоны (две нижние угловые ручки). */
+export function warpPointLocal(x: number, y: number, z: Zone) {
   const w = z.width, h = z.height;
-  const bt = z.bendTop ?? 0, br = z.bendRight ?? 0, bb = z.bendBottom ?? 0, bl = z.bendLeft ?? 0;
+  const aL = toRad(z.angleLeftDeg ?? 60);
+  const aR = toRad(z.angleRightDeg ?? 60);
 
-  const u = w ? x / w : 0;
-  const v = h ? y / h : 0;
+  const BL = { x: 0, y: h };
+  const BR = { x: w, y: h };
 
-  const T = qbez({ x: 0, y: 0 }, { x: w / 2, y: bt },    { x: w, y: 0 }, u);
-  const B = qbez({ x: 0, y: h }, { x: w / 2, y: h + bb },{ x: w, y: h }, u);
-  const Ptb = { x: lerp(T.x, B.x, v), y: lerp(T.y, B.y, v) };
+  const dirL = { x: Math.cos(aL),  y: -Math.sin(aL) };
+  const dirR = { x: -Math.cos(aR), y: -Math.sin(aR) };
 
-  const L = qbez({ x: 0, y: 0 }, { x: -bl,   y: h / 2 }, { x: 0, y: h }, v);
-  const R = qbez({ x: w, y: 0 }, { x: w + br, y: h / 2 }, { x: w, y: h }, v);
-  const Plr = { x: lerp(L.x, R.x, u), y: lerp(L.y, R.y, u) };
+  const TL = rayHitY(BL.x, BL.y, dirL.x, dirL.y, 0);
+  const TR = rayHitY(BR.x, BR.y, dirR.x, dirR.y, 0);
 
-  return {
-    x: Ptb.x + (Plr.x - lerp(0, w, u)),
-    y: Plr.y + (Ptb.y - lerp(0, h, v)),
-  };
+  const u = w ? x / w : 0; // 0..1 слева→вправо
+  const v = h ? y / h : 0; // 0..1 сверху→вниз
+
+  const top = lp(TL, TR, u);
+  const bottom = lp(BL, BR, u);
+  return lp(top, bottom, v);
 }
 
 export function applyBendToZoneContent(
   state: { rows: Row[]; seats: Seat[] },
   zone: Zone
 ) {
-  const warp = (p: V) => warpPointLocal(p.x, p.y, zone);
+  const warp = (p: { x: number; y: number }) => warpPointLocal(p.x, p.y, zone);
 
   const rows = state.rows.map((r) =>
     r.zoneId === zone.id ? { ...r, ...warp({ x: r.x, y: r.y }) } : r

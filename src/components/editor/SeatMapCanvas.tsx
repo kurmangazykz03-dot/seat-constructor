@@ -1249,24 +1249,26 @@ function SeatmapCanvas({
                 ref={(node) => {
                   textRefs.current[t.id] = node;
                 }}
-                x={crisp(t.x, scale)}
-                y={crisp(t.y, scale)}
+                x={t.x}
+ y={t.y}
                 text={t.text}
                 fontSize={Math.round(t.fontSize ?? 18)} // целый размер
                 fill={t.fill ?? "#111827"}
                 rotation={t.rotation ?? 0}
                 draggable={currentTool === "select" && !isSpacePressed}
                 onClick={(e) => handleElementClick(t.id, e)}
-                onDragEnd={(e) => {
-                  const nx = snapCenter(e.target.x());
-                  const ny = snapCenter(e.target.y());
-                  setState((prev) => ({
-                    ...prev,
-                    texts: (prev.texts || []).map((tt) =>
-                      tt.id === t.id ? { ...tt, x: nx, y: ny } : tt
-                    ),
-                  }));
-                }}
+                 onDragStart={(e) => (e.cancelBubble = true)}
+  onDragMove={(e) => (e.cancelBubble = true)}
+  onDragEnd={(e) => {
+    e.cancelBubble = true;
+    const { x, y } = e.target.position(); // БЕЗ снапа
+    setState((prev) => ({
+      ...prev,
+      texts: (prev.texts || []).map((tt) =>
+        tt.id === t.id ? { ...tt, x, y } : tt
+      ),
+    }));
+  }}
               />
             )),
           ]}

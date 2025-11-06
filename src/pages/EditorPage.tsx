@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, type ChangeEvent } from "react";
 
 import PropertiesPanel from "../components/editor/PropertiesPanel";
 import SeatmapCanvas from "../components/editor/SeatMapCanvas";
@@ -83,7 +83,7 @@ function EditorPage() {
 
   const [showGrid, setShowGrid] = useState(true);
   const { ref: scaleRootRef, scale } = useAutoScale(WORK_W, WORK_H, { min: 0.5, max: 1 });
-
+ const fileInputRef = useRef<HTMLInputElement>(null);
   const handleSave = () => {
     try {
       const json = exportToV2(state);
@@ -95,7 +95,8 @@ function EditorPage() {
     }
   };
 
-  const handleLoad = () => {
+    // 1) Загрузить последнюю из localStorage (оставляем как было)
+  const handleLoadLast = () => {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (!raw) return alert("Сохраненная схема не найдена.");
@@ -103,12 +104,42 @@ function EditorPage() {
       const prevStage = state.stage;
       const imported = importFromV2(data);
       setState(() => ({ ...imported, stage: prevStage }));
-      alert("Схема (v2) загружена!");
+      alert("Схема (v2) загружена из localStorage!");
     } catch (error) {
       console.error("Ошибка при загрузке:", error);
       alert("Не удалось загрузить схему. Данные могут быть повреждены.");
     }
   };
+
+  // 2) Открыть выбор JSON-файла
+  const handleLoadFromFile = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Прочитать выбранный .json, сохранить в LS и применить в редакторе
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const obj = JSON.parse(text); // без валидации, как просили
+
+      // Записываем «как есть» в LS, чтобы Viewer/Editor подхватили
+      localStorage.setItem(LS_KEY, JSON.stringify(obj));
+
+      // Применяем, сохранив текущие zoom/pan
+      const prevStage = state.stage;
+      const imported = importFromV2(obj);
+      setState(() => ({ ...imported, stage: prevStage }));
+
+      alert("JSON импортирован из файла и записан в localStorage.");
+    } catch (err: any) {
+      alert("Ошибка JSON: " + (err?.message || String(err)));
+    } finally {
+      e.target.value = ""; // разрешить повторно выбрать тот же файл
+    }
+  };
+
 
   const handleClear = () => {
     if (
@@ -132,26 +163,35 @@ function EditorPage() {
     }
   };
 function importFromV2(json: any): SeatmapState {
-  const zones: Zone[] = (json.zones || []).map((z: any) => ({
-    id: String(z.id),
-    x: Number(z.x ?? 0),
-    y: Number(z.y ?? 0),
-    width: Number(z.width ?? 200),
-    height: Number(z.height ?? 120),
-    fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-    label: String(z.name ?? z.label ?? ""),
-    color: z.color ?? undefined,
-    rotation: Number(z.rotation ?? 0),
-    transparent: Boolean(z.transparent ?? false),
-    fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
-    bendTop: Number(z.bendTop ?? 0),
-    bendRight: Number(z.bendRight ?? 0),
-    bendBottom: Number(z.bendBottom ?? 0),
-    bendLeft: Number(z.bendLeft ?? 0),
-    seatSpacingX: Number(z.seatSpacingX ?? 30),
-    seatSpacingY: Number(z.seatSpacingY ?? 30),
-    rowLabelSide: (z.rowLabelSide === "right" || z.rowLabelSide === "left") ? z.rowLabelSide : "left",
-  }));
+ // helper
+const readAngle = (v: any) => {
+  const a = Number(v);
+  if (!Number.isFinite(a) || a <= 0) return 90;   // 0/NaN -> прямоугольник
+  return Math.max(10, Math.min(170, a));          // кламп
+};
+
+const zones: Zone[] = (json.zones || []).map((z: any) => ({
+  id: String(z.id),
+  x: Number(z.x ?? 0),
+  y: Number(z.y ?? 0),
+  width: Number(z.width ?? 200),
+  height: Number(z.height ?? 120),
+  fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+  label: String(z.name ?? z.label ?? ""),
+  color: z.color ?? undefined,
+  rotation: Number(z.rotation ?? 0),
+  transparent: !!z.transparent,
+  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+
+  // ⬇️ КЛИН (миграция 0/NaN -> 90°)
+  angleLeftDeg:  readAngle(z.angleLeftDeg),
+  angleRightDeg: readAngle(z.angleRightDeg),
+
+  seatSpacingX: Number(z.seatSpacingX ?? 30),
+  seatSpacingY: Number(z.seatSpacingY ?? 30),
+  rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
+}));
+
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
@@ -257,22 +297,21 @@ function importFromV2(json: any): SeatmapState {
     backgroundRect: s.backgroundRect ?? null,
 
     zones: s.zones.map((zone) => ({
-      id: zone.id,
-      name: zone.label,
-      color: zone.color ?? zone.fill,
-      rotation: zone.rotation ?? 0,
-      x: zone.x,
-      y: zone.y,
-      width: zone.width,
-      height: zone.height,
-      transparent: !!zone.transparent,
-      fillOpacity: zone.fillOpacity ?? 1,
-      seatSpacingX: zone.seatSpacingX ?? 30,
-      seatSpacingY: zone.seatSpacingY ?? 30,
-      bendTop: zone.bendTop ?? 0,
-      bendRight: zone.bendRight ?? 0,
-      bendBottom: zone.bendBottom ?? 0,
-      bendLeft: zone.bendLeft ?? 0,
+  id: zone.id,
+  name: zone.label,
+  color: zone.color ?? zone.fill,
+  rotation: zone.rotation ?? 0,
+  x: zone.x, y: zone.y, width: zone.width, height: zone.height,
+  transparent: !!zone.transparent,
+  fillOpacity: zone.fillOpacity ?? 1,
+  seatSpacingX: zone.seatSpacingX ?? 30,
+  seatSpacingY: zone.seatSpacingY ?? 30,
+
+  // ⬇️ пишем углы
+  angleLeftDeg:  zone.angleLeftDeg ?? 90,
+  angleRightDeg: zone.angleRightDeg ?? 90,
+
+
       rowLabelSide: zone.rowLabelSide ?? "left",
       rows: s.rows
         .filter((row) => row.zoneId === zone.id)
@@ -453,7 +492,8 @@ function importFromV2(json: any): SeatmapState {
           <div style={{ height: DESIGN.TOPBAR_H }}>
             <TopBar
               onSave={handleSave}
-              onLoad={handleLoad}
+ onLoadLast={handleLoadLast}          // 👈 новая
+  onLoadFromFile={handleLoadFromFile}  // 👈 новая
               onClear={handleClear}
               onExport={handleExport}
               onUndo={undo}
@@ -461,6 +501,13 @@ function importFromV2(json: any): SeatmapState {
               canUndo={canUndo}
               canRedo={canRedo}
             />
+            <input
+  ref={fileInputRef}
+  type="file"
+  accept="application/json"
+  onChange={handleFileChange}
+  className="hidden"
+/>
           </div>
           <div
             className="mt-4 flex"

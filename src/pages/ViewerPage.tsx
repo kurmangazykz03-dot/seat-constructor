@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react"; // ← добавили useRef
+
 
 import { SeatmapState } from "./EditorPage";
 
@@ -27,31 +28,35 @@ const ToolbarPlaceholder = () => (
 );
 
 function importFromV2(json: any): SeatmapState {
-  const zones: Zone[] = (json.zones || []).map((z: any) => ({
-    id: String(z.id),
-    x: Number(z.x ?? 0),
-    y: Number(z.y ?? 0),
-    width: Number(z.width ?? 200),
-    height: Number(z.height ?? 120),
-    fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-    color: z.color ?? undefined,
-    label: String(z.name ?? z.label ?? ""),
-    rotation: Number(z.rotation ?? 0),
-    transparent: Boolean(z.transparent ?? false),
-    fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+ // helper
+const readAngle = (v: any) => {
+  const a = Number(v);
+  if (!Number.isFinite(a) || a <= 0) return 90;   // 0/NaN -> прямоугольник
+  return Math.max(10, Math.min(170, a));          // кламп
+};
 
-    // изгибы
-    bendTop: Number(z.bendTop ?? 0),
-    bendRight: Number(z.bendRight ?? 0),
-    bendBottom: Number(z.bendBottom ?? 0),
-    bendLeft: Number(z.bendLeft ?? 0),
+const zones: Zone[] = (json.zones || []).map((z: any) => ({
+  id: String(z.id),
+  x: Number(z.x ?? 0),
+  y: Number(z.y ?? 0),
+  width: Number(z.width ?? 200),
+  height: Number(z.height ?? 120),
+  fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+  label: String(z.name ?? z.label ?? ""),
+  color: z.color ?? undefined,
+  rotation: Number(z.rotation ?? 0),
+  transparent: !!z.transparent,
+  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
 
-    // интервалы и сторона метки ряда
-    seatSpacingX: Number(z.seatSpacingX ?? 30),
-    seatSpacingY: Number(z.seatSpacingY ?? 30),
-    rowLabelSide:
-      z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
-  }));
+  // ⬇️ КЛИН (миграция 0/NaN -> 90°)
+  angleLeftDeg:  readAngle(z.angleLeftDeg),
+  angleRightDeg: readAngle(z.angleRightDeg),
+
+  seatSpacingX: Number(z.seatSpacingX ?? 30),
+  seatSpacingY: Number(z.seatSpacingY ?? 30),
+  rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
+}));
+
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
@@ -165,6 +170,30 @@ function ViewerPage() {
     min: 0.5,
     max: 1,
   });
+const fileRef = useRef<HTMLInputElement | null>(null);
+
+const handleOpenFilePicker = () => fileRef.current?.click();
+
+const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  try {
+    const text = await f.text();
+    const obj = JSON.parse(text);
+    // (опц.) положим "как есть" в localStorage, чтобы Viewer мог обновиться по F5
+    localStorage.setItem("seatmap_schema", JSON.stringify(obj));
+
+    // применяем
+    const flatState: SeatmapState = importFromV2(obj);
+    setState(flatState);
+    setSelectedSeat(null);
+    setError(null);
+  } catch (err: any) {
+    setError("Не удалось импортировать JSON: " + (err?.message || String(err)));
+  } finally {
+    if (e.target) e.target.value = "";
+  }
+};
 
   useEffect(() => {
     try {
@@ -195,7 +224,8 @@ function ViewerPage() {
           className="mx-auto"
         >
           <div className="flex flex-col" style={{ width: DESIGN_W, height: DESIGN_H }}>
-            <ViewerTopBar />
+            <ViewerTopBar onImportJson={handleOpenFilePicker} />
+
 
             <div
               className="flex overflow-hidden"
@@ -239,6 +269,13 @@ function ViewerPage() {
           </div>
         </div>
       </div>
+      <input
+  ref={fileRef}
+  type="file"
+  accept="application/json"
+  onChange={handleFileChange}
+  className="hidden"
+/>
     </div>
   );
 }

@@ -14,10 +14,10 @@ function rayHitY(x0: number, y0: number, dx: number, dy: number, yLine: number) 
   return { x: x0 + dx * t, y: yLine };
 }
 
-/** Варп для клиновой зоны (две нижние угловые ручки). */
+
 export function warpPointLocal(x: number, y: number, z: Zone) {
   const w = z.width, h = z.height;
-  // zoneWarp.ts
+
 const aL = toRad(z.angleLeftDeg ?? 90);
 const aR = toRad(z.angleRightDeg ?? 90);
 
@@ -31,8 +31,8 @@ const aR = toRad(z.angleRightDeg ?? 90);
   const TL = rayHitY(BL.x, BL.y, dirL.x, dirL.y, 0);
   const TR = rayHitY(BR.x, BR.y, dirR.x, dirR.y, 0);
 
-  const u = w ? x / w : 0; // 0..1 слева→вправо
-  const v = h ? y / h : 0; // 0..1 сверху→вниз
+  const u = w ? x / w : 0; 
+  const v = h ? y / h : 0; 
 
   const top = lp(TL, TR, u);
   const bottom = lp(BL, BR, u);

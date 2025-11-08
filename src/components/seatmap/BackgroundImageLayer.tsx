@@ -13,8 +13,8 @@ interface BackgroundImageLayerProps {
   fit?: Fit;
   opacity?: number;
   blur?: number;
-  scale?: number;          // 1.0 = без доп.масштаба
-  showCanvasBg?: boolean;  // ← опциональная белая подложка
+  scale?: number;          
+  showCanvasBg?: boolean;  
 }
 
 function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, mode: Fit) {
@@ -35,7 +35,7 @@ function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, mode: F
       return { w, h, x: (boxW - w) / 2, y: 0 };
     }
   }
-  // cover
+
   if (rImg > rBox) {
     const h = boxH;
     const w = h * rImg;
@@ -55,17 +55,14 @@ const BackgroundImageLayer: React.FC<BackgroundImageLayerProps> = ({
   opacity = 0.25,
   blur = 0,
   scale = 1,
-  showCanvasBg = false, // ← по умолчанию фон холста не заливаем
+  showCanvasBg = false, 
 }) => {
   const [img] = useImage(dataUrl, "anonymous");
 
   const rect = useMemo(() => {
     if (!img) return { w: canvasW, h: canvasH, x: 0, y: 0 };
 
-    // базовый прямоугольник под выбранный fit
     const base = fitRect(img.width, img.height, canvasW, canvasH, fit);
-
-    // применяем дополнительный масштаб и заново центрируем
     const sw = base.w * scale;
     const sh = base.h * scale;
     const cx = base.x + base.w / 2;
@@ -89,7 +86,6 @@ const BackgroundImageLayer: React.FC<BackgroundImageLayerProps> = ({
           width={rect.w}
           height={rect.h}
           opacity={opacity}
-          // Корректный вызов blur-фильтра
           filters={blur > 0 ? [Konva.Filters.Blur] : undefined}
           blurRadius={blur}
         />

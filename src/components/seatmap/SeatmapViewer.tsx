@@ -1,4 +1,4 @@
-// src/components/viewer/SeatmapViewer.tsx
+
 import React from "react";
 import { SeatmapState } from "../../pages/EditorPage";
 import SeatmapViewerCanvas from '../viewer/SeatmapViewerCanvas';

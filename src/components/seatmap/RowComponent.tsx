@@ -21,7 +21,6 @@ interface RowComponentProps {
 }
 
 const seatRadius = 12;
-// Сделаем хит-зону компактной
 const HIT_PAD_X = 4;
 const HIT_PAD_Y = 4;
 
@@ -37,13 +36,12 @@ const RowComponent: React.FC<RowComponentProps> = ({
   scale
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
-  // ✅ Разрешаем тащить сразу в режиме Select (не требуем предварительного выделения)
+
   const canDrag = !isViewerMode && currentTool === "select";
 
-  // для корректного dx/dy
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Узкий bbox по фактическим сиденьям ряда (локальные координаты относительно row.x/row.y)
+
   const { bboxX, bboxY, bboxW, bboxH } = useMemo(() => {
     if (!rowSeats.length) {
       return {
@@ -86,13 +84,13 @@ const RowComponent: React.FC<RowComponentProps> = ({
         const node = e.target as Konva.Group;
         dragStartRef.current = { x: node.x(), y: node.y() };
 
-        // ✅ Автовыделение при начале драга
+
         if (!isRowSelected) {
           handleElementClick(row.id, e as any);
         }
       }}
       onDragMove={(e) => {
-        // не пишем в state каждый кадр — Konva двигает визуально
+
         e.cancelBubble = true;
       }}
       onDragEnd={(e) => {
@@ -103,7 +101,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
         const dx = end.x - start.x;
         const dy = end.y - start.y;
 
-        // Коммитим смещение и для ряда, и для всех его сидений
+
         setState((prev) => ({
           ...prev,
           rows: prev.rows.map((r) =>
@@ -117,7 +115,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
         dragStartRef.current = null;
       }}
     >
-      {/* Узкая прозрачная хит-зона — клик/захват именно вокруг сидений */}
+
       <Rect
         x={bboxX}
         y={bboxY}

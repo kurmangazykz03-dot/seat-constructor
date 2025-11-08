@@ -42,7 +42,7 @@ const SeatComponent: React.FC<SeatComponentProps> = ({
   const strokeColor = isSelected ? "blue" : isRowSelected ? "#99CCFF" : "transparent";
   const strokeWidth = isSelected ? 2 : isRowSelected ? 1 : 0;
 
-  // Группа в локальных координатах ряда/зоны
+
   const gx = Math.round(seat.x - offsetX);
   const gy = Math.round(seat.y - offsetY);
   const label = String(seat.label ?? "");

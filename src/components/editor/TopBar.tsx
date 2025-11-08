@@ -1,7 +1,7 @@
 // src/components/editor/TopBar.tsx
 import React from "react";
 import { Link } from "react-router-dom";
-import { Undo, Redo, Save, Upload, Download, Trash2 ,FolderOpen} from "lucide-react";
+import { Undo, Redo, Save, Upload, Download, Trash2 ,FolderOpen, HelpCircle} from "lucide-react";
 import logoUrl from "../../assets/icons/logo.png";
 
 type TopBarProps = {
@@ -13,12 +13,12 @@ type TopBarProps = {
   canUndo: boolean;
   canRedo: boolean;
 
-  /** Вариант A (старый): одна кнопка Load */
   onLoad?: () => void;
-
-  /** Вариант B (новый): Load Last + Load File */
   onLoadLast?: () => void;
   onLoadFromFile?: () => void;
+
+  /** открыть окно помощи */
+  onHelpClick?: () => void;
 };
 
 const ghost =
@@ -42,6 +42,7 @@ function TopBar({
   onLoad,
   onLoadLast,
   onLoadFromFile,
+    onHelpClick,
 }: TopBarProps) {
   const showOldLoad = !!onLoad && !onLoadLast && !onLoadFromFile;
   const showNewLoad = !!onLoadLast || !!onLoadFromFile;
@@ -55,7 +56,7 @@ function TopBar({
         </Link>
 
         <span className="hidden sm:inline-block text-xs font-medium px-2.5 py-1 rounded-md bg-gray-100 text-gray-600">
-          Editing mode
+          Режим редактирования
         </span>
       </div>
 
@@ -63,35 +64,29 @@ function TopBar({
       <div className="flex items-center gap-2">
         <button
           onClick={onUndo}
-          title="Undo (Ctrl+Z)"
+          title="Отменить (Ctrl+Z)"
           className={`${ghostIcon} ${!canUndo ? ghostDisabled : ""}`}
           disabled={!canUndo}
-          aria-label="Undo"
+          aria-label="Отменить"
         >
           <Undo size={16} />
         </button>
 
         <button
           onClick={onRedo}
-          title="Redo (Ctrl+Y)"
+          title="Повторить (Ctrl+Y)"
           className={`${ghostIcon} ${!canRedo ? ghostDisabled : ""}`}
           disabled={!canRedo}
-          aria-label="Redo"
+          aria-label="Повторить"
         >
           <Redo size={16} />
         </button>
 
         <div className="w-px h-6 bg-gray-200 mx-1" />
 
-        {/* Вариант A: одна кнопка Load */}
-        {showOldLoad && (
-          <button onClick={onLoad} title="Load" className={ghost}>
-            <Upload size={16} className="shrink-0" />
-            <span className="hidden sm:inline">Load</span>
-          </button>
-        )}
+       
 
-        {/* Вариант B: Load Last + Load File (кнопки появляются, если переданы хендлеры) */}
+        
         {showNewLoad && (
           <>
             {onLoadLast && (
@@ -103,7 +98,7 @@ function TopBar({
             {onLoadFromFile && (
               <button onClick={onLoadFromFile} title="Load from file" className={ghost}>
                 <FolderOpen size={16} className="shrink-0" />
-                <span className="hidden sm:inline">Import JSON</span>
+                <span className="hidden sm:inline">Импорт JSON</span>
               </button>
             )}
           </>
@@ -111,18 +106,28 @@ function TopBar({
 
         <button onClick={onExport} title="Export JSON" className={ghost}>
           <Download size={16} className="shrink-0" />
-          <span className="hidden sm:inline">Export</span>
+          <span className="hidden sm:inline">Экспорт</span>
         </button>
 
         <button onClick={onClear} title="Clear" className={danger}>
           <Trash2 size={16} className="shrink-0" />
-          <span className="hidden sm:inline">Clear</span>
+          <span className="hidden sm:inline">Очистить</span>
         </button>
 
         <button onClick={onSave} title="Save" className={primary}>
           <Save size={16} className="shrink-0" />
-          <span>Save</span>
+          <span>Сохранить</span>
         </button>
+        {onHelpClick && (
+    <button
+      onClick={onHelpClick}
+      title="Помощь"
+      className={ghostIcon}
+      aria-label="Help"
+    >
+      <HelpCircle size={16} />
+    </button>
+  )}
       </div>
     </div>
   );

@@ -576,7 +576,7 @@ function SeatmapCanvas({
         width: 0,
         height: 0,
         fill: "#FAFAFA",
-        label: `Zone ${zones.length + 1}`,
+        label: `Зона ${zones.length + 1}`,
         transparent: false,
         fillOpacity: 1,
       };
@@ -724,7 +724,7 @@ function SeatmapCanvas({
         width,
         height,
         fill: "#FAFAFA",
-        label: `Zone ${zones.length + 1}`,
+        label: `Зона ${zones.length + 1}`,
         rotation: 0,
         seatSpacingX: SEAT_SPACING_X,
         seatSpacingY: SEAT_SPACING_Y,

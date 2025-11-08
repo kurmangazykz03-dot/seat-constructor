@@ -1,21 +1,19 @@
 // src/components/editor/PropertiesPanel.tsx
-import React from "react";
-import type { SeatmapState } from "../../pages/EditorPage";
-import type { Row, Seat, Zone, TextObject, ShapeObject } from "../../types/types";
 import {
-  Shapes as ShapesIcon,
-  PaintBucket,
-  Ruler,
-  Rows3,
-  Type as TypeIcon,
+  BadgeInfo,
   Box as BoxIcon,
-  LayoutPanelLeft,
-
-  Shuffle as ShuffleIcon,
   FlipHorizontal,
   FlipVertical,
-  BadgeInfo,
+  PaintBucket,
+  Rows3,
+  Ruler,
+  Shapes as ShapesIcon,
+  Shuffle as ShuffleIcon,
+  Type as TypeIcon,
 } from "lucide-react";
+import React from "react";
+import type { SeatmapState } from "../../pages/EditorPage";
+import type { Row, Seat, ShapeObject, TextObject, Zone } from "../../types/types";
 
 /* --------------------------- constants & helpers -------------------------- */
 type ShapePreset = {
@@ -28,24 +26,45 @@ type ShapePreset = {
 };
 
 const SHAPE_PRESETS: ShapePreset[] = [
-  { key: "light",       label: "Light",       fill: "#ffffff", stroke: "#1f2937", strokeWidth: 1, opacity: 1 },
-  { key: "dark",        label: "Dark",        fill: "#111827", stroke: "#ffffff", strokeWidth: 1, opacity: 1 },
-  { key: "accent",      label: "Accent",      fill: "#eab308", stroke: "#1f2937", strokeWidth: 1, opacity: 1 },
-  { key: "muted",       label: "Muted",       fill: "#e5e7eb", stroke: "#6b7280", strokeWidth: 1, opacity: 1 },
-  { key: "outline",     label: "Outline",     fill: undefined, stroke: "#1f2937", strokeWidth: 2, opacity: 1 },
-  { key: "transparent", label: "Transparent", fill: undefined, stroke: undefined, strokeWidth: 0, opacity: 0.25 },
+  { key: "light", label: "Светлый", fill: "#ffffff", stroke: "#1f2937", strokeWidth: 1, opacity: 1 },
+  { key: "dark", label: "Тёмный", fill: "#111827", stroke: "#ffffff", strokeWidth: 1, opacity: 1 },
+  {
+    key: "accent",
+    label: "Акцент",
+    fill: "#eab308",
+    stroke: "#1f2937",
+    strokeWidth: 1,
+    opacity: 1,
+  },
+  { key: "muted", label: "Приглушённый", fill: "#e5e7eb", stroke: "#6b7280", strokeWidth: 1, opacity: 1 },
+  {
+    key: "outline",
+    label: "Контур",
+    fill: undefined,
+    stroke: "#1f2937",
+    strokeWidth: 2,
+    opacity: 1,
+  },
+  {
+    key: "transparent",
+    label: "Прозрачный",
+    fill: undefined,
+    stroke: undefined,
+    strokeWidth: 0,
+    opacity: 0.25,
+  },
 ];
 
 const CATEGORY_OPTIONS = [
-  { value: "standard", label: "Standard" },
+  { value: "standard", label: "Стандарт" },
   { value: "vip", label: "VIP" },
-  { value: "discount", label: "Discount" },
+  { value: "discount", label: "Льготный" },
 ] as const;
 
 const STATUS_OPTIONS = [
-  { value: "available", label: "Available" },
-  { value: "occupied", label: "Occupied" },
-  { value: "disabled", label: "Disabled" },
+  { value: "available", label: "Доступно" },
+  { value: "occupied", label: "Занято" },
+  { value: "disabled", label: "Недоступно" },
 ] as const;
 
 const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
@@ -85,20 +104,18 @@ const toNum = (v: unknown, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-
 /* --------------------------------- UI bits -------------------------------- */
 
 const Panel = ({ children }: { children: React.ReactNode }) => (
   <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">{children}</div>
 );
 
-const Section: React.FC<{ icon: React.ReactNode; title: string; hint?: string; className?: string }> = ({
-  icon,
-  title,
-  hint,
-  className,
-  children,
-}) => (
+const Section: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  hint?: string;
+  className?: string;
+}> = ({ icon, title, hint, className, children }) => (
   <div className={className ?? ""}>
     <div className="flex items-center gap-2 mb-2">
       <span className="text-gray-600">{icon}</span>
@@ -113,7 +130,11 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; hint?: string; c
   </div>
 );
 
-const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
+const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({
+  label,
+  children,
+  hint,
+}) => (
   <div className="mb-2">
     <label className="block text-xs font-medium text-gray-700 mb-1">
       {label}
@@ -131,16 +152,19 @@ const stopHotkeys: React.KeyboardEventHandler<HTMLElement> = (e) => {
   const k = e.key;
   if (
     k === "Delete" ||
-    k === "Backspace" ||       // чтобы не сносило тоже
-    (k.toLowerCase() === "z" && (e.ctrlKey || e.metaKey)) || // на всякий undo/redo
+    k === "Backspace" ||
+    (k.toLowerCase() === "z" && (e.ctrlKey || e.metaKey)) ||
     (k.toLowerCase() === "y" && (e.ctrlKey || e.metaKey))
   ) {
     e.stopPropagation();
   }
 };
 
-// TextInput — добавь обработчик
-const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ onKeyDown, ...props }) => (
+// TextInput
+const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({
+  onKeyDown,
+  ...props
+}) => (
   <input
     {...props}
     onKeyDown={(e) => {
@@ -151,8 +175,12 @@ const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ onKe
   />
 );
 
-// Select — тоже
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ children, onKeyDown, ...props }) => (
+// Select
+const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
+  children,
+  onKeyDown,
+  ...props
+}) => (
   <select
     {...props}
     onKeyDown={(e) => {
@@ -164,7 +192,6 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ child
     {children}
   </select>
 );
-
 
 // компактный number с «±»
 const StepperNumber: React.FC<{
@@ -179,11 +206,14 @@ const StepperNumber: React.FC<{
   const inc = () => onChange(clamp(value + step, min, max));
   return (
     <div className="flex items-stretch">
-      <button type="button" onClick={dec} className="px-2 border border-gray-300 rounded-l-lg text-gray-600 hover:bg-gray-50">
+      <button
+        type="button"
+        onClick={dec}
+        className="px-2 border border-gray-300 rounded-l-lg text-gray-600 hover:bg-gray-50"
+      >
         –
       </button>
       <input
-      
         type="number"
         value={value}
         min={min}
@@ -192,12 +222,15 @@ const StepperNumber: React.FC<{
         onChange={(e) => onChange(clamp(toInt(e.target.value, value), min, max))}
         onBlur={onBlur}
         className="w-full border-t border-b border-gray-300 px-2.5 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-center text-black"
-onKeyDown={(e) => {
-    stopHotkeys(e);
-
-  }}
+        onKeyDown={(e) => {
+          stopHotkeys(e);
+        }}
       />
-      <button type="button" onClick={inc} className="px-2 border border-gray-300 rounded-r-lg text-gray-600 hover:bg-gray-50">
+      <button
+        type="button"
+        onClick={inc}
+        className="px-2 border border-gray-300 rounded-r-lg text-gray-600 hover:bg-gray-50"
+      >
         +
       </button>
     </div>
@@ -246,12 +279,30 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     localStorage.setItem("seatmap_auto_reflow_spacing", autoReflow ? "1" : "0");
   }, [autoReflow]);
 
-  const selectedZones = React.useMemo(() => zones.filter((z) => selectedIds.includes(z.id)), [zones, selectedIds]);
-  const selectedRows = React.useMemo(() => rows.filter((r) => selectedIds.includes(r.id)), [rows, selectedIds]);
-  const selectedSeats = React.useMemo(() => seats.filter((s) => selectedIds.includes(s.id)), [seats, selectedIds]);
-  const selectedTexts = React.useMemo(() => state.texts.filter((t) => selectedIds.includes(t.id)), [state.texts, selectedIds]);
-  const selectedShapes = React.useMemo(() => (state.shapes || []).filter((sh) => selectedIds.includes(sh.id)), [state.shapes, selectedIds]);
-  const selectedSeatIdSet = React.useMemo(() => new Set(selectedSeats.map((s) => s.id)), [selectedSeats]);
+  const selectedZones = React.useMemo(
+    () => zones.filter((z) => selectedIds.includes(z.id)),
+    [zones, selectedIds]
+  );
+  const selectedRows = React.useMemo(
+    () => rows.filter((r) => selectedIds.includes(r.id)),
+    [rows, selectedIds]
+  );
+  const selectedSeats = React.useMemo(
+    () => seats.filter((s) => selectedIds.includes(s.id)),
+    [seats, selectedIds]
+  );
+  const selectedTexts = React.useMemo(
+    () => state.texts.filter((t) => selectedIds.includes(t.id)),
+    [state.texts, selectedIds]
+  );
+  const selectedShapes = React.useMemo(
+    () => (state.shapes || []).filter((sh) => selectedIds.includes(sh.id)),
+    [state.shapes, selectedIds]
+  );
+  const selectedSeatIdSet = React.useMemo(
+    () => new Set(selectedSeats.map((s) => s.id)),
+    [selectedSeats]
+  );
 
   /* ---------------------------- state update helpers ---------------------------- */
 
@@ -267,30 +318,38 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
   const setZonesRowLabelSide = (side: "left" | "right") => {
     setState((prev) => ({
       ...prev,
-      zones: prev.zones.map((z) => (selectedZoneIds.includes(z.id) ? { ...z, rowLabelSide: side } : z)),
+      zones: prev.zones.map((z) =>
+        selectedZoneIds.includes(z.id) ? { ...z, rowLabelSide: side } : z
+      ),
     }));
   };
   const flipZonesRowLabelSide = () => {
     setState((prev) => ({
       ...prev,
       zones: prev.zones.map((z) =>
-        selectedZoneIds.includes(z.id) ? { ...z, rowLabelSide: z.rowLabelSide === "right" ? "left" : "right" } : z
+        selectedZoneIds.includes(z.id)
+          ? { ...z, rowLabelSide: z.rowLabelSide === "right" ? "left" : "right" }
+          : z
       ),
     }));
   };
 
- const updateZone = (zoneId: string, rawPatch: Partial<Zone>, opts?: { maybeReflowBySpacing?: boolean }) => {
-  const patch = sanitizeRotation(rawPatch);
-  setState((prev) => {
-    const nextZones = prev.zones.map((z) => (z.id === zoneId ? { ...z, ...patch } : z));
-    let next: SeatmapState = { ...prev, zones: nextZones };
-    const changedSpacing = "seatSpacingX" in (patch as any) || "seatSpacingY" in (patch as any);
-    if (autoReflow && opts?.maybeReflowBySpacing && changedSpacing) {
-      next = reflowZoneBySpacingState(next, zoneId);
-    }
-    return next;
-  });
-};
+  const updateZone = (
+    zoneId: string,
+    rawPatch: Partial<Zone>,
+    opts?: { maybeReflowBySpacing?: boolean }
+  ) => {
+    const patch = sanitizeRotation(rawPatch);
+    setState((prev) => {
+      const nextZones = prev.zones.map((z) => (z.id === zoneId ? { ...z, ...patch } : z));
+      let next: SeatmapState = { ...prev, zones: nextZones };
+      const changedSpacing = "seatSpacingX" in (patch as any) || "seatSpacingY" in (patch as any);
+      if (autoReflow && opts?.maybeReflowBySpacing && changedSpacing) {
+        next = reflowZoneBySpacingState(next, zoneId);
+      }
+      return next;
+    });
+  };
 
   const updateRowAndSeats = (rowId: string, patch: Partial<Row> & { x?: number; y?: number }) => {
     setState((prev) => {
@@ -328,7 +387,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         if (!selectedSeatIdSet.has(s.id)) return s;
         const next = { ...s, ...patch };
         if ("status" in patch || "category" in patch) {
-          next.fill = colorFor((next.status ?? s.status) as Seat["status"], (next.category ?? s.category) as string);
+          next.fill = colorFor(
+            (next.status ?? s.status) as Seat["status"],
+            (next.category ?? s.category) as string
+          );
         }
         return next;
       }),
@@ -344,7 +406,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         if (!s.rowId || !rowIds.has(s.rowId)) return s;
         const next = { ...s, ...patch };
         if ("status" in patch || "category" in patch) {
-          next.fill = colorFor((next.status ?? s.status) as Seat["status"], (next.category ?? s.category) as string);
+          next.fill = colorFor(
+            (next.status ?? s.status) as Seat["status"],
+            (next.category ?? s.category) as string
+          );
         }
         return next;
       }),
@@ -360,29 +425,31 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         if (!s.zoneId || !zoneIds.has(s.zoneId)) return s;
         const next = { ...s, ...patch };
         if ("status" in patch || "category" in patch) {
-          next.fill = colorFor((next.status ?? s.status) as Seat["status"], (next.category ?? s.category) as string);
+          next.fill = colorFor(
+            (next.status ?? s.status) as Seat["status"],
+            (next.category ?? s.category) as string
+          );
         }
         return next;
       }),
     }));
   };
 
-const updateText = (textId: string, rawPatch: Partial<TextObject>) => {
-  const patch = sanitizeRotation(rawPatch);
-  setState((prev) => ({
-    ...prev,
-    texts: prev.texts.map((t) => (t.id === textId ? { ...t, ...patch } : t)),
-  }));
-};
+  const updateText = (textId: string, rawPatch: Partial<TextObject>) => {
+    const patch = sanitizeRotation(rawPatch);
+    setState((prev) => ({
+      ...prev,
+      texts: prev.texts.map((t) => (t.id === textId ? { ...t, ...patch } : t)),
+    }));
+  };
 
-
-const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
-  const patch = sanitizeRotation(rawPatch);
-  setState((prev) => ({
-    ...prev,
-    shapes: prev.shapes.map((s) => (s.id === shapeId ? { ...s, ...patch } : s)),
-  }));
-};
+  const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
+    const patch = sanitizeRotation(rawPatch);
+    setState((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((s) => (s.id === shapeId ? { ...s, ...patch } : s)),
+    }));
+  };
 
   const updateSelectedShapesBulk = (patch: Partial<ShapeObject>) => {
     const ids = new Set(selectedShapes.map((s) => s.id));
@@ -397,11 +464,15 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
     if (sh.kind !== "polygon" || !sh.points || sh.width === 0 || sh.height === 0) return sh;
     const sx = nextW / sh.width;
     const sy = nextH / sh.height;
-    return { ...sh, width: nextW, height: nextH, points: sh.points.map((p) => ({ x: p.x * sx, y: p.y * sy })) };
+    return {
+      ...sh,
+      width: nextW,
+      height: nextH,
+      points: sh.points.map((p) => ({ x: p.x * sx, y: p.y * sy })),
+    };
   };
 
   /* ------------------------------- reflow utils ------------------------------ */
-
 
   const reflowZoneBySpacingState = (curr: SeatmapState, zoneId: string): SeatmapState => {
     const z = curr.zones.find((zz) => zz.id === zoneId);
@@ -445,7 +516,9 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       const z = prev.zones.find((zz) => zz.id === zoneId);
       if (!z) return prev;
 
-      const rowsInZone = [...prev.rows].filter((r) => r.zoneId === zoneId).sort((a, b) => a.y - b.y);
+      const rowsInZone = [...prev.rows]
+        .filter((r) => r.zoneId === zoneId)
+        .sort((a, b) => a.y - b.y);
       if (rowsInZone.length === 0) return prev;
 
       const rowsNext = prev.rows.map((r) => ({ ...r }));
@@ -454,7 +527,9 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       const rowMaxR: Record<string, number> = {};
       for (const r of rowsInZone) {
         const rs = seatsNext.filter((s) => s.rowId === r.id);
-        rowMaxR[r.id] = rs.length ? Math.max(...rs.map((s) => s.radius ?? DEFAULT_RADIUS)) : DEFAULT_RADIUS;
+        rowMaxR[r.id] = rs.length
+          ? Math.max(...rs.map((s) => s.radius ?? DEFAULT_RADIUS))
+          : DEFAULT_RADIUS;
       }
 
       const rowsCount = rowsInZone.length;
@@ -486,7 +561,8 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
     });
   };
 
-  const reflowZoneBySpacing = (zoneId: string) => setState((prev) => reflowZoneBySpacingState(prev, zoneId));
+  const reflowZoneBySpacing = (zoneId: string) =>
+    setState((prev) => reflowZoneBySpacingState(prev, zoneId));
 
   const addColumnToZone = (zoneId: string, side: "left" | "right") => {
     setState((prev) => {
@@ -508,8 +584,12 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
           requiredShift = Math.max(requiredShift, Math.max(0, rRad - proposed));
         }
         if (requiredShift > 0) {
-          rowsNext = rowsNext.map((rr) => (rr.zoneId === zoneId ? { ...rr, x: rr.x + requiredShift } : rr));
-          seatsNext = seatsNext.map((s) => (s.zoneId === zoneId ? { ...s, x: s.x + requiredShift } : s));
+          rowsNext = rowsNext.map((rr) =>
+            rr.zoneId === zoneId ? { ...rr, x: rr.x + requiredShift } : rr
+          );
+          seatsNext = seatsNext.map((s) =>
+            s.zoneId === zoneId ? { ...s, x: s.x + requiredShift } : s
+          );
         }
       }
 
@@ -545,7 +625,9 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       const needWidth = seatsInZone.length
         ? Math.max(...seatsInZone.map((s) => s.x + (s.radius ?? DEFAULT_RADIUS)))
         : zone.width;
-      const zonesNext = prev.zones.map((z) => (z.id === zoneId ? { ...z, width: Math.max(z.width, needWidth) } : z));
+      const zonesNext = prev.zones.map((z) =>
+        z.id === zoneId ? { ...z, width: Math.max(z.width, needWidth) } : z
+      );
 
       for (const r of zoneRows) {
         const rs = seatsNext.filter((s) => s.rowId === r.id).sort((a, b) => a.x - b.x);
@@ -617,10 +699,20 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
   };
 
   const applyShapePresetBulk = (p: ShapePreset) => {
-    updateSelectedShapesBulk({ fill: p.fill, stroke: p.stroke, strokeWidth: p.strokeWidth, opacity: p.opacity });
+    updateSelectedShapesBulk({
+      fill: p.fill,
+      stroke: p.stroke,
+      strokeWidth: p.strokeWidth,
+      opacity: p.opacity,
+    });
   };
   const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
-    updateShape(shapeId, { fill: p.fill, stroke: p.stroke, strokeWidth: p.strokeWidth, opacity: p.opacity });
+    updateShape(shapeId, {
+      fill: p.fill,
+      stroke: p.stroke,
+      strokeWidth: p.strokeWidth,
+      opacity: p.opacity,
+    });
   };
 
   /* -------------------------------- empty state ------------------------------- */
@@ -628,34 +720,38 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
   if (selectedIds.length === 0) {
     return (
       <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Properties</h2>
-        <p className="text-sm text-gray-500">Выберите зону, ряд, место, текст или шейп для редактирования.</p>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Свойства</h2>
+        <p className="text-sm text-gray-500">
+          Выберите зону, ряд, место, текст или шейп для редактирования.
+        </p>
       </div>
     );
   }
 
   const CountChip = ({ label }: { label: string }) => (
-    <span className="px-2 py-1 text-[11px] rounded-md bg-white border border-gray-200 text-gray-600">{label}</span>
+    <span className="px-2 py-1 text-[11px] rounded-md bg-white border border-gray-200 text-gray-600">
+      {label}
+    </span>
   );
 
   return (
     <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xl font-semibold text-gray-900">Properties</h2>
+        <h2 className="text-xl font-semibold text-gray-900">Свойства</h2>
         <div className="flex gap-1 flex-wrap">
-          {selectedZones.length > 0 && <CountChip label={`Zones: ${selectedZones.length}`} />}
-          {selectedRows.length > 0 && <CountChip label={`Rows: ${selectedRows.length}`} />}
-          {selectedSeats.length > 0 && <CountChip label={`Seats: ${selectedSeats.length}`} />}
-          {selectedTexts.length > 0 && <CountChip label={`Text: ${selectedTexts.length}`} />}
-          {selectedShapes.length > 0 && <CountChip label={`Shapes: ${selectedShapes.length}`} />}
+          {selectedZones.length > 0 && <CountChip label={`Зоны: ${selectedZones.length}`} />}
+          {selectedRows.length > 0 && <CountChip label={`Ряды: ${selectedRows.length}`} />}
+          {selectedSeats.length > 0 && <CountChip label={`Места: ${selectedSeats.length}`} />}
+          {selectedTexts.length > 0 && <CountChip label={`Текст: ${selectedTexts.length}`} />}
+          {selectedShapes.length > 0 && <CountChip label={`Фигуры: ${selectedShapes.length}`} />}
         </div>
       </div>
 
       {/* ------------------------------- SHAPES -------------------------------- */}
       {selectedShapes.length > 1 && (
         <Panel>
-          <Section icon={<ShapesIcon size={16} />} title="Bulk edit — Shapes" />
-          <Field label="Presets" hint="Быстро применяет набор Fill/Stroke/Opacity">
+          <Section icon={<ShapesIcon size={16} />} title="Массовое редактирование — Фигуры" />
+          <Field label="Пресеты" hint="Быстро применяет набор заливки / обводки / прозрачности">
             <div className="grid grid-cols-2 gap-2">
               {SHAPE_PRESETS.map((p) => (
                 <button key={p.key} type="button" onClick={() => applyShapePresetBulk(p)}>
@@ -665,28 +761,57 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
             </div>
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Fill">
+            <Field label="Заливка">
               <div className="flex items-center gap-2">
-                <input type="color" defaultValue="#ffffff" onChange={(e) => updateSelectedShapesBulk({ fill: e.target.value })} className="w-10 h-10 rounded-lg border" />
+                <input
+                  type="color"
+                  defaultValue="#ffffff"
+                  onChange={(e) => updateSelectedShapesBulk({ fill: e.target.value })}
+                  className="w-10 h-10 rounded-lg border"
+                />
                 <div className="flex gap-2">
                   {COLOR_OPTIONS.map((c) => (
-                    <button key={c} style={{ backgroundColor: c }} className="w-6 h-6 rounded-full border" onClick={() => updateSelectedShapesBulk({ fill: c })} />
+                    <button
+                      key={c}
+                      style={{ backgroundColor: c }}
+                      className="w-6 h-6 rounded-full border"
+                      onClick={() => updateSelectedShapesBulk({ fill: c })}
+                    />
                   ))}
                 </div>
               </div>
             </Field>
-            <Field label="Stroke">
+            <Field label="Обводка">
               <div className="flex items-center gap-2">
-                <input type="color" defaultValue="#111827" onChange={(e) => updateSelectedShapesBulk({ stroke: e.target.value })} className="w-10 h-10 rounded-lg border" />
+                <input
+                  type="color"
+                  defaultValue="#111827"
+                  onChange={(e) => updateSelectedShapesBulk({ stroke: e.target.value })}
+                  className="w-10 h-10 rounded-lg border"
+                />
               </div>
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Stroke width">
-              <StepperNumber value={1} min={0} step={1} onChange={(v) => updateSelectedShapesBulk({ strokeWidth: v })} />
+            <Field label="Толщина обводки">
+              <StepperNumber
+                value={1}
+                min={0}
+                step={1}
+                onChange={(v) => updateSelectedShapesBulk({ strokeWidth: v })}
+              />
             </Field>
-            <Field label="Opacity">
-              <input type="range" min={0} max={100} defaultValue={100} onChange={(e) => updateSelectedShapesBulk({ opacity: toInt(e.target.value, 100) / 100 })} className="w-full accent-blue-600" />
+            <Field label="Прозрачность">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                defaultValue={100}
+                onChange={(e) =>
+                  updateSelectedShapesBulk({ opacity: toInt(e.target.value, 100) / 100 })
+                }
+                className="w-full accent-blue-600"
+              />
             </Field>
           </div>
         </Panel>
@@ -694,8 +819,8 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
 
       {selectedShapes.map((sh) => (
         <Panel key={sh.id}>
-          <Section icon={<BoxIcon size={16} />} title={`Shape: ${sh.kind}`} />
-          <Field label="Preset">
+          <Section icon={<BoxIcon size={16} />} title={`Фигура: ${sh.kind}`} />
+          <Field label="Пресет">
             <div className="flex flex-wrap gap-2">
               {SHAPE_PRESETS.map((p) => (
                 <button key={p.key} type="button" onClick={() => applyShapePresetOne(sh.id, p)}>
@@ -705,60 +830,124 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
             </div>
           </Field>
 
-          <Section icon={<Ruler size={14} />} title="Geometry" className="mt-3" hint="Позиция и размер шейпа">
+          <Section
+            icon={<Ruler size={14} />}
+            title="Геометрия"
+            className="mt-3"
+            hint="Позиция и размер шейпа"
+          >
             <div className="grid grid-cols-2 gap-2">
-              <Field label="X"><StepperNumber value={Math.round(sh.x)} step={1} onChange={(v) => updateShape(sh.id, { x: v })} /></Field>
-              <Field label="Y"><StepperNumber value={Math.round(sh.y)} step={1} onChange={(v) => updateShape(sh.id, { y: v })} /></Field>
+              <Field label="X">
+                <StepperNumber
+                  value={Math.round(sh.x)}
+                  step={1}
+                  onChange={(v) => updateShape(sh.id, { x: v })}
+                />
+              </Field>
+              <Field label="Y">
+                <StepperNumber
+                  value={Math.round(sh.y)}
+                  step={1}
+                  onChange={(v) => updateShape(sh.id, { y: v })}
+                />
+              </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Width">
+              <Field label="Ширина">
                 <StepperNumber
                   value={Math.round(sh.width)}
                   min={2}
                   step={1}
-                  onChange={(v) => (sh.kind === "polygon" ? updateShape(sh.id, resizePolygon(sh, v, sh.height)) : updateShape(sh.id, { width: v }))}
+                  onChange={(v) =>
+                    sh.kind === "polygon"
+                      ? updateShape(sh.id, resizePolygon(sh, v, sh.height))
+                      : updateShape(sh.id, { width: v })
+                  }
                 />
               </Field>
-              <Field label="Height">
+              <Field label="Высота">
                 <StepperNumber
                   value={Math.round(sh.height)}
                   min={2}
                   step={1}
-                  onChange={(v) => (sh.kind === "polygon" ? updateShape(sh.id, resizePolygon(sh, sh.width, v)) : updateShape(sh.id, { height: v }))}
+                  onChange={(v) =>
+                    sh.kind === "polygon"
+                      ? updateShape(sh.id, resizePolygon(sh, sh.width, v))
+                      : updateShape(sh.id, { height: v })
+                  }
                 />
               </Field>
             </div>
           </Section>
 
-          <Section icon={<PaintBucket size={14} />} title="Appearance" className="mt-2">
+          <Section icon={<PaintBucket size={14} />} title="Внешний вид" className="mt-2">
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Fill">
-                <input type="color" value={sh.fill ?? "#ffffff"} onChange={(e) => updateShape(sh.id, { fill: e.target.value })} className="w-10 h-10 rounded-lg border" />
+              <Field label="Заливка">
+                <input
+                  type="color"
+                  value={sh.fill ?? "#ffffff"}
+                  onChange={(e) => updateShape(sh.id, { fill: e.target.value })}
+                  className="w-10 h-10 rounded-lg border"
+                />
               </Field>
-              <Field label="Stroke">
-                <input type="color" value={sh.stroke ?? "#111827"} onChange={(e) => updateShape(sh.id, { stroke: e.target.value })} className="w-10 h-10 rounded-lg border" />
+              <Field label="Обводка">
+                <input
+                  type="color"
+                  value={sh.stroke ?? "#111827"}
+                  onChange={(e) => updateShape(sh.id, { stroke: e.target.value })}
+                  className="w-10 h-10 rounded-lg border"
+                />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Stroke width"><StepperNumber value={Math.round(sh.strokeWidth ?? 1)} min={0} step={1} onChange={(v) => updateShape(sh.id, { strokeWidth: v })} /></Field>
-              <Field label={`Opacity: ${Math.round((sh.opacity ?? 1) * 100)}%`}>
-                <input type="range" min={0} max={100} value={Math.round((sh.opacity ?? 1) * 100)} onChange={(e) => updateShape(sh.id, { opacity: toInt(e.target.value, 100) / 100 })} className="w-full accent-blue-600" />
+              <Field label="Толщина обводки">
+                <StepperNumber
+                  value={Math.round(sh.strokeWidth ?? 1)}
+                  min={0}
+                  step={1}
+                  onChange={(v) => updateShape(sh.id, { strokeWidth: v })}
+                />
+              </Field>
+              <Field label={`Прозрачность: ${Math.round((sh.opacity ?? 1) * 100)}%`}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round((sh.opacity ?? 1) * 100)}
+                  onChange={(e) =>
+                    updateShape(sh.id, { opacity: toInt(e.target.value, 100) / 100 })
+                  }
+                  className="w-full accent-blue-600"
+                />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Rotation (°)"><StepperNumber value={Math.round(sh.rotation ?? 0)} step={1} onChange={(v) => updateShape(sh.id, { rotation: v })} /></Field>
-              
-            </div>
-            <Field label="Flip">
-                <div className="flex items-center gap-2">
-                  <button className="px-2 py-1 text-xs bg-gray-100 rounded border inline-flex items-center gap-1 text-blue-600 border-gray-200" onClick={() => updateShape(sh.id, { flipX: !sh.flipX })} title="Mirror X">
-                    <FlipHorizontal size={14} /> Mirror X
-                  </button>
-                  <button className="px-2 py-1 text-xs bg-gray-100 rounded border inline-flex items-center gap-1 text-blue-600 border-gray-200" onClick={() => updateShape(sh.id, { flipY: !sh.flipY })} title="Mirror Y">
-                    <FlipVertical size={14} /> Mirror Y
-                  </button>
-                </div>
+              <Field label="Поворот (°)">
+                <StepperNumber
+                  value={Math.round(sh.rotation ?? 0)}
+                  step={1}
+                  onChange={(v) => updateShape(sh.id, { rotation: v })}
+                />
               </Field>
+            </div>
+            <Field label="Отразить">
+              <div className="flex items-center gap-2">
+                <button
+                  className="px-2 py-1 text-xs bg-gray-100 rounded border inline-flex items-center gap-1 text-blue-600 border-gray-200"
+                  onClick={() => updateShape(sh.id, { flipX: !sh.flipX })}
+                  title="Зеркально по X"
+                >
+                  <FlipHorizontal size={14} /> По X
+                </button>
+                <button
+                  className="px-2 py-1 text-xs bg-gray-100 rounded border inline-flex items-center gap-1 text-blue-600 border-gray-200"
+                  onClick={() => updateShape(sh.id, { flipY: !sh.flipY })}
+                  title="Зеркально по Y"
+                >
+                  <FlipVertical size={14} /> По Y
+                </button>
+              </div>
+            </Field>
           </Section>
         </Panel>
       ))}
@@ -766,20 +955,54 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       {/* -------------------------------- TEXTS -------------------------------- */}
       {selectedTexts.map((t) => (
         <Panel key={t.id}>
-          <Section icon={<TypeIcon size={16} />} title="Text" />
-          <Field label="Text"><TextInput type="text" value={t.text} placeholder="Введите текст" onChange={(e) => updateText(t.id, { text: e.target.value })} /></Field>
-          <Section icon={<Ruler size={14} />} title="Geometry" className="mt-2">
+          <Section icon={<TypeIcon size={16} />} title="Текст" />
+          <Field label="Текст">
+            <TextInput
+              type="text"
+              value={t.text}
+              placeholder="Введите текст"
+              onChange={(e) => updateText(t.id, { text: e.target.value })}
+            />
+          </Field>
+          <Section icon={<Ruler size={14} />} title="Геометрия" className="mt-2">
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Font size"><StepperNumber value={Math.round(t.fontSize)} min={8} max={256} step={1} onChange={(v) => updateText(t.id, { fontSize: clamp(v, 8, 256) })} /></Field>
-              <Field label="Rotation (°)"><StepperNumber value={Math.round(t.rotation ?? 0)} step={1} onChange={(v) => updateText(t.id, { rotation: v })} /></Field>
+              <Field label="Размер шрифта">
+                <StepperNumber
+                  value={Math.round(t.fontSize)}
+                  min={8}
+                  max={256}
+                  step={1}
+                  onChange={(v) => updateText(t.id, { fontSize: clamp(v, 8, 256) })}
+                />
+              </Field>
+              <Field label="Поворот (°)">
+                <StepperNumber
+                  value={Math.round(t.rotation ?? 0)}
+                  step={1}
+                  onChange={(v) => updateText(t.id, { rotation: v })}
+                />
+              </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Fill">
+              <Field label="Цвет">
                 <div className="flex items-center gap-2">
-                  <input type="color" value={t.fill ?? "#111827"} onChange={(e) => updateText(t.id, { fill: e.target.value })} className="w-10 h-10 rounded-lg border" />
+                  <input
+                    type="color"
+                    value={t.fill ?? "#111827"}
+                    onChange={(e) => updateText(t.id, { fill: e.target.value })}
+                    className="w-10 h-10 rounded-lg border"
+                  />
                   <div className="flex gap-2">
                     {COLOR_OPTIONS.map((c) => (
-                      <button key={c} style={{ backgroundColor: c }} className={`w-6 h-6 rounded-full border ${t.fill === c ? "ring-2 ring-blue-500" : ""}`} onClick={() => updateText(t.id, { fill: c })} title={c} />
+                      <button
+                        key={c}
+                        style={{ backgroundColor: c }}
+                        className={`w-6 h-6 rounded-full border ${
+                          t.fill === c ? "ring-2 ring-blue-500" : ""
+                        }`}
+                        onClick={() => updateText(t.id, { fill: c })}
+                        title={c}
+                      />
                     ))}
                   </div>
                 </div>
@@ -792,12 +1015,8 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       {/* -------------------------------- ZONES -------------------------------- */}
       {selectedZones.map((zone) => (
         <Panel key={zone.id}>
-          <Section icon={<Rows3 size={16} />} title={`Zone: ${zone.label}`} />
-          <Section
-           
-            title="Row labels side"
-            hint="Сторона меток рядов относительно зоны"
-          >
+          <Section icon={<Rows3 size={16} />} title={`Зона: ${zone.label}`} />
+          <Section title="Сторона меток рядов" hint="С какой стороны показывать метки рядов">
             <div className="flex items-center gap-2 mb-2">
               <button
                 type="button"
@@ -809,9 +1028,9 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                     : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50"
                 }`}
                 onClick={() => updateZone(zone.id, { rowLabelSide: "left" })}
-                title="Place row labels on the left"
+                title="Подписи рядов слева"
               >
-                Left
+                Слева
               </button>
               <button
                 type="button"
@@ -823,105 +1042,195 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                     : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50"
                 }`}
                 onClick={() => updateZone(zone.id, { rowLabelSide: "right" })}
-                title="Place row labels on the right"
+                title="Подписи рядов справа"
               >
-                Right
+                Справа
               </button>
-          
             </div>
           </Section>
 
-          <Section icon={<TypeIcon size={14} />} title="Label">
-            <Field label="Zone Label"><TextInput type="text" value={zone.label} onChange={(e) => updateZone(zone.id, { label: e.target.value })} /></Field>
+          <Section icon={<TypeIcon size={14} />} title="Подпись">
+            <Field label="Название зоны">
+              <TextInput
+                type="text"
+                value={zone.label}
+                onChange={(e) => updateZone(zone.id, { label: e.target.value })}
+              />
+            </Field>
           </Section>
 
-          <Section icon={<Ruler size={14} />} title="Geometry" hint="Позиция и размер зоны" className="mt-2">
+          <Section
+            icon={<Ruler size={14} />}
+            title="Геометрия"
+            hint="Позиция и размер зоны"
+            className="mt-2"
+          >
             <div className="grid grid-cols-2 gap-2">
-              <Field label="X"><StepperNumber value={Math.round(zone.x)} step={1} onChange={(v) => updateZone(zone.id, { x: v })} /></Field>
-              <Field label="Y"><StepperNumber value={Math.round(zone.y)} step={1} onChange={(v) => updateZone(zone.id, { y: v })} /></Field>
+              <Field label="X">
+                <StepperNumber
+                  value={Math.round(zone.x)}
+                  step={1}
+                  onChange={(v) => updateZone(zone.id, { x: v })}
+                />
+              </Field>
+              <Field label="Y">
+                <StepperNumber
+                  value={Math.round(zone.y)}
+                  step={1}
+                  onChange={(v) => updateZone(zone.id, { y: v })}
+                />
+              </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="Width">
-                <StepperNumber value={Math.round(zone.width)} min={10} step={1} onChange={(v) => updateZone(zone.id, { width: Math.max(10, v) })} onBlur={() => reflowZoneBySpacing(zone.id)} />
+              <Field label="Ширина">
+                <StepperNumber
+                  value={Math.round(zone.width)}
+                  min={10}
+                  step={1}
+                  onChange={(v) => updateZone(zone.id, { width: Math.max(10, v) })}
+                  onBlur={() => reflowZoneBySpacing(zone.id)}
+                />
               </Field>
-              <Field label="Height">
-                <StepperNumber value={Math.round(zone.height)} min={10} step={1} onChange={(v) => updateZone(zone.id, { height: Math.max(10, v) })} onBlur={() => reflowZoneBySpacing(zone.id)} />
+              <Field label="Высота">
+                <StepperNumber
+                  value={Math.round(zone.height)}
+                  min={10}
+                  step={1}
+                  onChange={(v) => updateZone(zone.id, { height: Math.max(10, v) })}
+                  onBlur={() => reflowZoneBySpacing(zone.id)}
+                />
               </Field>
             </div>
-            <Field label="Rotation (°)">
-  <TextInput
-    type="text"
-    inputMode="numeric"
-    value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
-    onChange={(e) => {
-      // позволяем пустую строку, минус и цифры во время ввода
-      const v = e.target.value;
-      if (v === "" || /^-?\d{0,4}$/.test(v)) {
-        setRotDraft(prev => ({ ...prev, [zone.id]: v }));
-      }
-    }}
-    onBlur={() => {
-      const raw = rotDraft[zone.id];
-      const n = toNum(raw === "" ? 0 : raw);   // ← пусто = 0
-      updateZone(zone.id, { rotation: n });
-      setRotDraft(prev => {
-        const copy = { ...prev };
-        delete copy[zone.id];
-        return copy;
-      });
-    }}
-    onKeyDown={(e) => {
-        stopHotkeys(e);
-      if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-      if (e.key === "Escape") {
-        // откатить черновик к текущему state
-        setRotDraft(prev => {
-          const copy = { ...prev };
-          delete copy[zone.id];
-          return copy;
-        });
-        (e.currentTarget as HTMLInputElement).blur();
-      }
-    }}
-    placeholder="e.g. -45"
-  />
-</Field>
-
+            <Field label="Поворот (°)">
+              <TextInput
+                type="text"
+                inputMode="numeric"
+                value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || /^-?\d{0,4}$/.test(v)) {
+                    setRotDraft((prev) => ({ ...prev, [zone.id]: v }));
+                  }
+                }}
+                onBlur={() => {
+                  const raw = rotDraft[zone.id];
+                  const n = toNum(raw === "" ? 0 : raw);
+                  updateZone(zone.id, { rotation: n });
+                  setRotDraft((prev) => {
+                    const copy = { ...prev };
+                    delete copy[zone.id];
+                    return copy;
+                  });
+                }}
+                onKeyDown={(e) => {
+                  stopHotkeys(e);
+                  if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+                  if (e.key === "Escape") {
+                    setRotDraft((prev) => {
+                      const copy = { ...prev };
+                      delete copy[zone.id];
+                      return copy;
+                    });
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder="например, -45"
+              />
+            </Field>
           </Section>
 
-          <Section icon={<Rows3 size={14} />} title="Seat layout" hint="Шаг сетки и нумерация" className="mt-3">
+          <Section
+            icon={<Rows3 size={14} />}
+            title="Раскладка мест"
+            hint="Шаг сетки и нумерация"
+            className="mt-3"
+          >
             <div className="grid grid-cols-2 gap-2 mt-1">
-              <button onClick={() => addColumnToZone(zone.id, "left")} className="text-blue-700 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-100 inline-flex items-center gap-2" title="Добавить колонку слева">
-                <ShuffleIcon size={14} /> + Column Left
+              <button
+                onClick={() => addColumnToZone(zone.id, "left")}
+                className="text-blue-700 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-100 inline-flex items-center gap-2"
+                title="Добавить колонку слева"
+              >
+                <ShuffleIcon size={14} /> + Колонка слева
               </button>
-              <button onClick={() => addColumnToZone(zone.id, "right")} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-700 border-gray-100 inline-flex items-center gap-2" title="Добавить колонку справа">
-                <ShuffleIcon size={14} /> + Column Right
+              <button
+                onClick={() => addColumnToZone(zone.id, "right")}
+                className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-700 border-gray-100 inline-flex items-center gap-2"
+                title="Добавить колонку справа"
+              >
+                <ShuffleIcon size={14} /> + Колонка справа
               </button>
             </div>
 
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-gray-600">Seat numbering:</span>
-              <button onClick={() => renumberZoneSeats(zone.id, "ltr")} className="text-black px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border">L→R</button>
-              <button onClick={() => renumberZoneSeats(zone.id, "rtl")} className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border text-black">R→L</button>
+              <span className="text-xs text-gray-600">Нумерация мест:</span>
+              <button
+                onClick={() => renumberZoneSeats(zone.id, "ltr")}
+                className="text-black px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border"
+              >
+                L→R
+              </button>
+              <button
+                onClick={() => renumberZoneSeats(zone.id, "rtl")}
+                className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg border text-black"
+              >
+                R→L
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-2">
-              <Field label="Seat spacing X (px)" hint="Горизонтальный шаг между местами">
-                <StepperNumber value={Math.round(zone.seatSpacingX ?? DEFAULT_SPACING_X)} min={4} step={1} onChange={(v) => updateZone(zone.id, { seatSpacingX: Math.max(4, v) }, { maybeReflowBySpacing: true })} />
+              <Field label="Шаг по X (px)" hint="Горизонтальный шаг между местами">
+                <StepperNumber
+                  value={Math.round(zone.seatSpacingX ?? DEFAULT_SPACING_X)}
+                  min={4}
+                  step={1}
+                  onChange={(v) =>
+                    updateZone(
+                      zone.id,
+                      { seatSpacingX: Math.max(4, v) },
+                      { maybeReflowBySpacing: true }
+                    )
+                  }
+                />
               </Field>
-              <Field label="Seat spacing Y (px)" hint="Вертикальный шаг между рядами">
-                <StepperNumber value={Math.round(zone.seatSpacingY ?? DEFAULT_SPACING_Y)} min={4} step={1} onChange={(v) => updateZone(zone.id, { seatSpacingY: Math.max(4, v) }, { maybeReflowBySpacing: true })} />
+              <Field label="Шаг по Y (px)" hint="Вертикальный шаг между рядами">
+                <StepperNumber
+                  value={Math.round(zone.seatSpacingY ?? DEFAULT_SPACING_Y)}
+                  min={4}
+                  step={1}
+                  onChange={(v) =>
+                    updateZone(
+                      zone.id,
+                      { seatSpacingY: Math.max(4, v) },
+                      { maybeReflowBySpacing: true }
+                    )
+                  }
+                />
               </Field>
             </div>
 
             <div className="mt-2 flex items-center gap-2">
-              <button onClick={() => reflowZoneBySpacing(zone.id)} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200">Apply (by spacing)</button>
-              <button onClick={() => reflowZone(zone.id)} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200">Distribute seats to fit</button>
-             
+              <button
+                onClick={() => reflowZoneBySpacing(zone.id)}
+                className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200"
+              >
+                Применить по шагам
+              </button>
+              <button
+                onClick={() => reflowZone(zone.id)}
+                className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200"
+              >
+                Растянуть места по зоне
+              </button>
             </div>
           </Section>
 
-          <Section icon={<PaintBucket size={14} />} title="Appearance" className="mt-3" hint="Фон зоны и прозрачность">
+          <Section
+            icon={<PaintBucket size={14} />}
+            title="Внешний вид"
+            className="mt-3"
+            hint="Фон зоны и прозрачность"
+          >
             <Field label="Фон зоны">
               <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg border border-gray-200 bg-white">
                 <div className="flex items-center gap-2">
@@ -937,10 +1246,18 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                       }}
                     />
                     {!zone.transparent && (
-                      <div className="absolute inset-0" style={{ backgroundColor: zone.color ?? zone.fill ?? "#ffffff", opacity: zone.fillOpacity ?? 1 }} />
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          backgroundColor: zone.color ?? zone.fill ?? "#ffffff",
+                          opacity: zone.fillOpacity ?? 1,
+                        }}
+                      />
                     )}
                   </div>
-                  <span className="text-xs text-gray-700">{zone.transparent ? "Прозрачный" : "Заливка"}</span>
+                  <span className="text-xs text-gray-700">
+                    {zone.transparent ? "Прозрачный" : "Заливка"}
+                  </span>
                 </div>
 
                 <button
@@ -953,14 +1270,27 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                   } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1`}
                   title="Переключить прозрачный фон"
                 >
-                  <span className={`pointer-events-none absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-white shadow ring-1 ring-gray-300 transition-all ${zone.transparent ? "left-4" : "left-1"}`} />
+                  <span
+                    className={`pointer-events-none absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-white shadow ring-1 ring-gray-300 transition-all ${
+                      zone.transparent ? "left-4" : "left-1"
+                    }`}
+                  />
                 </button>
               </div>
             </Field>
 
             {!zone.transparent && (
-              <Field label={`Opacity: ${Math.round((zone.fillOpacity ?? 1) * 100)}%`}>
-                <input type="range" min={0} max={100} value={Math.round((zone.fillOpacity ?? 1) * 100)} onChange={(e) => updateZone(zone.id, { fillOpacity: toInt(e.target.value, 100) / 100 })} className="w-full accent-blue-600" />
+              <Field label={`Прозрачность: ${Math.round((zone.fillOpacity ?? 1) * 100)}%`}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round((zone.fillOpacity ?? 1) * 100)}
+                  onChange={(e) =>
+                    updateZone(zone.id, { fillOpacity: toInt(e.target.value, 100) / 100 })
+                  }
+                  className="w-full accent-blue-600"
+                />
               </Field>
             )}
           </Section>
@@ -972,33 +1302,88 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
         const rowSeats = seats.filter((s) => s.rowId === row.id);
         return (
           <Panel key={row.id}>
-            <Section icon={<Rows3 size={16} />} title={`Row: ${row.label}`} />
-            <Section icon={<TypeIcon size={14} />} title="Label">
-              <Field label="Row Label"><TextInput type="text" value={row.label} onChange={(e) => setState((prev) => ({ ...prev, rows: prev.rows.map((r) => (r.id === row.id ? { ...r, label: e.target.value } : r)) }))} /></Field>
+            <Section icon={<Rows3 size={16} />} title={`Ряд: ${row.label}`} />
+            <Section icon={<TypeIcon size={14} />} title="Подпись">
+              <Field label="Название ряда">
+                <TextInput
+                  type="text"
+                  value={row.label}
+                  onChange={(e) =>
+                    setState((prev) => ({
+                      ...prev,
+                      rows: prev.rows.map((r) =>
+                        r.id === row.id ? { ...r, label: e.target.value } : r
+                      ),
+                    }))
+                  }
+                />
+              </Field>
             </Section>
 
-            <Section icon={<Ruler size={14} />} title="Geometry" className="mt-2">
+            <Section icon={<Ruler size={14} />} title="Геометрия" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
-                <Field label="X"><StepperNumber value={Math.round(row.x)} step={1} onChange={(v) => updateRowAndSeats(row.id, { x: v })} /></Field>
-                <Field label="Y"><StepperNumber value={Math.round(row.y)} step={1} onChange={(v) => updateRowAndSeats(row.id, { y: v })} /></Field>
+                <Field label="X">
+                  <StepperNumber
+                    value={Math.round(row.x)}
+                    step={1}
+                    onChange={(v) => updateRowAndSeats(row.id, { x: v })}
+                  />
+                </Field>
+                <Field label="Y">
+                  <StepperNumber
+                    value={Math.round(row.y)}
+                    step={1}
+                    onChange={(v) => updateRowAndSeats(row.id, { y: v })}
+                  />
+                </Field>
               </div>
             </Section>
 
             {rowSeats.length > 0 && (
-              <Section icon={<Rows3 size={14} />} title="Seats in row" className="mt-3" hint="Распределение и нумерация">
+              <Section
+                icon={<Rows3 size={14} />}
+                title="Места в ряду"
+                className="mt-3"
+                hint="Распределение и нумерация"
+              >
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button onClick={() => distributeRowSeats(row.id)} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200">Distribute horizontally</button>
-                  <button onClick={() => renumberRowSeatsDir(row.id, "ltr")} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200">Number L→R</button>
+                  <button
+                    onClick={() => distributeRowSeats(row.id)}
+                    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200"
+                  >
+                    Равномерно по ширине
+                  </button>
+                  <button
+                    onClick={() => renumberRowSeatsDir(row.id, "ltr")}
+                    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200"
+                  >
+                    Нумерация L→R
+                  </button>
                 </div>
                 <div className="mt-2">
-                  <button onClick={() => renumberRowSeatsDir(row.id, "rtl")} className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200">Number R→L</button>
+                  <button
+                    onClick={() => renumberRowSeatsDir(row.id, "rtl")}
+                    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg border text-blue-600 border-gray-200"
+                  >
+                    Нумерация R→L
+                  </button>
                 </div>
 
-                <h4 className="text-sm font-semibold text-gray-800 mb-3 mt-4">Apply to all seats in row</h4>
+                <h4 className="text-sm font-semibold text-gray-800 mb-3 mt-4">
+                  Применить ко всем местам в ряду
+                </h4>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Status">
-                    <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateAllSeatsOfSelectedRows({ status: e.currentTarget.value as Seat["status"] })}>
-                      <option value="">— keep —</option>
+                  <Field label="Статус">
+                    <Select
+                      defaultValue=""
+                      onChange={(e) =>
+                        e.currentTarget.value &&
+                        updateAllSeatsOfSelectedRows({
+                          status: e.currentTarget.value as Seat["status"],
+                        })
+                      }
+                    >
+                      <option value="">— оставить —</option>
                       {STATUS_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
@@ -1006,9 +1391,15 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Category">
-                    <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateAllSeatsOfSelectedRows({ category: e.currentTarget.value })}>
-                      <option value="">— keep —</option>
+                  <Field label="Категория">
+                    <Select
+                      defaultValue=""
+                      onChange={(e) =>
+                        e.currentTarget.value &&
+                        updateAllSeatsOfSelectedRows({ category: e.currentTarget.value })
+                      }
+                    >
+                      <option value="">— оставить —</option>
                       {CATEGORY_OPTIONS.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
@@ -1019,15 +1410,27 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label={`Radius (min ${RADIUS_MIN}, max ${RADIUS_MAX})`}>
-                    <StepperNumber value={12} min={RADIUS_MIN} max={RADIUS_MAX} step={1} onChange={(v) => updateAllSeatsOfSelectedRows({ radius: v })} />
+                  <Field label={`Радиус (мин. ${RADIUS_MIN}, макс. ${RADIUS_MAX})`}>
+                    <StepperNumber
+                      value={12}
+                      min={RADIUS_MIN}
+                      max={RADIUS_MAX}
+                      step={1}
+                      onChange={(v) => updateAllSeatsOfSelectedRows({ radius: v })}
+                    />
                   </Field>
                 </div>
 
-                <Field label="Color">
+                <Field label="Цвет">
                   <div className="flex gap-2">
                     {COLOR_OPTIONS.map((c) => (
-                      <button key={c} style={{ backgroundColor: c }} className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition" onClick={() => updateAllSeatsOfSelectedRows({ fill: c })} title={c} />
+                      <button
+                        key={c}
+                        style={{ backgroundColor: c }}
+                        className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition"
+                        onClick={() => updateAllSeatsOfSelectedRows({ fill: c })}
+                        title={c}
+                      />
                     ))}
                   </div>
                 </Field>
@@ -1040,11 +1443,17 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
       {/* -------------------------------- SEATS -------------------------------- */}
       {selectedSeats.length > 1 && (
         <Panel>
-          <Section icon={<Rows3 size={16} />} title="Bulk edit — Seats" />
+          <Section icon={<Rows3 size={16} />} title="Массовое редактирование — Места" />
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Status">
-              <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateSelectedSeatsBulk({ status: e.currentTarget.value as Seat["status"] })}>
-                <option value="">— keep —</option>
+            <Field label="Статус">
+              <Select
+                defaultValue=""
+                onChange={(e) =>
+                  e.currentTarget.value &&
+                  updateSelectedSeatsBulk({ status: e.currentTarget.value as Seat["status"] })
+                }
+              >
+                <option value="">— оставить —</option>
                 {STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -1052,9 +1461,15 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                 ))}
               </Select>
             </Field>
-            <Field label="Category">
-              <Select defaultValue="" onChange={(e) => e.currentTarget.value && updateSelectedSeatsBulk({ category: e.currentTarget.value })}>
-                <option value="">— keep —</option>
+            <Field label="Категория">
+              <Select
+                defaultValue=""
+                onChange={(e) =>
+                  e.currentTarget.value &&
+                  updateSelectedSeatsBulk({ category: e.currentTarget.value })
+                }
+              >
+                <option value="">— оставить —</option>
                 {CATEGORY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -1065,15 +1480,27 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Field label={`Radius (min ${RADIUS_MIN}, max ${RADIUS_MAX})`}>
-              <StepperNumber value={12} min={RADIUS_MIN} max={RADIUS_MAX} step={1} onChange={(v) => updateSelectedSeatsBulk({ radius: v })} />
+            <Field label={`Радиус (мин. ${RADIUS_MIN}, макс. ${RADIUS_MAX})`}>
+              <StepperNumber
+                value={12}
+                min={RADIUS_MIN}
+                max={RADIUS_MAX}
+                step={1}
+                onChange={(v) => updateSelectedSeatsBulk({ radius: v })}
+              />
             </Field>
           </div>
 
-          <Field label="Color">
+          <Field label="Цвет">
             <div className="flex gap-2">
               {COLOR_OPTIONS.map((c) => (
-                <button key={c} style={{ backgroundColor: c }} className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition" onClick={() => updateSelectedSeatsBulk({ fill: c })} title={c} />
+                <button
+                  key={c}
+                  style={{ backgroundColor: c }}
+                  className="w-7 h-7 rounded-lg shadow-sm hover:scale-105 transition"
+                  onClick={() => updateSelectedSeatsBulk({ fill: c })}
+                  title={c}
+                />
               ))}
             </div>
           </Field>
@@ -1084,12 +1511,24 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
         const row = seat.rowId ? rows.find((r) => r.id === seat.rowId) : undefined;
         return (
           <Panel key={seat.id}>
-            <Section icon={<Rows3 size={16} />} title={`Seat: ${seat.label}`} />
-            <Field label="Seat Label"><TextInput type="text" value={seat.label} onChange={(e) => updateSeat(seat.id, { label: e.target.value })} /></Field>
+            <Section icon={<Rows3 size={16} />} title={`Место: ${seat.label}`} />
+            <Field label="Подпись места">
+              <TextInput
+                type="text"
+                value={seat.label}
+                onChange={(e) => updateSeat(seat.id, { label: e.target.value })}
+              />
+            </Field>
 
-            <Section icon={<Ruler size={14} />} title="Geometry" className="mt-2">
+            <Section icon={<Ruler size={14} />} title="Геометрия" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
-                <Field label="X"><StepperNumber value={Math.round(seat.x)} step={1} onChange={(v) => updateSeat(seat.id, { x: v })} /></Field>
+                <Field label="X">
+                  <StepperNumber
+                    value={Math.round(seat.x)}
+                    step={1}
+                    onChange={(v) => updateSeat(seat.id, { x: v })}
+                  />
+                </Field>
                 <Field label="Y">
                   <StepperNumber
                     value={Math.round(seat.y)}
@@ -1109,10 +1548,15 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
               </div>
             </Section>
 
-            <Section icon={<PaintBucket size={14} />} title="Appearance" className="mt-2">
+            <Section icon={<PaintBucket size={14} />} title="Внешний вид" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Status">
-                  <Select value={seat.status} onChange={(e) => updateSeat(seat.id, { status: e.target.value as Seat["status"] })}>
+                <Field label="Статус">
+                  <Select
+                    value={seat.status}
+                    onChange={(e) =>
+                      updateSeat(seat.id, { status: e.target.value as Seat["status"] })
+                    }
+                  >
                     {STATUS_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1120,8 +1564,11 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
                     ))}
                   </Select>
                 </Field>
-                <Field label="Category">
-                  <Select value={(seat.category as string) || "standard"} onChange={(e) => updateSeat(seat.id, { category: e.target.value })}>
+                <Field label="Категория">
+                  <Select
+                    value={(seat.category as string) || "standard"}
+                    onChange={(e) => updateSeat(seat.id, { category: e.target.value })}
+                  >
                     {CATEGORY_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1132,18 +1579,33 @@ const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <Field label={`Radius (min ${RADIUS_MIN}, max ${RADIUS_MAX})`}>
-                  <StepperNumber value={Math.round(seat.radius)} min={RADIUS_MIN} max={RADIUS_MAX} step={1} onChange={(v) => updateSeat(seat.id, { radius: clamp(v, RADIUS_MIN, RADIUS_MAX) })} />
+                <Field label={`Радиус (мин. ${RADIUS_MIN}, макс. ${RADIUS_MAX})`}>
+                  <StepperNumber
+                    value={Math.round(seat.radius)}
+                    min={RADIUS_MIN}
+                    max={RADIUS_MAX}
+                    step={1}
+                    onChange={(v) =>
+                      updateSeat(seat.id, { radius: clamp(v, RADIUS_MIN, RADIUS_MAX) })
+                    }
+                  />
                 </Field>
-                <Field label="Color">
+                <Field label="Цвет">
                   <div className="flex items-center gap-2">
-                    <input type="color" value={seat.fill} onChange={(e) => updateSeat(seat.id, { fill: e.target.value })} className="w-10 h-10 rounded-lg border" />
+                    <input
+                      type="color"
+                      value={seat.fill}
+                      onChange={(e) => updateSeat(seat.id, { fill: e.target.value })}
+                      className="w-10 h-10 rounded-lg border"
+                    />
                     <div className="flex gap-2">
                       {COLOR_OPTIONS.map((c) => (
                         <button
                           key={c}
                           style={{ backgroundColor: c }}
-                          className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${seat.fill === c ? "ring-2 ring-offset-1 ring-blue-500" : ""}`}
+                          className={`w-6 h-6 rounded-full shadow-inner transition-transform hover:scale-110 ${
+                            seat.fill === c ? "ring-2 ring-offset-1 ring-blue-500" : ""
+                          }`}
                           onClick={() => updateSeat(seat.id, { fill: c })}
                           title={c}
                         />

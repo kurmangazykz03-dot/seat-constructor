@@ -1,7 +1,7 @@
 // components/seatmap/ZoneComponent.tsx
 import Konva from "konva";
 import React, { useMemo, useRef } from "react";
-import { Group, Rect, Text, Path } from "react-konva";
+import { Group, Path, Rect, Text } from "react-konva";
 
 import { SeatmapState } from "../../pages/EditorPage";
 import { Row, Seat, Zone } from "../../types/types";
@@ -14,7 +14,7 @@ import { buildAngleWedgePathClamped } from "./zonePath";
 import { warpPointLocal } from "./zoneWarp";
 
 import type { KonvaEventObject } from "konva/lib/Node";
-import { crisp, crispRect,crispSize,crispStrokeRect} from "../../utils/crisp";
+import { crisp, crispStrokeRect } from "../../utils/crisp";
 
 interface ZoneComponentProps {
   zone: Zone;
@@ -23,24 +23,32 @@ interface ZoneComponentProps {
   selectedIds: string[];
   currentTool: string;
   hoveredZoneId: string | null;
-   scale: number; 
+  scale: number; // текущий zoom-коэффициент (для crisp-отрисовки)
 
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   setHoveredZoneId: React.Dispatch<React.SetStateAction<string | null>>;
 
-  handleElementClick: (
-    id: string,
-    e: KonvaEventObject<MouseEvent | TouchEvent>
-  ) => void;
+  // клик по элементу (место/ряд/зона) → наружу
+  handleElementClick: (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => void;
+
+  // реф на группу зоны, чтобы снаружи, при необходимости, можно было преобразовывать координаты
   setGroupRef?: (node: Konva.Group | null) => void;
+
+  // режим read-only (Viewer)
   isViewerMode?: boolean;
+
+  // флаг выделения зоны (если не передан — считаем по selectedIds)
   isSelected?: boolean;
 }
 
+// базовый радиус создаваемых мест
 const seatRadius = 12;
 
-
+/**
+ * Вспомогательная фабрика: создаёт ряд и N мест в зоне с равномерным шагом.
+ * Координаты — в локальной системе зоны (0..width / 0..height).
+ */
 const createRowWithSeats = (
   zoneId: string,
   rowIndex: number,
@@ -93,14 +101,15 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
   handleElementClick,
   setGroupRef,
   isSelected: isSelectedProp,
-  scale
+  scale,
 }) => {
-  const ROW_LABEL_W = 28; // ширина колонки, px
-  const ROW_LABEL_GAP = 6; // зазор от зоны
+  // ширина колонки с подписями рядов
+  const ROW_LABEL_W = 28;
+  const ROW_LABEL_GAP = 6;
   const rowLabelSide = zone.rowLabelSide ?? "left";
   const fontSizeRow = 14;
 
-  // ✅ шаги зоны — ВНУТРИ компонента
+  // шаг сетки для мест внутри зоны
   const stepX = zone.seatSpacingX ?? 30;
   const stepY = zone.seatSpacingY ?? 30;
 
@@ -110,7 +119,8 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
 
   const groupRef = useRef<Konva.Group | null>(null);
 
-  // если сверху пришёл флаг — используем его; иначе вычисляем по selectedIds
+  // если флаг выделения пришёл сверху — используем его,
+  // иначе считаем, выделена ли зона по selectedIds
   const isSelected = isSelectedProp ?? selectedIds.includes(zone.id);
 
   const handleGroupRef = (node: Konva.Group | null) => {
@@ -118,47 +128,51 @@ const ZoneComponent: React.FC<ZoneComponentProps> = ({
     setGroupRef?.(node);
   };
 
-const hasAngles =
-   Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
+  // есть ли у зоны клиновые углы (для изгиба содержимого)
+  const hasAngles = Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
 
- // ЕДИНАЯ логика: если углы заданы — показываем контент уже ИЗОГНУТЫМ
- const warpIf = (p: { x: number; y: number }) =>
-   hasAngles ? warpPointLocal(p.x, p.y, zone) : p;
+  // Если углы заданы — ВСЁ содержимое зоны (ряды, места) отображаем в изогнутых координатах.
+  // В state остаются прямоугольные координаты, искривление — только на отрисовку.
+  const warpIf = (p: { x: number; y: number }) => (hasAngles ? warpPointLocal(p.x, p.y, zone) : p);
 
-
-
+  // Рендер-версии рядов с учётом изгиба
   const rowsRender = useMemo(
     () => zoneRows.map((r) => ({ ...r, ...warpIf({ x: r.x, y: r.y }) })),
     [zoneRows, zone, currentTool]
   );
 
+  // Рендер-версии мест с учётом изгиба
   const seatsRender = useMemo(
     () => zoneSeats.map((s) => ({ ...s, ...warpIf({ x: s.x, y: s.y }) })),
     [zoneSeats, zone, currentTool]
   );
 
-  const seatsWithoutRowRender = useMemo(
-    () => seatsRender.filter((s) => !s.rowId),
-    [seatsRender]
-  );
+  // Свободные места (внутри зоны, но без rowId) — например, вручную добавленные
+  const seatsWithoutRowRender = useMemo(() => seatsRender.filter((s) => !s.rowId), [seatsRender]);
 
+  /**
+   * Обработка клика по зоне.
+   * В зависимости от currentTool:
+   *  - add-seat: добавление места по клику;
+   *  - add-row: добавление нового ряда;
+   *  - select: обычное выделение зоны.
+   */
   const handleZoneClick = (e: any) => {
     e.cancelBubble = true;
 
+    // Режим: добавить место
     if (currentTool === "add-seat") {
       const stage = e.target.getStage();
       const pointer = stage.getPointerPosition();
       if (!pointer || !groupRef.current) return;
 
+      // Переводим координаты клика в локальную систему зоны
       const transform = groupRef.current.getAbsoluteTransform().copy().invert();
       const { x: localX, y: localY } = transform.point(pointer);
 
-      // ✅ вместо несуществующей seatSpacingY — используем stepY
+      // Ищем родительский ряд под курсором
       const parentRow = rows.find(
-        (r) =>
-          r.zoneId === zone.id &&
-          localY >= r.y - stepY / 2 &&
-          localY <= r.y + stepY / 2
+        (r) => r.zoneId === zone.id && localY >= r.y - stepY / 2 && localY <= r.y + stepY / 2
       );
 
       const countInRow = parentRow
@@ -187,25 +201,20 @@ const hasAngles =
       return;
     }
 
+    // Режим: добавить ряд
     if (currentTool === "add-row") {
-      // определяем кол-во колонок в зоне (максимальный colIndex), fallback = 5
-      const cols =
-        zoneSeats.length > 0
-          ? Math.max(...zoneSeats.map((s) => s.colIndex || 1))
-          : 5;
+      // Число колонок берём по макс. colIndex в зоне, fallback = 5
+      const cols = zoneSeats.length > 0 ? Math.max(...zoneSeats.map((s) => s.colIndex || 1)) : 5;
 
       const newRowIndex = zoneRows.length;
 
-      // выравниваем offsetX: берём x первого ряда (если есть), иначе центрируем в зоне
+      // offsetX: если уже есть ряд — берём его x; иначе центрируем по зоне
       const existingOffsetX =
-        zoneRows.length > 0
-          ? zoneRows[0].x
-          : Math.max(0, (zone.width - cols * stepX) / 2);
+        zoneRows.length > 0 ? zoneRows[0].x : Math.max(0, (zone.width - cols * stepX) / 2);
 
-      // новый ряд появляется под текущим «дном» зоны
+      // новый ряд — под текущим "дном" зоны
       const localY = zone.height + stepY / 2;
 
-      // ✅ передаём stepX/stepY в фабрику
       const { row: newRow, seats: newSeats } = createRowWithSeats(
         zone.id,
         newRowIndex,
@@ -230,17 +239,17 @@ const hasAngles =
 
       setState((prev) => ({
         ...prev,
-        zones: prev.zones.map((z) =>
-          z.id === zone.id ? { ...z, height: z.height + stepY } : z
-        ),
+        // увеличиваем высоту зоны, чтобы новый ряд поместился "внутри"
+        zones: prev.zones.map((z) => (z.id === zone.id ? { ...z, height: z.height + stepY } : z)),
         rows: [...prev.rows, adjustedRow],
         seats: [...prev.seats, ...adjustedSeats],
       }));
       return;
     }
 
-    // обычное выделение
+    // Обычное выделение зоны
     if (e.evt.shiftKey) {
+      // мультивыделение
       setSelectedIds((prev) =>
         prev.includes(zone.id) ? prev.filter((i) => i !== zone.id) : [...prev, zone.id]
       );
@@ -248,20 +257,28 @@ const hasAngles =
       setSelectedIds([zone.id]);
     }
   };
-const handleZoneClickLocal = (e: any) => {
-  const nm = e.target?.name?.();
-  if (nm === "zone-bg" || nm === "zone-ui") {
-    // не cancelBubble: пусть событие дойдёт до Stage для старта marquee
-    return;
-  }
-  if (isViewerMode) {
-    e.cancelBubble = true;
-    return;
-  }
-  handleZoneClick(e);
-};
 
+  /**
+   * Обёртка над handleZoneClick:
+   *  - пропускаем клики по фону зоны (zone-bg, zone-ui) до Stage для рамки выбора;
+   *  - в Viewer режиме блокируем внутреннюю логику селекта.
+   */
+  const handleZoneClickLocal = (e: any) => {
+    const nm = e.target?.name?.();
+    if (nm === "zone-bg" || nm === "zone-ui") {
+      // не cancelBubble → пусть Stage увидит down для marquee selection
+      return;
+    }
+    if (isViewerMode) {
+      e.cancelBubble = true;
+      return;
+    }
+    handleZoneClick(e);
+  };
 
+  /**
+   * Перетаскивание всей зоны целиком (x,y зоны меняются, содержимое — в локальных координатах).
+   */
   const handleZoneDragEnd = (e: any) => {
     e.cancelBubble = true;
     const node = e.target as any;
@@ -270,12 +287,15 @@ const handleZoneClickLocal = (e: any) => {
 
     setState((prev) => ({
       ...prev,
-      zones: prev.zones.map((z) =>
-        z.id === zone.id ? { ...z, x: newX, y: newY } : z
-      ),
+      zones: prev.zones.map((z) => (z.id === zone.id ? { ...z, x: newX, y: newY } : z)),
     }));
   };
 
+  /**
+   * Завершение перетаскивания одного места внутри зоны:
+   *    - привязка к ближайшему ряду (applySeatDrop)
+   *    - при необходимости — перенумерация
+   */
   const onSeatDragEnd = (seatAfterDrag: Seat) => {
     setState((prev) => {
       const z = prev.zones.find((zz) => zz.id === zone.id);
@@ -292,43 +312,47 @@ const handleZoneClickLocal = (e: any) => {
     });
   };
 
-  const strokeColor =
-    isSelected
-      ? "#3B82F6"
-      : hoveredZoneId === zone.id && currentTool === "add-row"
+  // Цвет обводки зоны: выделена / подсвечена под add-row / обычная
+  const strokeColor = isSelected
+    ? "#3B82F6"
+    : hoveredZoneId === zone.id && currentTool === "add-row"
       ? "orange"
       : "#CBD5E1";
 
   const strokeWidth = isSelected || hoveredZoneId === zone.id ? 2 : 1;
 
-  const hasCone =
-   Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
- // Форму зоны (клин) рисуем ВСЕГДА, если углы заданы
- const showConeFill = hasCone;
- const bendPath = showConeFill
-   ? buildAngleWedgePathClamped(
-       zone.width,
-       zone.height,
-       zone.angleLeftDeg as number,
-       zone.angleRightDeg as number
-     )
-   : null;
+  // Есть ли клиновая форма (клин по углам)
+  const hasCone = Number.isFinite(zone.angleLeftDeg) && Number.isFinite(zone.angleRightDeg);
 
-const sw = strokeWidth; // 1 или 2 у тебя
-const r = crispStrokeRect(0, 0, zone.width, zone.height, scale, sw);
+  // Если углы заданы — рисуем зону клином (Path), иначе прямоугольник
+  const showConeFill = hasCone;
+  const bendPath = showConeFill
+    ? buildAngleWedgePathClamped(
+        zone.width,
+        zone.height,
+        zone.angleLeftDeg as number,
+        zone.angleRightDeg as number
+      )
+    : null;
 
-const col = {
-  x: 0,
-  y: 0,
-  w: ROW_LABEL_W,
-  h: zone.height,
-};
-const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
+  // crisp-координаты для прямоугольной рамки зоны (чёткие границы на разных scale)
+  const sw = strokeWidth;
+  const r = crispStrokeRect(0, 0, zone.width, zone.height, scale, sw);
+
+  // геометрия колонки с номерами рядов
+  const col = {
+    x: 0,
+    y: 0,
+    w: ROW_LABEL_W,
+    h: zone.height,
+  };
+  const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
+
   return (
     <Group
       ref={handleGroupRef}
       x={crisp(zone.x, scale)}
-  y={crisp(zone.y, scale)}
+      y={crisp(zone.y, scale)}
       rotation={zone.rotation ?? 0}
       onMouseEnter={() => setHoveredZoneId(zone.id)}
       onMouseLeave={() => setHoveredZoneId(null)}
@@ -336,62 +360,71 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
       onClick={handleZoneClickLocal}
       onDragEnd={handleZoneDragEnd}
     >
-       {showConeFill ? (
-  <Path
-    data={bendPath!}
-    name="zone-ui"
-    fill={zone.fill} fillEnabled={!zone.transparent}
-    fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-    stroke={strokeColor} strokeWidth={strokeWidth}
-    strokeScaleEnabled={false} hitStrokeWidth={12} perfectDrawEnabled={false}
-  />
-) : (
-  <Rect
-    x={r.x} y={r.y} width={r.width} height={r.height}
-    name="zone-ui"
-    fill={zone.fill} fillEnabled={!zone.transparent}
-    fillOpacity={zone.transparent ? 0 : zone.fillOpacity ?? 1}
-    stroke={strokeColor} strokeWidth={sw}
-    strokeScaleEnabled={false} hitStrokeWidth={12} perfectDrawEnabled={false}
-  />
-)}
+      {/* Основной фон зоны: либо клин (Path), либо прямоугольник */}
+      {showConeFill ? (
+        <Path
+          data={bendPath!}
+          name="zone-ui"
+          fill={zone.fill}
+          fillEnabled={!zone.transparent}
+          fillOpacity={zone.transparent ? 0 : (zone.fillOpacity ?? 1)}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeScaleEnabled={false}
+          hitStrokeWidth={12}
+          perfectDrawEnabled={false}
+        />
+      ) : (
+        <Rect
+          x={r.x}
+          y={r.y}
+          width={r.width}
+          height={r.height}
+          name="zone-ui"
+          fill={zone.fill}
+          fillEnabled={!zone.transparent}
+          fillOpacity={zone.transparent ? 0 : (zone.fillOpacity ?? 1)}
+          stroke={strokeColor}
+          strokeWidth={sw}
+          strokeScaleEnabled={false}
+          hitStrokeWidth={12}
+          perfectDrawEnabled={false}
+        />
+      )}
 
-<Text
-  text={zone.label}
-  x={crisp(zone.width / 2, scale)}   
-  y={crisp(-18, scale)}              
-  fontSize={14}
-  fill="black"
-  align="center"
-  offsetX={(zone.label.length * 7) / 2}
-/>
+      {/* Подпись зоны над центром */}
+      <Text
+        text={zone.label}
+        x={crisp(zone.width / 2, scale)}
+        y={crisp(-18, scale)}
+        fontSize={14}
+        fill="black"
+        align="center"
+        offsetX={(zone.label.length * 7) / 2}
+      />
 
-
+      {/* Колонка с подписями рядов слева или справа от зоны */}
       {rowsRender.length > 0 && (
         <Group
-          x={
-            rowLabelSide === "left"
-              ? -ROW_LABEL_W - ROW_LABEL_GAP
-              : zone.width + ROW_LABEL_GAP
-          }
+          x={rowLabelSide === "left" ? -ROW_LABEL_W - ROW_LABEL_GAP : zone.width + ROW_LABEL_GAP}
           y={0}
           listening={currentTool === "select" && !isViewerMode}
         >
-          {/* фон колонки */}
+          {/* фон колонки c номером ряда */}
           <Rect
-             x={colR.x}
-  y={colR.y}
-  width={colR.width}
-  height={colR.height}
+            x={colR.x}
+            y={colR.y}
+            width={colR.width}
+            height={colR.height}
             fill="#ffffff"
             stroke="#CBD5E1"
-             strokeWidth={1}
-  strokeScaleEnabled={false}
+            strokeWidth={1}
+            strokeScaleEnabled={false}
           />
 
-          {/* сами ярлыки рядов — берём label из row */}
+          {/* сами ярлыки рядов (label из Row) */}
           {rowsRender
-            .slice() // если потребуется сортировка по y
+            .slice()
             .sort((a, b) => a.y - b.y)
             .map((r) => (
               <Text
@@ -411,19 +444,21 @@ const colR = crispStrokeRect(col.x, col.y, col.w, col.h, scale, 1);
         </Group>
       )}
 
+      {/* Места в зоне без rowId (свободные) */}
       {seatsWithoutRowRender.map((seat) => (
         <SeatComponent
           key={seat.id}
-    seat={seat}
-    isSelected={selectedIds.includes(seat.id)}
-    isRowSelected={false}            // ← добавили
-    onClick={handleElementClick}
-    isViewerMode={isViewerMode || currentTool === "bend"}
-    onDragEnd={(_e, s) => onSeatDragEnd(s)}
-    scale={scale}
+          seat={seat}
+          isSelected={selectedIds.includes(seat.id)}
+          isRowSelected={false}
+          onClick={handleElementClick}
+          isViewerMode={isViewerMode || currentTool === "bend"}
+          onDragEnd={(_e, s) => onSeatDragEnd(s)}
+          scale={scale}
         />
       ))}
 
+      {/* Ряды и их места */}
       {rowsRender.map((row) => (
         <RowComponent
           key={row.id}

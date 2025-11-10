@@ -1,4 +1,18 @@
-// src/components/editor/PropertiesPanel.tsx
+/**
+ * PropertiesPanel — правый панельный редактор свойств.
+ *
+ * Отвечает за:
+ *  • отображение агрегированной информации по выделению (зоны, ряды, места, тексты, фигуры);
+ *  • редактирование геометрии (x/y/width/height/rotation);
+ *  • редактирование визуального вида (цвет, обводка, прозрачность, пресеты);
+ *  • массовое редактирование (несколько фигур / мест / рядов / зон одновременно);
+ *  • вспомогательные операции: рефлоу мест в зоне, добавление колонок, нумерация и пр.
+ *
+ * Важная идея:
+ *  - Компонент НЕ хранит основной state схемы, а только вызывает setState(updater),
+ *    который приходит сверху (EditorPage) и обёрнут в историю (undo/redo).
+ */
+
 import {
   BadgeInfo,
   Box as BoxIcon,
@@ -16,6 +30,7 @@ import type { SeatmapState } from "../../pages/EditorPage";
 import type { Row, Seat, ShapeObject, TextObject, Zone } from "../../types/types";
 
 /* --------------------------- constants & helpers -------------------------- */
+
 type ShapePreset = {
   key: string;
   label: string;
@@ -25,8 +40,16 @@ type ShapePreset = {
   opacity?: number;
 };
 
+/** Готовые пресеты для фигур (быстрый выбор темы оформления) */
 const SHAPE_PRESETS: ShapePreset[] = [
-  { key: "light", label: "Светлый", fill: "#ffffff", stroke: "#1f2937", strokeWidth: 1, opacity: 1 },
+  {
+    key: "light",
+    label: "Светлый",
+    fill: "#ffffff",
+    stroke: "#1f2937",
+    strokeWidth: 1,
+    opacity: 1,
+  },
   { key: "dark", label: "Тёмный", fill: "#111827", stroke: "#ffffff", strokeWidth: 1, opacity: 1 },
   {
     key: "accent",
@@ -36,7 +59,14 @@ const SHAPE_PRESETS: ShapePreset[] = [
     strokeWidth: 1,
     opacity: 1,
   },
-  { key: "muted", label: "Приглушённый", fill: "#e5e7eb", stroke: "#6b7280", strokeWidth: 1, opacity: 1 },
+  {
+    key: "muted",
+    label: "Приглушённый",
+    fill: "#e5e7eb",
+    stroke: "#6b7280",
+    strokeWidth: 1,
+    opacity: 1,
+  },
   {
     key: "outline",
     label: "Контур",
@@ -55,38 +85,45 @@ const SHAPE_PRESETS: ShapePreset[] = [
   },
 ];
 
+/** Категории мест, используемые в селектах */
 const CATEGORY_OPTIONS = [
   { value: "standard", label: "Стандарт" },
   { value: "vip", label: "VIP" },
   { value: "discount", label: "Льготный" },
 ] as const;
 
+/** Статусы мест */
 const STATUS_OPTIONS = [
   { value: "available", label: "Доступно" },
   { value: "occupied", label: "Занято" },
   { value: "disabled", label: "Недоступно" },
 ] as const;
 
+/** Быстрые цвета для фигур/текста/мест */
 const COLOR_OPTIONS = ["#22c55e", "#ef4444", "#9ca3af", "#eab308"];
-const SNAP_Y_THRESHOLD = 12;
+
+const SNAP_Y_THRESHOLD = 12; // порог «примагничивания» сиденья к ряду по Y
 const RADIUS_MIN = 6;
 const RADIUS_MAX = 30;
 const DEFAULT_RADIUS = 12;
 const DEFAULT_SPACING_X = 30;
 const DEFAULT_SPACING_Y = 30;
 
+/** Базовые цвета для статусов мест */
 const STATUS_COLOR = {
   available: "#22c55e",
   occupied: "#ef4444",
   disabled: "#9ca3af",
 } as const;
 
+/** Цвета по категориям (если статус — available) */
 const CATEGORY_COLOR: Record<string, string> = {
   standard: "#22c55e",
   vip: "#eab308",
   discount: "#22c55e",
 };
 
+/** Подбор цвета места по статусу и категории */
 function colorFor(status: Seat["status"], category?: string) {
   if (status === "occupied") return STATUS_COLOR.occupied;
   if (status === "disabled") return STATUS_COLOR.disabled;
@@ -106,30 +143,35 @@ const toNum = (v: unknown, fallback = 0) => {
 
 /* --------------------------------- UI bits -------------------------------- */
 
+/** Обёртка секции панели — белая карточка */
 const Panel = ({ children }: { children: React.ReactNode }) => (
   <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">{children}</div>
 );
 
+/** Заголовок секции с иконкой и необязательной подсказкой */
 const Section: React.FC<{
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   title: string;
   hint?: string;
   className?: string;
 }> = ({ icon, title, hint, className, children }) => (
   <div className={className ?? ""}>
-    <div className="flex items-center gap-2 mb-2">
-      <span className="text-gray-600">{icon}</span>
-      <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
-      {hint ? (
-        <span className="ml-1 text-gray-400" title={hint}>
-          <BadgeInfo size={14} />
-        </span>
-      ) : null}
-    </div>
+    {(icon || title) && (
+      <div className="flex items-center gap-2 mb-2">
+        {icon ? <span className="text-gray-600">{icon}</span> : null}
+        <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
+        {hint ? (
+          <span className="ml-1 text-gray-400" title={hint}>
+            <BadgeInfo size={14} />
+          </span>
+        ) : null}
+      </div>
+    )}
     {children}
   </div>
 );
 
+/** Поле: подпись + контент */
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({
   label,
   children,
@@ -148,6 +190,10 @@ const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string 
   </div>
 );
 
+/**
+ * stopHotkeys — не даём Delete/Backspace/Ctrl+Z/Ctrl+Y уходить вверх
+ * (чтобы в инпутах можно было редактировать без вмешательства shortcut'ов редактора).
+ */
 const stopHotkeys: React.KeyboardEventHandler<HTMLElement> = (e) => {
   const k = e.key;
   if (
@@ -160,7 +206,7 @@ const stopHotkeys: React.KeyboardEventHandler<HTMLElement> = (e) => {
   }
 };
 
-// TextInput
+/** Текстовый инпут с блокировкой глобальных хоткеев */
 const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({
   onKeyDown,
   ...props
@@ -175,7 +221,7 @@ const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({
   />
 );
 
-// Select
+/** Select с блокировкой глобальных хоткеев */
 const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
   children,
   onKeyDown,
@@ -193,7 +239,10 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
   </select>
 );
 
-// компактный number с «±»
+/**
+ * StepperNumber — компактный number-инпут с кнопками «±».
+ * Используем для координат, размеров, толщин, вращений.
+ */
 const StepperNumber: React.FC<{
   value: number;
   min?: number;
@@ -237,11 +286,16 @@ const StepperNumber: React.FC<{
   );
 };
 
+/**
+ * sanitizeRotation — гарантируем, что rotation всегда число (а не NaN/undefined)
+ * перед тем как записывать в стейт.
+ */
 function sanitizeRotation<T extends { rotation?: number }>(patch: T): T {
   if ("rotation" in patch) return { ...patch, rotation: toNum(patch.rotation, 0) };
   return patch;
 }
 
+/** Превью кружка-пресета для фигур */
 const PresetSwatch: React.FC<{ preset: ShapePreset }> = ({ preset }) => {
   const borderW = Math.max(1, preset.strokeWidth ?? 1);
   return (
@@ -270,7 +324,10 @@ interface PropertiesPanelProps {
 export default function PropertiesPanel({ selectedIds, state, setState }: PropertiesPanelProps) {
   const { seats, rows, zones } = state;
 
+  /** Черновики вращения зоны (строкой), чтобы не ломать undo при каждом keypress */
   const [rotDraft, setRotDraft] = React.useState<Record<string, string>>({});
+
+  /** Авто-рефлоу при смене seatSpacingX/Y (запоминаем в localStorage) */
   const [autoReflow, setAutoReflow] = React.useState<boolean>(() => {
     const raw = localStorage.getItem("seatmap_auto_reflow_spacing");
     return raw ? raw === "1" : true;
@@ -279,6 +336,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     localStorage.setItem("seatmap_auto_reflow_spacing", autoReflow ? "1" : "0");
   }, [autoReflow]);
 
+  // Отфильтрованные списки по выделению
   const selectedZones = React.useMemo(
     () => zones.filter((z) => selectedIds.includes(z.id)),
     [zones, selectedIds]
@@ -308,6 +366,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
 
   const selectedZoneIds = React.useMemo(() => selectedZones.map((z) => z.id), [selectedZones]);
 
+  /** Агрегированная сторона меток рядов у выделенных зон (left/right/mixed) */
   const rowLabelSideAgg: "left" | "right" | "mixed" = React.useMemo(() => {
     if (!selectedZones.length) return "left";
     const left = selectedZones.some((z) => (z.rowLabelSide ?? "left") === "left");
@@ -315,6 +374,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     return left && right ? "mixed" : left ? "left" : "right";
   }, [selectedZones]);
 
+  /** Задать сторону меток рядов для всех выбранных зон */
   const setZonesRowLabelSide = (side: "left" | "right") => {
     setState((prev) => ({
       ...prev,
@@ -323,6 +383,8 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       ),
     }));
   };
+
+  /** Переключить сторону меток рядов (left↔right) у выбранных зон */
   const flipZonesRowLabelSide = () => {
     setState((prev) => ({
       ...prev,
@@ -334,6 +396,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /**
+   * updateZone — обновление зоны по id.
+   * Опционально включает reflow по seatSpacingX/Y, если autoReflow=true.
+   */
   const updateZone = (
     zoneId: string,
     rawPatch: Partial<Zone>,
@@ -351,6 +417,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /**
+   * updateRowAndSeats — двигаем ряд, и все его места вместе с ним (dx/dy).
+   * Изменяем только row.x/row.y и соответствующие seat.x/seat.y.
+   */
   const updateRowAndSeats = (rowId: string, patch: Partial<Row> & { x?: number; y?: number }) => {
     setState((prev) => {
       const row = prev.rows.find((r) => r.id === rowId);
@@ -365,6 +435,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /** updateSeat — обновление одного места, с автоматическим подбором цвета по статусу/категории */
   const updateSeat = (seatId: string, patch: Partial<Seat>) => {
     setState((prev) => ({
       ...prev,
@@ -379,6 +450,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Массовое обновление выбранных мест */
   const updateSelectedSeatsBulk = (patch: Partial<Seat>) => {
     if (selectedSeatIdSet.size === 0) return;
     setState((prev) => ({
@@ -397,6 +469,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Обновить все места всех выбранных рядов */
   const updateAllSeatsOfSelectedRows = (patch: Partial<Seat>) => {
     const rowIds = new Set(selectedRows.map((r) => r.id));
     if (rowIds.size === 0) return;
@@ -416,6 +489,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Обновить все места всех выбранных зон */
   const updateAllSeatsOfSelectedZones = (patch: Partial<Seat>) => {
     const zoneIds = new Set(selectedZones.map((z) => z.id));
     if (zoneIds.size === 0) return;
@@ -435,6 +509,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Обновление TextObject */
   const updateText = (textId: string, rawPatch: Partial<TextObject>) => {
     const patch = sanitizeRotation(rawPatch);
     setState((prev) => ({
@@ -443,6 +518,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Обновление ShapeObject */
   const updateShape = (shapeId: string, rawPatch: Partial<ShapeObject>) => {
     const patch = sanitizeRotation(rawPatch);
     setState((prev) => ({
@@ -451,6 +527,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /** Массовое обновление выбранных фигур */
   const updateSelectedShapesBulk = (patch: Partial<ShapeObject>) => {
     const ids = new Set(selectedShapes.map((s) => s.id));
     if (!ids.size) return;
@@ -460,6 +537,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     }));
   };
 
+  /**
+   * resizePolygon — масштабирует точки полигона при изменении width/height,
+   * чтобы контур оставался пропорциональным.
+   */
   const resizePolygon = (sh: ShapeObject, nextW: number, nextH: number) => {
     if (sh.kind !== "polygon" || !sh.points || sh.width === 0 || sh.height === 0) return sh;
     const sx = nextW / sh.width;
@@ -474,6 +555,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
 
   /* ------------------------------- reflow utils ------------------------------ */
 
+  /**
+   * reflowZoneBySpacingState — перераскладывает места в зоне по шагам seatSpacingX/Y
+   * (центрируя по зоне). Работает на копии state и возвращает новый SeatmapState.
+   */
   const reflowZoneBySpacingState = (curr: SeatmapState, zoneId: string): SeatmapState => {
     const z = curr.zones.find((zz) => zz.id === zoneId);
     if (!z) return curr;
@@ -485,6 +570,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     const rowsNext = curr.rows.map((r) => ({ ...r }));
     const seatsNext = curr.seats.map((s) => ({ ...s }));
 
+    // Центрируем ряды по высоте зоны
     const totalH = (rowsInZone.length - 1) * sy;
     const baseY = totalH <= z.height ? (z.height - totalH) / 2 : 0;
 
@@ -493,6 +579,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       const ri = rowsNext.findIndex((rr) => rr.id === r.id);
       if (ri >= 0) rowsNext[ri].y = newY;
 
+      // Места в ряду — по X также раскладываем с шагом sx и центрируем
       const rs = seatsNext.filter((s) => s.rowId === r.id).sort((a, b) => a.x - b.x);
       const n = rs.length;
       if (n > 0) {
@@ -511,6 +598,14 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     return { ...curr, rows: rowsNext, seats: seatsNext };
   };
 
+  /** Обёртка над reflowZoneBySpacingState для setState */
+  const reflowZoneBySpacing = (zoneId: string) =>
+    setState((prev) => reflowZoneBySpacingState(prev, zoneId));
+
+  /**
+   * reflowZone — альтернативный вариант рефлоу:
+   * растягивает ряды и места по высоте/ширине зоны с учётом радиусов.
+   */
   const reflowZone = (zoneId: string) => {
     setState((prev) => {
       const z = prev.zones.find((zz) => zz.id === zoneId);
@@ -524,6 +619,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       const rowsNext = prev.rows.map((r) => ({ ...r }));
       const seatsNext = prev.seats.map((s) => ({ ...s }));
 
+      // максимальный радиус по ряду — чтобы не выходили за границы
       const rowMaxR: Record<string, number> = {};
       for (const r of rowsInZone) {
         const rs = seatsNext.filter((s) => s.rowId === r.id);
@@ -537,12 +633,14 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       const usableH = Math.max(0, z.height - 2 * padY);
       const stepY = rowsCount > 1 ? usableH / (rowsCount - 1) : 0;
 
+      // Раскладываем ряды по Y
       rowsInZone.forEach((r, i) => {
         const newY = rowsCount > 1 ? padY + stepY * i : z.height / 2;
         const idx = rowsNext.findIndex((rr) => rr.id === r.id);
         if (idx >= 0) rowsNext[idx].y = Math.round(newY);
       });
 
+      // Для каждого ряда — распределяем места по X
       for (const r of rowsInZone) {
         const rs = seatsNext.filter((s) => s.rowId === r.id).sort((a, b) => a.x - b.x);
         if (rs.length === 0) continue;
@@ -561,9 +659,10 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
-  const reflowZoneBySpacing = (zoneId: string) =>
-    setState((prev) => reflowZoneBySpacingState(prev, zoneId));
-
+  /**
+   * addColumnToZone — добавляет одну дополнительную колонку мест слева/справа
+   * для всех рядов в зоне (c учётом seatSpacingX).
+   */
   const addColumnToZone = (zoneId: string, side: "left" | "right") => {
     setState((prev) => {
       const zone = prev.zones.find((z) => z.id === zoneId);
@@ -574,6 +673,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       let seatsNext = [...prev.seats];
       const zoneRows = rowsNext.filter((r) => r.zoneId === zoneId);
 
+      // Если добавляем слева — возможно, нужно сместить существующие места, чтобы не выйти за левый край
       if (side === "left") {
         let requiredShift = 0;
         for (const r of zoneRows) {
@@ -593,6 +693,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         }
       }
 
+      // Создаём новые места для каждого ряда
       const newSeats: Seat[] = [];
       for (const r of zoneRows) {
         const rowSeats = seatsNext.filter((s) => s.rowId === r.id);
@@ -621,6 +722,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
 
       seatsNext = seatsNext.concat(newSeats);
 
+      // Возможно, нужно расширить зону по ширине
       const seatsInZone = seatsNext.filter((s) => s.zoneId === zoneId);
       const needWidth = seatsInZone.length
         ? Math.max(...seatsInZone.map((s) => s.x + (s.radius ?? DEFAULT_RADIUS)))
@@ -629,6 +731,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         z.id === zoneId ? { ...z, width: Math.max(z.width, needWidth) } : z
       );
 
+      // Перенумеруем colIndex/label в каждом ряду слева направо
       for (const r of zoneRows) {
         const rs = seatsNext.filter((s) => s.rowId === r.id).sort((a, b) => a.x - b.x);
         rs.forEach((s, i) => {
@@ -641,6 +744,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /** Перенумерация мест в зоне слева-направо или справа-налево */
   const renumberZoneSeats = (zoneId: string, dir: "ltr" | "rtl") => {
     setState((prev) => {
       const rowsInZone = prev.rows.filter((r) => r.zoneId === zoneId);
@@ -658,6 +762,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /** Перенумерация мест в конкретном ряду (L→R или R→L) */
   const renumberRowSeatsDir = (rowId: string, dir: "ltr" | "rtl") => {
     setState((prev) => {
       const rs = prev.seats.filter((s) => s.rowId === rowId).sort((a, b) => a.x - b.x);
@@ -676,6 +781,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /** distributeRowSeats — равномерно растягивает места по текущей ширине ряда */
   const distributeRowSeats = (rowId: string) => {
     setState((prev) => {
       const seatsInRow = prev.seats.filter((s) => s.rowId === rowId);
@@ -698,6 +804,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     });
   };
 
+  /** Массовое применение пресета ко всем выбранным фигурам */
   const applyShapePresetBulk = (p: ShapePreset) => {
     updateSelectedShapesBulk({
       fill: p.fill,
@@ -706,6 +813,8 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       opacity: p.opacity,
     });
   };
+
+  /** Применение пресета к одной фигуре */
   const applyShapePresetOne = (shapeId: string, p: ShapePreset) => {
     updateShape(shapeId, {
       fill: p.fill,
@@ -728,6 +837,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
     );
   }
 
+  /** Маленький чип-счётчик типа выделенных сущностей */
   const CountChip = ({ label }: { label: string }) => (
     <span className="px-2 py-1 text-[11px] rounded-md bg-white border border-gray-200 text-gray-600">
       {label}
@@ -736,6 +846,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
 
   return (
     <div className="w-[320px] bg-gray-50 border-l border-gray-200 p-6 shadow-lg h-full overflow-y-auto">
+      {/* Заголовок панели + сводка по выделению */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold text-gray-900">Свойства</h2>
         <div className="flex gap-1 flex-wrap">
@@ -817,6 +928,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         </Panel>
       )}
 
+      {/* Индивидуальные панели по фигурам */}
       {selectedShapes.map((sh) => (
         <Panel key={sh.id}>
           <Section icon={<BoxIcon size={16} />} title={`Фигура: ${sh.kind}`} />
@@ -1016,6 +1128,8 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       {selectedZones.map((zone) => (
         <Panel key={zone.id}>
           <Section icon={<Rows3 size={16} />} title={`Зона: ${zone.label}`} />
+
+          {/* Сторона меток рядов (left/right) */}
           <Section title="Сторона меток рядов" hint="С какой стороны показывать метки рядов">
             <div className="flex items-center gap-2 mb-2">
               <button
@@ -1049,6 +1163,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
             </div>
           </Section>
 
+          {/* Подпись зоны */}
           <Section icon={<TypeIcon size={14} />} title="Подпись">
             <Field label="Название зоны">
               <TextInput
@@ -1059,6 +1174,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
             </Field>
           </Section>
 
+          {/* Геометрия зоны */}
           <Section
             icon={<Ruler size={14} />}
             title="Геометрия"
@@ -1108,6 +1224,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
                 value={rotDraft[zone.id] ?? String(zone.rotation ?? 0)}
                 onChange={(e) => {
                   const v = e.target.value;
+                  // Разрешаем только до 4 цифр и ведущий минус, либо пусто
                   if (v === "" || /^-?\d{0,4}$/.test(v)) {
                     setRotDraft((prev) => ({ ...prev, [zone.id]: v }));
                   }
@@ -1139,6 +1256,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
             </Field>
           </Section>
 
+          {/* Раскладка мест в зоне */}
           <Section
             icon={<Rows3 size={14} />}
             title="Раскладка мест"
@@ -1225,6 +1343,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
             </div>
           </Section>
 
+          {/* Внешний вид зоны: фон и прозрачность */}
           <Section
             icon={<PaintBucket size={14} />}
             title="Внешний вид"
@@ -1234,6 +1353,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
             <Field label="Фон зоны">
               <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg border border-gray-200 bg-white">
                 <div className="flex items-center gap-2">
+                  {/* Шахматный фон + заливка зоны сверху (если не прозрачная) */}
                   <div className="relative h-4 w-4 rounded border overflow-hidden">
                     <div
                       className="absolute inset-0"
@@ -1260,6 +1380,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
                   </span>
                 </div>
 
+                {/* Тоггл прозрачности */}
                 <button
                   type="button"
                   role="switch"
@@ -1279,6 +1400,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               </div>
             </Field>
 
+            {/* Слайдер прозрачности, только если фон не полностью прозрачный */}
             {!zone.transparent && (
               <Field label={`Прозрачность: ${Math.round((zone.fillOpacity ?? 1) * 100)}%`}>
                 <input
@@ -1303,6 +1425,8 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         return (
           <Panel key={row.id}>
             <Section icon={<Rows3 size={16} />} title={`Ряд: ${row.label}`} />
+
+            {/* Подпись ряда */}
             <Section icon={<TypeIcon size={14} />} title="Подпись">
               <Field label="Название ряда">
                 <TextInput
@@ -1320,6 +1444,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               </Field>
             </Section>
 
+            {/* Геометрия ряда (двигает и сиденья) */}
             <Section icon={<Ruler size={14} />} title="Геометрия" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
                 <Field label="X">
@@ -1339,6 +1464,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               </div>
             </Section>
 
+            {/* Управление местами в ряду */}
             {rowSeats.length > 0 && (
               <Section
                 icon={<Rows3 size={14} />}
@@ -1369,6 +1495,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
                   </button>
                 </div>
 
+                {/* Массовое применение к местам выбранного ряда */}
                 <h4 className="text-sm font-semibold text-gray-800 mb-3 mt-4">
                   Применить ко всем местам в ряду
                 </h4>
@@ -1441,6 +1568,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
       })}
 
       {/* -------------------------------- SEATS -------------------------------- */}
+      {/* Массовое редактирование мест (если выделено более одного) */}
       {selectedSeats.length > 1 && (
         <Panel>
           <Section icon={<Rows3 size={16} />} title="Массовое редактирование — Места" />
@@ -1507,6 +1635,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
         </Panel>
       )}
 
+      {/* Индивидуальные свойства мест */}
       {selectedSeats.map((seat) => {
         const row = seat.rowId ? rows.find((r) => r.id === seat.rowId) : undefined;
         return (
@@ -1520,6 +1649,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               />
             </Field>
 
+            {/* Геометрия места */}
             <Section icon={<Ruler size={14} />} title="Геометрия" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
                 <Field label="X">
@@ -1537,6 +1667,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
                       const ny = v;
                       if (row) {
                         const dy = Math.abs(ny - row.y);
+                        // Если недалеко от ряда — «примагничиваем» к row.y и оставляем rowId
                         if (dy <= SNAP_Y_THRESHOLD) updateSeat(seat.id, { y: row.y });
                         else updateSeat(seat.id, { y: ny, rowId: null });
                       } else {
@@ -1548,6 +1679,7 @@ export default function PropertiesPanel({ selectedIds, state, setState }: Proper
               </div>
             </Section>
 
+            {/* Внешний вид места */}
             <Section icon={<PaintBucket size={14} />} title="Внешний вид" className="mt-2">
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Статус">

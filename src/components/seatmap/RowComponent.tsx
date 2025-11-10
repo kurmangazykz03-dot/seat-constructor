@@ -1,28 +1,27 @@
 // src/components/editor/RowComponent.tsx
-import React, { useRef, useMemo } from "react";
-import { Group, Rect } from "react-konva";
 import type Konva from "konva";
+import React, { useMemo, useRef } from "react";
+import { Group, Rect } from "react-konva";
 import { SeatmapState } from "../../pages/EditorPage";
 import { Row, Seat } from "../../types/types";
+import { crisp } from "../../utils/crisp";
 import SeatComponent from "./SeatComponent";
-import { crisp, crispSize } from "../../utils/crisp";
-
 
 interface RowComponentProps {
-  row: Row;
-  rowSeats: Seat[];
-  selectedIds: string[];
+  row: Row; // сам ряд
+  rowSeats: Seat[]; // места, принадлежащие этому ряду
+  selectedIds: string[]; // текущий selection
   setState: (updater: (prevState: SeatmapState) => SeatmapState) => void;
   handleElementClick: (id: string, e: any) => void;
-  currentTool: string;
-  isViewerMode?: boolean;
-  onSeatDragEnd?: (seatAfterDrag: Seat) => void;
-  scale:number
+  currentTool: string; // текущий инструмент (select / bend / ...)
+  isViewerMode?: boolean; // режим просмотра (без редактирования)
+  onSeatDragEnd?: (seatAfterDrag: Seat) => void; // коллбек, когда перетаскивание места закончено
+  scale: number; // масштаб Stage (для crisp)
 }
 
 const seatRadius = 12;
-const HIT_PAD_X = 4;
-const HIT_PAD_Y = 4;
+const HIT_PAD_X = 4; // дополнительная «подушка» по X для хитбокса ряда
+const HIT_PAD_Y = 4; // дополнительная «подушка» по Y для хитбокса ряда
 
 const RowComponent: React.FC<RowComponentProps> = ({
   row,
@@ -33,16 +32,19 @@ const RowComponent: React.FC<RowComponentProps> = ({
   currentTool,
   isViewerMode = false,
   onSeatDragEnd,
-  scale
+  scale,
 }) => {
   const isRowSelected = selectedIds.includes(row.id);
 
+  // Ряд можно таскать только в редакторе и только в режиме select
   const canDrag = !isViewerMode && currentTool === "select";
 
+  // Запоминаем позицию группы в момент начала драга — чтобы посчитать dx/dy
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
-
+  // Вычисляем bounding-box ряда по его сиденьям
   const { bboxX, bboxY, bboxW, bboxH } = useMemo(() => {
+    // Если в ряду пока нет мест — рисуем минимальный хитбокс по центру
     if (!rowSeats.length) {
       return {
         bboxX: -seatRadius - HIT_PAD_X,
@@ -51,11 +53,14 @@ const RowComponent: React.FC<RowComponentProps> = ({
         bboxH: seatRadius * 2 + HIT_PAD_Y * 2,
       };
     }
+
+    // Сначала считаем «абсолютные» координаты относительно сцены
     const minAbsX = Math.min(...rowSeats.map((s) => s.x - (s.radius ?? seatRadius)));
     const maxAbsX = Math.max(...rowSeats.map((s) => s.x + (s.radius ?? seatRadius)));
     const minAbsY = Math.min(...rowSeats.map((s) => s.y - (s.radius ?? seatRadius)));
     const maxAbsY = Math.max(...rowSeats.map((s) => s.y + (s.radius ?? seatRadius)));
 
+    // Переводим в локальные координаты внутри группы ряда (центр в row.x / row.y)
     const minLocalX = minAbsX - row.x;
     const maxLocalX = maxAbsX - row.x;
     const minLocalY = minAbsY - row.y;
@@ -64,18 +69,19 @@ const RowComponent: React.FC<RowComponentProps> = ({
     return {
       bboxX: minLocalX - HIT_PAD_X,
       bboxY: minLocalY - HIT_PAD_Y,
-      bboxW: (maxLocalX - minLocalX) + HIT_PAD_X * 2,
-      bboxH: (maxLocalY - minLocalY) + HIT_PAD_Y * 2,
+      bboxW: maxLocalX - minLocalX + HIT_PAD_X * 2,
+      bboxH: maxLocalY - minLocalY + HIT_PAD_Y * 2,
     };
   }, [rowSeats, row.x, row.y]);
 
   return (
     <Group
       key={row.id}
-      x={crisp(row.x, scale)}   // ← было row.x
-  y={crisp(row.y, scale)}   // ← было row.y
+      // К центру ряда применяем crisp, чтобы линии/текст попадали в пиксели сетки
+      x={crisp(row.x, scale)}
+      y={crisp(row.y, scale)}
       draggable={canDrag}
-      // гасим всплытие, чтобы зона не перехватывала
+      // Гасим всплытие событий, чтобы клики/drag не уходили в зону
       onMouseDown={(e) => (e.cancelBubble = true)}
       onMouseUp={(e) => (e.cancelBubble = true)}
       onTap={(e) => (e.cancelBubble = true)}
@@ -84,13 +90,13 @@ const RowComponent: React.FC<RowComponentProps> = ({
         const node = e.target as Konva.Group;
         dragStartRef.current = { x: node.x(), y: node.y() };
 
-
+        // Если сам ряд не был выделен — выделяем его при начале перетаскивания
         if (!isRowSelected) {
           handleElementClick(row.id, e as any);
         }
       }}
       onDragMove={(e) => {
-
+        // Просто гасим всплытие, сам пересчёт делаем на onDragEnd
         e.cancelBubble = true;
       }}
       onDragEnd={(e) => {
@@ -101,12 +107,10 @@ const RowComponent: React.FC<RowComponentProps> = ({
         const dx = end.x - start.x;
         const dy = end.y - start.y;
 
-
+        // Смещаем и сам Row, и все его Seats на dx/dy
         setState((prev) => ({
           ...prev,
-          rows: prev.rows.map((r) =>
-            r.id === row.id ? { ...r, x: r.x + dx, y: r.y + dy } : r
-          ),
+          rows: prev.rows.map((r) => (r.id === row.id ? { ...r, x: r.x + dx, y: r.y + dy } : r)),
           seats: prev.seats.map((s) =>
             s.rowId === row.id ? { ...s, x: s.x + dx, y: s.y + dy } : s
           ),
@@ -115,7 +119,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
         dragStartRef.current = null;
       }}
     >
-
+      {/* Прямоугольник-хитбокс по всему ряду: принимает клики/тапы по пустому месту между сиденьями */}
       <Rect
         x={bboxX}
         y={bboxY}
@@ -123,7 +127,6 @@ const RowComponent: React.FC<RowComponentProps> = ({
         height={bboxH}
         fillEnabled={false}
         strokeEnabled={false}
-      
         hitStrokeWidth={12}
         onMouseDown={(e) => {
           e.cancelBubble = true;
@@ -135,7 +138,7 @@ const RowComponent: React.FC<RowComponentProps> = ({
         }}
       />
 
-      {/* Рамка выделения — только при выбранном ряду */}
+      {/* Рамка выделения ряда — показываем только если ряд выбран */}
       {isRowSelected && (
         <Rect
           x={bboxX}
@@ -150,20 +153,20 @@ const RowComponent: React.FC<RowComponentProps> = ({
         />
       )}
 
-      {/* Сиденья ряда */}
+      {/* Сами сиденья ряда */}
       {rowSeats.map((seat) => (
         <SeatComponent
-           key={seat.id}
+          key={seat.id}
           seat={seat}
           isSelected={selectedIds.includes(seat.id)}
           isRowSelected={isRowSelected}
           onClick={handleElementClick}
           onDragEnd={(_e, seatAfterDrag) => onSeatDragEnd?.(seatAfterDrag)}
-          offsetX={row.x}
+          offsetX={row.x} // сиденья внутри группы живут относительно row.x/row.y
           offsetY={row.y}
           isViewerMode={isViewerMode}
           currentTool={currentTool}
-          scale={scale}          // ← передаём сюда
+          scale={scale}
         />
       ))}
     </Group>

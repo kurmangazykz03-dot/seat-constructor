@@ -1,5 +1,5 @@
+import { ChevronDown, LayoutPanelLeft } from "lucide-react";
 import React from "react";
-import { LayoutPanelLeft, ChevronDown } from "lucide-react";
 
 /** ОДИН шаблон */
 export type TemplateItem = {
@@ -129,31 +129,30 @@ function sortWithPriority(data: TemplateCategory[]): TemplateCategory[] {
 const TemplatesPanel: React.FC = () => {
   // TemplatesPanel.tsx
 
-const [categories, setCategories] = React.useState<TemplateCategory[]>([]);
-const [isLoading, setIsLoading] = React.useState(true);
-const [error, setError] = React.useState<string | null>(null);
+  const [categories, setCategories] = React.useState<TemplateCategory[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-React.useEffect(() => {
-  setIsLoading(true);
-  setError(null);
+  React.useEffect(() => {
+    setIsLoading(true);
+    setError(null);
 
-  fetch("/api/seatmap-templates")
-    .then((r) => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
-    .then((json: { categories: TemplateCategory[] }) => {
-      setCategories(sortWithPriority(json.categories));
-    })
-    .catch((e) => {
-      console.error("Failed to load templates", e);
-      // фолбэк на мок, чтобы редактор не ломался
-      setCategories(sortWithPriority(MOCK_TEMPLATES));
-      setError("Не удалось загрузить шаблоны, показаны тестовые данные.");
-    })
-    .finally(() => setIsLoading(false));
-}, []);
-
+    fetch("/api/seatmap-templates")
+      .then((r) => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then((json: { categories: TemplateCategory[] }) => {
+        setCategories(sortWithPriority(json.categories));
+      })
+      .catch((e) => {
+        console.error("Failed to load templates", e);
+        // фолбэк на мок, чтобы редактор не ломался
+        setCategories(sortWithPriority(MOCK_TEMPLATES));
+        setError("Не удалось загрузить шаблоны, показаны тестовые данные.");
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
 
   return (
     <div className="w-full h-full bg-white border-l border-gray-200 shadow-lg flex flex-col">
@@ -163,9 +162,7 @@ React.useEffect(() => {
           <LayoutPanelLeft size={18} className="text-gray-500" />
           <div>
             <div className="text-sm font-semibold text-gray-900">Готовые шаблоны</div>
-            <div className="text-[11px] text-gray-400">
-              Быстрый старт для типовых площадок
-            </div>
+            <div className="text-[11px] text-gray-400">Быстрый старт для типовых площадок</div>
           </div>
         </div>
       </div>
@@ -179,9 +176,7 @@ React.useEffect(() => {
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-6">
           {categories.map((category) => (
             <section key={category.id}>
-              <div className="text-xs font-semibold text-gray-500 mb-2">
-                {category.title}
-              </div>
+              <div className="text-xs font-semibold text-gray-500 mb-2">{category.title}</div>
               <div className="space-y-2">
                 {category.items.map((item) => (
                   <button
@@ -197,11 +192,7 @@ React.useEffect(() => {
                     {/* Иконка / превью */}
                     <div className="flex-shrink-0 h-10 w-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
                       {item.iconUrl ? (
-                        <img
-                          src={item.iconUrl}
-                          alt=""
-                          className="w-full h-full object-contain"
-                        />
+                        <img src={item.iconUrl} alt="" className="w-full h-full object-contain" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100" />
                       )}

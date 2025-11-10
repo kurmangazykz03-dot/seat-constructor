@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react"; // ← добавили useRef
-
+import React, { useEffect, useRef, useState } from "react"; // React нужен и для типов (React.ChangeEventHandler)
 
 import { SeatmapState } from "./EditorPage";
 
@@ -8,9 +7,10 @@ import { SeatInfoPanel } from "../components/viewer/SeatInfoPanel";
 import SeatmapViewerCanvas from "../components/viewer/SeatmapViewerCanvas";
 import { ViewerTopBar } from "../components/viewer/ViewerTopBar";
 import { useAutoScale } from "../hooks/useAutoScale";
-import type { Row, Seat, Zone, TextObject, ShapeObject } from "../types/types";
+import type { Row, Seat, ShapeObject, TextObject, Zone } from "../types/types";
 
-// —— константы дизайн-рамки ——
+// —— константы дизайн-рамки (фиксированный layout) ——
+// размеры верхней панели, отступов и рабочих областей
 const TOPBAR_H = 60;
 const PAD = 16;
 const GAP = 12;
@@ -19,52 +19,64 @@ const MAIN_W = 1486;
 const MAIN_H = 752;
 const RIGHT_W = 320;
 
+// общая ширина и высота «макета» для автоскейла
 const DESIGN_W = LEFT_W + MAIN_W + RIGHT_W + 2 * GAP + 2 * PAD;
-
 const DESIGN_H = TOPBAR_H + MAIN_H + 2 * PAD;
 
+// «заглушка» вместо тулбара в режиме просмотра (серая панель слева)
 const ToolbarPlaceholder = () => (
   <div className="bg-gray-50 border-r border-gray-200 flex-shrink-0" style={{ width: LEFT_W }} />
 );
 
+/**
+ * importFromV2
+ *
+ * Конвертирует JSON-схему формата v2 (из редактора) в плоский SeatmapState,
+ * который использует Viewer:
+ *  • нормализует зоны, ряды, места;
+ *  • подтягивает клин (углы) зоны;
+ *  • разворачивает вложенные ряды/места в массивы rows/seats;
+ *  • подхватывает тексты и шейпы, если они есть.
+ */
 function importFromV2(json: any): SeatmapState {
- // helper
-const readAngle = (v: any) => {
-  const a = Number(v);
-  if (!Number.isFinite(a) || a <= 0) return 90;   // 0/NaN -> прямоугольник
-  return Math.max(10, Math.min(170, a));          // кламп
-};
+  // helper для безопасного чтения угла клина
+  const readAngle = (v: any) => {
+    const a = Number(v);
+    if (!Number.isFinite(a) || a <= 0) return 90; // 0/NaN -> прямоугольник
+    return Math.max(10, Math.min(170, a)); // кламп в разумный диапазон
+  };
 
-const zones: Zone[] = (json.zones || []).map((z: any) => ({
-  id: String(z.id),
-  x: Number(z.x ?? 0),
-  y: Number(z.y ?? 0),
-  width: Number(z.width ?? 200),
-  height: Number(z.height ?? 120),
-  fill: String(z.color ?? z.fill ?? "#E5E7EB"),
-  label: String(z.name ?? z.label ?? ""),
-  color: z.color ?? undefined,
-  rotation: Number(z.rotation ?? 0),
-  transparent: !!z.transparent,
-  fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
+  // нормализация зон
+  const zones: Zone[] = (json.zones || []).map((z: any) => ({
+    id: String(z.id),
+    x: Number(z.x ?? 0),
+    y: Number(z.y ?? 0),
+    width: Number(z.width ?? 200),
+    height: Number(z.height ?? 120),
+    fill: String(z.color ?? z.fill ?? "#E5E7EB"),
+    label: String(z.name ?? z.label ?? ""),
+    color: z.color ?? undefined,
+    rotation: Number(z.rotation ?? 0),
+    transparent: !!z.transparent,
+    fillOpacity: z.fillOpacity != null ? Number(z.fillOpacity) : 1,
 
-  // ⬇️ КЛИН (миграция 0/NaN -> 90°)
-  angleLeftDeg:  readAngle(z.angleLeftDeg),
-  angleRightDeg: readAngle(z.angleRightDeg),
+    // углы клина зоны (для изгиба рядов)
+    angleLeftDeg: readAngle(z.angleLeftDeg),
+    angleRightDeg: readAngle(z.angleRightDeg),
 
-  seatSpacingX: Number(z.seatSpacingX ?? 30),
-  seatSpacingY: Number(z.seatSpacingY ?? 30),
-  rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
-}));
-
+    seatSpacingX: Number(z.seatSpacingX ?? 30),
+    seatSpacingY: Number(z.seatSpacingY ?? 30),
+    rowLabelSide: z.rowLabelSide === "right" || z.rowLabelSide === "left" ? z.rowLabelSide : "left",
+  }));
 
   const rows: Row[] = [];
   const seats: Seat[] = [];
 
-  // вложенные ряды/места
+  // разворачиваем вложенные ряды и места в плоские массивы
   (json.zones || []).forEach((z: any) => {
     (z.rows || []).forEach((r: any, rIdx: number) => {
       const rowId = String(r.id);
+
       rows.push({
         id: rowId,
         zoneId: String(z.id),
@@ -92,7 +104,7 @@ const zones: Zone[] = (json.zones || []).map((z: any) => ({
     });
   });
 
-  // свободные места (если приходят отдельно)
+  // свободные места (не принадлежат ни зоне, ни ряду)
   if (Array.isArray(json.freeSeats)) {
     json.freeSeats.forEach((s: any) => {
       seats.push({
@@ -111,6 +123,7 @@ const zones: Zone[] = (json.zones || []).map((z: any) => ({
     });
   }
 
+  // текстовые объекты (названия, пояснения)
   const texts: TextObject[] = Array.isArray(json.texts)
     ? json.texts.map((t: any) => ({
         id: String(t.id ?? crypto.randomUUID()),
@@ -124,6 +137,7 @@ const zones: Zone[] = (json.zones || []).map((z: any) => ({
       }))
     : [];
 
+  // произвольные фигуры (декор, сцена и т.п.)
   const shapes: ShapeObject[] = Array.isArray(json.shapes)
     ? json.shapes.map((s: any) => ({
         id: String(s.id ?? crypto.randomUUID()),
@@ -145,6 +159,7 @@ const zones: Zone[] = (json.zones || []).map((z: any) => ({
       }))
     : [];
 
+  // итоговое состояние, которое использует ViewerCanvas
   return {
     hallName: String(json.hallName ?? "Hall"),
     backgroundImage: json.backgroundImage ?? null,
@@ -160,41 +175,80 @@ const zones: Zone[] = (json.zones || []).map((z: any) => ({
   };
 }
 
-
+/**
+ * ViewerPage — страница просмотра схемы (клиентский режим).
+ *
+ * Источники данных:
+ *  • localStorage["seatmap_schema"] — схема, сохранённая из редактора;
+ *  • импорт JSON-файла через кнопку «Импорт» в ViewerTopBar.
+ *
+ * Основные части:
+ *  • ViewerTopBar — верхняя панель с импортом;
+ *  • слева — заглушка под тулбар (визуальный баланс с редактором);
+ *  • центр — SeatmapViewerCanvas (сама схема);
+ *  • справа — панель SeatInfoPanel с информацией о выбранном месте.
+ */
 function ViewerPage() {
+  // плоское состояние схемы (null, пока не загрузили)
   const [state, setState] = useState<SeatmapState | null>(null);
+  // выбранное место в режиме просмотра
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
+  // текст ошибки загрузки/импорта схемы
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * useAutoScale — автоподбор масштаба всей страницы
+   * чтобы фиксированный layout (DESIGN_W x DESIGN_H) влезал в окно.
+   */
   const { ref: hostRef, scale: layoutScale } = useAutoScale(DESIGN_W, DESIGN_H, {
     min: 0.5,
     max: 1,
   });
-const fileRef = useRef<HTMLInputElement | null>(null);
 
-const handleOpenFilePicker = () => fileRef.current?.click();
+  // ref на скрытый <input type="file"> для импорта JSON
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-  const f = e.target.files?.[0];
-  if (!f) return;
-  try {
-    const text = await f.text();
-    const obj = JSON.parse(text);
-    // (опц.) положим "как есть" в localStorage, чтобы Viewer мог обновиться по F5
-    localStorage.setItem("seatmap_schema", JSON.stringify(obj));
+  // открыть диалог выбора файла
+  const handleOpenFilePicker = () => fileRef.current?.click();
 
-    // применяем
-    const flatState: SeatmapState = importFromV2(obj);
-    setState(flatState);
-    setSelectedSeat(null);
-    setError(null);
-  } catch (err: any) {
-    setError("Не удалось импортировать JSON: " + (err?.message || String(err)));
-  } finally {
-    if (e.target) e.target.value = "";
-  }
-};
+  /**
+   * handleFileChange — импорт схемы из JSON-файла.
+   *
+   * Шаги:
+   *  1) читаем файл как текст;
+   *  2) парсим JSON;
+   *  3) кладём «как есть» в localStorage (для синхронизации и F5);
+   *  4) конвертируем в SeatmapState через importFromV2;
+   *  5) сбрасываем выбранное место и очищаем ошибки.
+   */
+  const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const obj = JSON.parse(text);
 
+      // (опц.) пишем в localStorage, чтобы Viewer мог восстановиться после перезагрузки
+      localStorage.setItem("seatmap_schema", JSON.stringify(obj));
+
+      const flatState: SeatmapState = importFromV2(obj);
+      setState(flatState);
+      setSelectedSeat(null);
+      setError(null);
+    } catch (err: any) {
+      setError("Не удалось импортировать JSON: " + (err?.message || String(err)));
+    } finally {
+      // разрешить выбрать тот же файл ещё раз
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  /**
+   * Начальная загрузка схемы при открытии страницы:
+   *  • пробуем прочитать "seatmap_schema" из localStorage;
+   *  • определяем формат (v2 или старый);
+   *  • конвертируем через importFromV2, если это v2.
+   */
   useEffect(() => {
     try {
       const saved = localStorage.getItem("seatmap_schema");
@@ -213,6 +267,7 @@ const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) =
 
   return (
     <div className="w-full h-screen bg-gray-100">
+      {/* контейнер, который масштабируется под окно с помощью useAutoScale */}
       <div ref={hostRef} className="w-full h-full overflow-auto">
         <div
           style={{
@@ -224,9 +279,10 @@ const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) =
           className="mx-auto"
         >
           <div className="flex flex-col" style={{ width: DESIGN_W, height: DESIGN_H }}>
+            {/* Верхняя панель просмотра (кнопка импорта и т.п.) */}
             <ViewerTopBar onImportJson={handleOpenFilePicker} />
 
-
+            {/* Основная область: слева заглушка, центр — схема, справа — инфо по месту */}
             <div
               className="flex overflow-hidden"
               style={{
@@ -235,23 +291,28 @@ const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) =
                 gap: GAP,
               }}
             >
+              {/* Левая колонка — placeholder под тулбар */}
               <ToolbarPlaceholder />
 
+              {/* Центральная область — канвас схемы */}
               <main
                 className="relative bg-white border border-gray-200 rounded-[12px] overflow-hidden"
                 style={{ width: MAIN_W, height: MAIN_H }}
               >
                 {error ? (
+                  // Блок ошибки при проблемах с загрузкой/парсингом
                   <div className="flex flex-col items-center justify-center h-full text-red-600 p-8 text-center">
                     <AlertTriangle size={48} className="mb-4" />
                     <h2 className="text-xl font-semibold">Ошибка при загрузке</h2>
                     <p>{error}</p>
                   </div>
                 ) : !state ? (
+                  // Состояние «идёт загрузка»
                   <div className="flex items-center justify-center h-full text-gray-500">
                     <p>Загрузка схемы...</p>
                   </div>
                 ) : (
+                  // Основной viewer-канвас (только просмотр и выбор места)
                   <SeatmapViewerCanvas
                     state={state}
                     selectedSeatId={selectedSeat?.id || null}
@@ -262,6 +323,7 @@ const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) =
                 )}
               </main>
 
+              {/* Правая колонка — панель информации по выбранному месту */}
               <div className="flex-shrink-0" style={{ width: RIGHT_W, height: MAIN_H }}>
                 <SeatInfoPanel seat={selectedSeat} />
               </div>
@@ -269,13 +331,15 @@ const handleFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) =
           </div>
         </div>
       </div>
+
+      {/* Скрытый input для импорта JSON (вызывается из ViewerTopBar) */}
       <input
-  ref={fileRef}
-  type="file"
-  accept="application/json"
-  onChange={handleFileChange}
-  className="hidden"
-/>
+        ref={fileRef}
+        type="file"
+        accept="application/json"
+        onChange={handleFileChange}
+        className="hidden"
+      />
     </div>
   );
 }

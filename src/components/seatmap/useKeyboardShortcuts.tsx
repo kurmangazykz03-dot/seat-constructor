@@ -17,6 +17,8 @@ interface UseKeyboardShortcutsProps {
   setState: (updater: (prev: any) => any) => void; // допускаем расширенный стейт
   onDuplicate?: () => void;
 }
+
+// Проверяем, вводит ли пользователь текст (input/textarea/contentEditable)
 const isEditable = (el: EventTarget | null) => {
   const t = el as HTMLElement | null;
   if (!t) return false;
@@ -29,8 +31,12 @@ const isEditable = (el: EventTarget | null) => {
   );
 };
 
+// Форматы для сидений в буфере обмена:
+
+// 1) seat, который лежит внутри ряда/зоны (локальные координаты)
 type ClipboardSeat =
-  | (Seat & { __mode?: "local" }) // локальная (если в составе ряда/зоны)
+  | (Seat & { __mode?: "local" })
+  // 2) seat, который скопирован как "свободный" объект в мировых координатах
   | ({ id: string } & {
       x: number;
       y: number;
@@ -42,15 +48,16 @@ type ClipboardSeat =
       status?: string;
       category?: string;
       __mode: "world";
-    }); // свободная
+    });
 
 type ClipboardRow = Row & { seats?: ClipboardSeat[] };
 type ClipboardZone = Zone & { rows?: ClipboardRow[] };
 
+// Структура, которую кладём в localStorage в виде JSON
 type SeatmapClipboard = {
   zones: ClipboardZone[];
-  rows: ClipboardRow[]; // только те, чьи зоны НЕ были скопированы
-  seats: ClipboardSeat[]; // только «свободные» (world)
+  rows: ClipboardRow[]; // ряды без зон (зоны не скопированы)
+  seats: ClipboardSeat[]; // одиночные «свободные» места (world)
   texts?: TextObject[];
   shapes?: ShapeObject[];
 };
@@ -64,7 +71,9 @@ export const useKeyboardShortcuts = ({
 }: UseKeyboardShortcutsProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // если фокус в вводимом поле — выходим (кроме спец. случая ниже)
       if (isEditable(e.target) || e.defaultPrevented) return;
+
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName?.toLowerCase();
       const isEditing =
@@ -72,8 +81,8 @@ export const useKeyboardShortcuts = ({
 
       const isDeleteKey = e.key === "Delete" || e.key === "Backspace";
 
-      // Разрешаем Delete/Backspace удалять выделенные объекты даже при фокусе в инпутах.
-      // Все остальные хоткеи блокируем, если юзер печатает.
+      // Разрешаем Delete/Backspace удалять выделенные объекты даже если фокус в инпуте.
+      // Все остальные хоткеи блокируем, если пользователь в режиме ввода.
       if (isEditing && !(isDeleteKey && selectedIds.length > 0)) {
         return;
       }
@@ -91,25 +100,37 @@ export const useKeyboardShortcuts = ({
       const texts = state.texts ?? [];
       const shapes = state.shapes ?? [];
 
-      // ===== Delete / Backspace (Каскадное) =====
+      // ===== Delete / Backspace (каскадное удаление) =====
       if (selectedIds.length > 0 && (e.key === "Delete" || e.key === "Backspace")) {
         e.preventDefault();
+
         setState((prev: EntitiesState) => {
           const sel = new Set(selectedIds);
 
+          // Удаляем зоны:
           const delZones = new Set(prev.zones.filter((z) => sel.has(z.id)).map((z) => z.id));
+
+          // Ряды, выбранные напрямую:
           const delRowsDirect = new Set(prev.rows.filter((r) => sel.has(r.id)).map((r) => r.id));
+
+          // Ряды, принадлежащие удаляемым зонам:
           const delRowsFromZones = new Set(
             prev.rows.filter((r) => delZones.has(r.zoneId)).map((r) => r.id)
           );
+
+          // Все удаляемые ряды:
           const delRows = new Set([...delRowsDirect, ...delRowsFromZones]);
 
+          // Места из удаляемых рядов:
           const delSeatsFromRows = new Set(
             prev.seats.filter((s) => s.rowId && delRows.has(s.rowId)).map((s) => s.id)
           );
+          // Места, выделенные напрямую:
           const delSeatsDirect = new Set(prev.seats.filter((s) => sel.has(s.id)).map((s) => s.id));
+          // Все удаляемые места:
           const delSeats = new Set([...delSeatsFromRows, ...delSeatsDirect]);
 
+          // Тексты и шейпы:
           const prevTexts = prev.texts ?? [];
           const prevShapes = prev.shapes ?? [];
           const delTextIds = new Set(prevTexts.filter((t) => sel.has(t.id)).map((t) => t.id));
@@ -125,18 +146,21 @@ export const useKeyboardShortcuts = ({
           };
         });
 
+        // после удаления — снимаем выделение
         setSelectedIds([]);
         return;
       }
 
-      // ===== Nudge arrows (←↑→↓) + Shift=×10 =====
+      // ===== Сдвиг стрелками (←↑→↓) + Shift = ×10 =====
       const arrows = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
       if (arrows.has(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
+
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
 
+        // Разделяем выделение по типам id
         const selSeatIds = new Set(selectedIds.filter((id) => id.startsWith("seat-")));
         const selRowIds = new Set(selectedIds.filter((id) => id.startsWith("row-")));
         const selZoneIds = new Set(selectedIds.filter((id) => id.startsWith("zone-")));
@@ -144,17 +168,17 @@ export const useKeyboardShortcuts = ({
         const selShapeIds = new Set(selectedIds.filter((id) => id.startsWith("shape-")));
 
         setState((prev: EntitiesState) => {
-          // зоны
+          // Зоны двигаем целиком
           const zones = prev.zones.map((z) =>
             selZoneIds.has(z.id) ? { ...z, x: z.x + dx, y: z.y + dy } : z
           );
 
-          // ряды
+          // Ряды двигаем, если выделены
           const rows = prev.rows.map((r) =>
             selRowIds.has(r.id) ? { ...r, x: r.x + dx, y: r.y + dy } : r
           );
 
-          // тексты/шейпы (в мировых координатах)
+          // Тексты и шейпы живут в мировых координатах → просто сдвигаем
           const texts = (prev.texts ?? []).map((t) =>
             selTextIds.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t
           );
@@ -162,17 +186,23 @@ export const useKeyboardShortcuts = ({
             selShapeIds.has(sh.id) ? { ...sh, x: sh.x + dx, y: sh.y + dy } : sh
           );
 
-          // сиденья: выделенные; а также подчинённые выбранным рядам или зонам
+          // Сиденья:
+          //  - если сиденье выделено напрямую — двигаем
+          //  - если выбран ряд — двигаем его сиденья
+          //  - если выбрана зона, а ряд не выбран — тоже двигаем (через зону)
           const seats = prev.seats.map((s) => {
             if (selSeatIds.has(s.id)) return { ...s, x: s.x + dx, y: s.y + dy };
+
             const rowSel = s.rowId ? selRowIds.has(s.rowId) : false;
             const zoneSel = (() => {
               const r = s.rowId ? prev.rows.find((rr) => rr.id === s.rowId) : null;
               return r ? selZoneIds.has(r.zoneId) : false;
             })();
+
             if (rowSel || (zoneSel && !rowSel)) {
               return { ...s, x: s.x + dx, y: s.y + dy };
             }
+
             return s;
           });
 
@@ -187,6 +217,8 @@ export const useKeyboardShortcuts = ({
         e.preventDefault();
 
         const sel = new Set(selectedIds);
+
+        // выделенные сущности
         const zonesSel = zones.filter((z) => sel.has(z.id));
         const rowsSelDirect = rows.filter((r) => sel.has(r.id));
         const seatsSelDirect = seats.filter((s) => sel.has(s.id));
@@ -194,54 +226,62 @@ export const useKeyboardShortcuts = ({
         const textsSel = texts.filter((t) => sel.has(t.id));
         const shapesSel = shapes.filter((sh) => sel.has(sh.id));
 
-        // ряды из выбранных зон
+        // Ряды из выбранных зон
         const rowsFromZones = rows.filter((r) => zonesSel.some((z) => z.id === r.zoneId));
-        // места из выбранных зон и выбранных рядов
+
+        // Места из выбранных зон и выбранных рядов
         const seatsFromZones = seats.filter((s) => zonesSel.some((z) => z.id === s.zoneId));
         const seatsFromRows = seats.filter((s) => rowsSelDirect.some((r) => r.id === s.rowId));
 
-        // уникальные ряды для копирования (из зон + выб. напрямую)
+        // Итоговые ряды для копирования:
+        // - все ряды из зон
+        // - плюс те, которые выбраны напрямую, но не входят в зоны
         const rowIdsInZones = new Set(rowsFromZones.map((r) => r.id));
         const rowsToCopy = [
           ...rowsFromZones,
           ...rowsSelDirect.filter((r) => !rowIdsInZones.has(r.id)),
         ];
 
-        // уникальные места, попавшие в копирование из зон/рядов
+        // Места, попавшие через зоны или ряды (чтобы не дублировать)
         const seatIdsInRowsOrZones = new Set([
           ...seatsFromZones.map((s) => s.id),
           ...seatsFromRows.map((s) => s.id),
         ]);
 
-        // свободные (standalone) места — те, что выбраны отдельно, но не попали через зону/ряд:
+        // Свободные (standalone) места — выбраны отдельно, но не попали через ряды/зоны
         const freeSeats = seatsSelDirect.filter((s) => !seatIdsInRowsOrZones.has(s.id));
 
-        // Подготавливаем Clipboard:
-        // 1) Зоны с их рядами и местами (локальные координаты)
+        // -------- Собираем структуру буфера обмена --------
+
+        // 1) Зоны с их рядами и местами (локальные coords для rows/seats)
         const clipZones: ClipboardZone[] = zonesSel.map((z) => ({
           ...z,
           rows: rows
             .filter((r) => r.zoneId === z.id)
             .map((r) => ({
               ...r,
-              seats: seats.filter((s) => s.rowId === r.id).map((s) => ({ ...s, __mode: "local" })),
+              seats: seats
+                .filter((s) => s.rowId === r.id)
+                .map((s) => ({ ...s, __mode: "local" }) as ClipboardSeat),
             })),
         }));
 
-        // 2) Ряды (без зон), со своими местами (локальные координаты)
+        // 2) Ряды без зон — с их местами
         const clipRows: ClipboardRow[] = rowsToCopy
-          .filter((r) => !zonesSel.some((z) => z.id === r.zoneId)) // исключаем те, что уже ушли в clipZones
+          .filter((r) => !zonesSel.some((z) => z.id === r.zoneId)) // исключаем те, что уже в clipZones
           .map((r) => ({
             ...r,
-            seats: seats.filter((s) => s.rowId === r.id).map((s) => ({ ...s, __mode: "local" })),
+            seats: seats
+              .filter((s) => s.rowId === r.id)
+              .map((s) => ({ ...s, __mode: "local" }) as ClipboardSeat),
           }));
 
-        // 3) Свободные места — переводим в мировые координаты и обнуляем родителей
+        // 3) Свободные сиденья — переводим в мировые координаты и обнуляем зону/ряд
         const clipSeats: ClipboardSeat[] = freeSeats.map((s) => {
-          // мировые координаты = (x,y) + (x,y) зоны (если есть)
           const z = s.zoneId ? zones.find((zz) => zz.id === s.zoneId) : null;
           const xw = (z ? z.x : 0) + s.x;
           const yw = (z ? z.y : 0) + s.y;
+
           return {
             id: s.id,
             x: xw,
@@ -265,6 +305,7 @@ export const useKeyboardShortcuts = ({
           shapes: shapesSel,
         };
 
+        // Сохраняем всё в localStorage (вместо системного clipboard)
         localStorage.setItem("seatmap_clipboard", JSON.stringify(clipboard));
         return;
       }
@@ -272,11 +313,12 @@ export const useKeyboardShortcuts = ({
       // ===== Paste (Ctrl/⌘ + V) =====
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
         e.preventDefault();
+
         const data = localStorage.getItem("seatmap_clipboard");
         if (!data) return;
 
         const parsed = JSON.parse(data) as SeatmapClipboard;
-        const offset = 40;
+        const offset = 40; // смещение вставленной копии, чтобы было видно
 
         const newSeats: Seat[] = [];
         const newRows: Row[] = [];
@@ -285,11 +327,13 @@ export const useKeyboardShortcuts = ({
         const newShapes: ShapeObject[] = [];
         const newSelected: string[] = [];
 
-        // карты для ремапа id
+        // карты старыйId → новыйId для зон/рядов
         const zoneIdMap = new Map<string, string>();
         const rowIdMap = new Map<string, string>();
 
-        // 1) Вставляем ЗОНЫ: смещаем ТОЛЬКО зону; ряды/места — без доп. оффсета (локальные координаты)
+        // 1) Вставляем зоны:
+        //    - саму зону сдвигаем (x+offset, y+offset)
+        //    - ряды/места оставляем в тех же локальных координатах
         (parsed.zones || []).forEach((z) => {
           const oldZoneId = z.id;
           const newZoneId = `zone-${crypto.randomUUID()}`;
@@ -300,7 +344,7 @@ export const useKeyboardShortcuts = ({
             id: newZoneId,
             x: z.x + offset,
             y: z.y + offset,
-            // убираем встроенные ряды в самом объекте зоны
+            // удаляем вложенные rows у копии зоны (они пойдут отдельным массивом)
             rows: undefined as any,
           });
           newSelected.push(newZoneId);
@@ -314,7 +358,6 @@ export const useKeyboardShortcuts = ({
               ...r,
               id: newRowId,
               zoneId: newZoneId,
-              // ВНИМАНИЕ: ряд остаётся в локальных координатах — НЕ добавляем offset
               seats: undefined as any,
             });
 
@@ -324,15 +367,14 @@ export const useKeyboardShortcuts = ({
                 id: `seat-${crypto.randomUUID()}`,
                 zoneId: newZoneId,
                 rowId: newRowId,
-                // места тоже остаются локальными — НЕ добавляем offset
-              });
+              } as Seat);
             });
           });
         });
 
-        // 2) Вставляем РЯДЫ без зон: смещаем и ряд, и его места
+        // 2) Вставляем ряды, чьи зоны НЕ копировались секцией выше
         (parsed.rows || []).forEach((r) => {
-          // если вдруг его зона была скопирована секцией выше — пропустим этот ряд (чтобы не задублировать)
+          // если его зона уже скопирована как целая зона — этот ряд пропускаем
           if (zoneIdMap.has(r.zoneId)) return;
 
           const newRowId = `row-${crypto.randomUUID()}`;
@@ -352,18 +394,18 @@ export const useKeyboardShortcuts = ({
               ...s,
               id: `seat-${crypto.randomUUID()}`,
               rowId: newRowId,
-
               x: s.x + offset,
               y: s.y + offset,
-            });
+            } as Seat);
           });
         });
 
+        // 3) Свободные места (world): просто вставляем с оффсетом и без родителей
         (parsed.seats || []).forEach((s) => {
           const nsId = `seat-${crypto.randomUUID()}`;
-          // гарантируем standalone
           const xw = (s as any).x ?? 0;
           const yw = (s as any).y ?? 0;
+
           newSeats.push({
             ...s,
             id: nsId,
@@ -375,18 +417,20 @@ export const useKeyboardShortcuts = ({
           newSelected.push(nsId);
         });
 
-        // 4) Тексты и Шейпы — мировые координаты, просто смещаем
+        // 4) Тексты и фигуры: просто смещаем в мировых координатах
         (parsed.texts || []).forEach((t) => {
           const nid = `text-${crypto.randomUUID()}`;
           newTexts.push({ ...t, id: nid, x: t.x + offset, y: t.y + offset });
           newSelected.push(nid);
         });
+
         (parsed.shapes || []).forEach((sh) => {
           const nid = `shape-${crypto.randomUUID()}`;
           newShapes.push({ ...sh, id: nid, x: sh.x + offset, y: sh.y + offset });
           newSelected.push(nid);
         });
 
+        // Применяем к редактору
         setState((prev: any) => ({
           ...prev,
           seats: [...prev.seats, ...newSeats],
@@ -396,6 +440,7 @@ export const useKeyboardShortcuts = ({
           shapes: [...(prev.shapes ?? []), ...newShapes],
         }));
 
+        // Выделяем только что вставленные объекты
         if (newSelected.length) setSelectedIds(newSelected);
         return;
       }

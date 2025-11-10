@@ -1,6 +1,5 @@
 // src/components/editor/HelpDrawer.tsx
 import React from "react";
-import { X } from "lucide-react";
 
 type HelpTopic = {
   id: string;
@@ -36,14 +35,19 @@ const MOCK_TOPICS: HelpTopic[] = [
       </ol>
 
       <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
-        <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
-          Пример панели инструментов
-        </div>
-        <div class="h-40 flex items-center justify-center text-[11px] text-gray-400">
-          Здесь можно разместить иллюстрацию с подсветкой Toolbar / TopBar.
-        </div>
-      </div>
-    `,
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help1.jpeg"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
+
+  `,
   },
   {
     id: "hotkeys",
@@ -73,6 +77,19 @@ const MOCK_TOPICS: HelpTopic[] = [
         <li><b>Polygon</b>: по умолчанию точки ставятся на сетку; удерживайте <b>Alt</b>, чтобы отключить снап только для текущего клика.</li>
         <li>Перетаскивание свободных мест снапится при отпускании (координаты округляются к центрам клеток).</li>
       </ul>
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help3.png"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
     `,
   },
   {
@@ -84,7 +101,21 @@ const MOCK_TOPICS: HelpTopic[] = [
         <li><b>Auto</b>: фон сам вписывается (режимы <code>contain / cover / stretch / none</code> — параметр Fit).</li>
         <li><b>Manual</b>: фон выделяется, его можно двигать/растягивать трансформером; <b>Delete</b> — убрать фон.</li>
       </ul>
-    `,
+      
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help4.jpeg"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
+    `
+    ,
   },
   {
     id: "zones-seats",
@@ -127,6 +158,19 @@ const MOCK_TOPICS: HelpTopic[] = [
         <li><b>Shift</b> — симметрия; <b>Ctrl/Cmd</b> — шаг 5°; <b>Alt</b> — тонкий шаг.</li>
         <li>Геометрия зоны меняется клином, контент не «тянется», но визуально согласуется.</li>
       </ul>
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help5.jpeg"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
     `,
   },
   {
@@ -139,6 +183,19 @@ const MOCK_TOPICS: HelpTopic[] = [
         <li><b>Duplicate</b> (Toolbar): делает копии выделенных объектов со смещением.</li>
         <li><b>Delete</b> — удалить выделенные объекты. Для зон каскадно удаляются ряды и места.</li>
       </ul>
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help6.jpeg"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
     `,
   },
   {
@@ -151,6 +208,20 @@ const MOCK_TOPICS: HelpTopic[] = [
         <li><b>Import JSON</b> — выберите <code>.json</code> (формат v2).</li>
         <li><b>Export</b> — скачивает <code>seatmap_v2.json</code> (тот же формат v2).</li>
       </ul>
+    
+
+      <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+  <div class="bg-gray-50 border-b border-gray-100 px-3 py-2 text-[11px] text-gray-500">
+    Пример панели инструментов
+  </div>
+  <div class="h-100 flex items-center justify-center">
+    <img
+      src="/src/assets/Help/Help7.jpeg"
+      alt="Панель инструментов"
+      class="max-h-full max-w-full object-contain"
+    />
+  </div>
+</div>
     `,
   },
 ];
@@ -208,16 +279,12 @@ const HelpDrawer: React.FC<HelpDrawerProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const activeTopic =
-    topics.find((t) => t.id === activeTopicId) || topics[0] || null;
+  const activeTopic = topics.find((t) => t.id === activeTopicId) || topics[0] || null;
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       {/* полупрозрачный фон */}
-      <div
-        className="absolute inset-0 bg-black/20"
-        onClick={onClose}
-      />
+
 
       {/* сам drawer */}
       <div
@@ -227,12 +294,8 @@ const HelpDrawer: React.FC<HelpDrawerProps> = ({ isOpen, onClose }) => {
         {/* header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-gray-900">
-              Помощь
-            </span>
-            <span className="text-[11px] text-gray-500">
-              Краткий гид по редактору схем
-            </span>
+            <span className="text-sm font-semibold text-gray-900">Помощь</span>
+            <span className="text-[11px] text-gray-500">Краткий гид по редактору схем</span>
           </div>
           <button
             type="button"
@@ -268,20 +331,12 @@ const HelpDrawer: React.FC<HelpDrawerProps> = ({ isOpen, onClose }) => {
 
           {/* контент раздела */}
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            {isLoading && (
-              <div className="text-xs text-gray-400 mb-2">
-                Загрузка контента...
-              </div>
-            )}
-            {error && (
-              <div className="text-[11px] text-red-500 mb-3">{error}</div>
-            )}
+            {isLoading && <div className="text-xs text-gray-400 mb-2">Загрузка контента...</div>}
+            {error && <div className="text-[11px] text-red-500 mb-3">{error}</div>}
 
             {activeTopic && (
               <>
-                <h2 className="text-base font-semibold text-gray-900 mb-3">
-                  {activeTopic.title}
-                </h2>
+                <h2 className="text-base font-semibold text-gray-900 mb-3">{activeTopic.title}</h2>
                 <div
                   className="text-sm text-gray-700 leading-relaxed space-y-2"
                   dangerouslySetInnerHTML={{

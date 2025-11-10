@@ -1,6 +1,16 @@
+// Вертикальная панель инструментов редактора схемы.
+// Отвечает за выбор текущего инструмента рисования/редактирования,
+// действия над выделением (дублировать, удалить, выравнивание),
+// а также за управление сеткой и фоном.
+
 import React, { useEffect, useRef, useState } from "react";
 
 type AlignDirection = "left" | "center" | "right";
+
+/**
+ * Набор инструментов, которые может активировать пользователь.
+ * Значение хранится в EditorPage и влияет на поведение холста.
+ */
 type Tool =
   | "select"
   | "add-seat"
@@ -13,26 +23,59 @@ type Tool =
   | "add-polygon"
   | "bend";
 
+/**
+ * Пропсы панели инструментов:
+ *  - currentTool/setCurrentTool — текущий режим редактирования;
+ *  - onDelete/onDuplicate — действия над выделенными объектами;
+ *  - onAlign — выравнивание выделения;
+ *  - onUploadBackground — загрузка фонового изображения;
+ *  - showGrid/onToggleGrid — переключение сетки;
+ *  - backgroundMode/backgroundFit — режим/способ отображения фона.
+ */
 interface ToolbarProps {
+  /** Текущий выбранный инструмент */
   currentTool: Tool;
+  /** Сменить текущий инструмент */
   setCurrentTool: (t: Tool) => void;
+
+  /** Удалить выделенные объекты (или фон, если ничего не выделено) */
   onDelete: () => void;
+  /** Выравнять выбранные объекты по заданному направлению */
   onAlign: (dir: AlignDirection) => void;
+  /** Дублировать выделенные объекты */
   onDuplicate: () => void;
+
+  /** Загрузить/изменить фоновое изображение (dataUrl) */
   onUploadBackground?: (dataUrl: string | null) => void;
+
+  /** Показана ли сетка на холсте */
   showGrid?: boolean;
+  /** Переключить отображение сетки */
   onToggleGrid?: () => void;
 
+  /** Режим работы с фоном: авто-вписывание или ручное позиционирование */
   backgroundMode: "auto" | "manual";
+  /** Изменить режим фона */
   setBackgroundMode: (m: "auto" | "manual") => void;
+  /** Способ вписывания фонового изображения в канвас */
   backgroundFit: "contain" | "cover" | "stretch" | "none";
+  /** Изменить способ вписывания фона */
   setBackgroundFit: (fit: "contain" | "cover" | "stretch" | "none") => void;
 }
 
 /* -------------------------------- Icons ---------------------------------- */
+/**
+ * Набор простых SVG-иконок для кнопок тулбара.
+ * Держим их в этом файле, чтобы не тащить сторонние библиотеки.
+ */
 const IconSelect = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-    <path d="M7 3l13 7-7 2-2 7-4-16z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    <path
+      d="M7 3l13 7-7 2-2 7-4-16z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const IconRect = () => (
@@ -74,7 +117,12 @@ const IconRow = () => (
 const IconRotate = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
     <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M20 12a8 8 0 1 1-4.7-7.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path
+      d="M20 12a8 8 0 1 1-4.7-7.3"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 const IconBend = () => (
@@ -85,7 +133,16 @@ const IconBend = () => (
 const IconDuplicate = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
     <rect x="8" y="8" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
-    <rect x="4" y="4" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" opacity="0.6" />
+    <rect
+      x="4"
+      y="4"
+      width="10"
+      height="10"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="2"
+      opacity="0.6"
+    />
   </svg>
 );
 const IconDelete = () => (
@@ -100,7 +157,12 @@ const IconDelete = () => (
 );
 const IconAlign = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
-    <path d="M12 4v16M6 8h12M4 12h16M6 16h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path
+      d="M12 4v16M6 8h12M4 12h16M6 16h12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 const IconGrid = () => (
@@ -111,7 +173,12 @@ const IconGrid = () => (
 const IconUpload = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
     <path d="M4 17v2h16v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M12 3v10m0 0l-4-4m4 4l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path
+      d="M12 3v10m0 0l-4-4m4 4l4-4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
   </svg>
 );
 const IconBg = () => (
@@ -123,6 +190,15 @@ const IconBg = () => (
 );
 
 /* ------------------------------ primitives ------------------------------- */
+
+/**
+ * Универсальная компактная кнопка тулбара.
+ *
+ * Используется для всех иконок, поддерживает:
+ *  - состояние active (подсветка выбранного инструмента),
+ *  - disabled (например, когда нет колбэка),
+ *  - title / aria-label для подсказок.
+ */
 function Button({
   active,
   disabled,
@@ -155,6 +231,7 @@ function Button({
   );
 }
 
+/** Подпись над группой инструментов (SELECT / DRAW / ZONES / TRANSFORM) */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10px] tracking-wide text-gray-400 font-medium select-none">
@@ -164,8 +241,23 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 /* ------------------------------ group model ------------------------------ */
+
+/**
+ * Логические группы инструментов тулбара.
+ *
+ *  - select — выбор / перемещение;
+ *  - draw   — фигуры и текст;
+ *  - zones  — зоны, ряды, места;
+ *  - transform — поворот и «клин».
+ */
 type GroupId = "select" | "draw" | "zones" | "transform";
 
+/**
+ * Описание всех кнопок внутри каждой группы:
+ *  - id    — Tool (для смены режима),
+ *  - title — тултип,
+ *  - icon  — SVG-компонент.
+ */
 const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]> = {
   select: [{ id: "select", title: "Выбор (V)", icon: IconSelect }],
   draw: [
@@ -185,6 +277,10 @@ const GROUP_ITEMS: Record<GroupId, { id: Tool; title: string; icon: React.FC }[]
   ],
 };
 
+/**
+ * Утилита: по Tool возвращает, к какой группе он относится.
+ * Используется для подсветки нужной группы и запоминания «последнего инструмента» в группе.
+ */
 function groupOf(tool: Tool): GroupId {
   if (tool === "select") return "select";
   if (["add-rect", "add-ellipse", "add-polygon", "add-text"].includes(tool)) return "draw";
@@ -193,6 +289,21 @@ function groupOf(tool: Tool): GroupId {
 }
 
 /* ------------------------------ Group button ----------------------------- */
+
+/**
+ * GroupButton — кнопка-группа на тулбаре.
+ *
+ * Показ:
+ *  - основная кнопка — отображает «последний использованный» инструмент группы;
+ *  - при клике по группе с несколькими инструментами — всплывает палитра кнопок (popover).
+ *
+ * Пропсы:
+ *  - groupId      — идентификатор группы (select/draw/...);
+ *  - currentTool  — текущий инструмент редактора;
+ *  - lastUsed     — карта «группа → последний выбранный Tool»;
+ *  - onPick       — вызывается при выборе конкретного инструмента;
+ *  - isOpen/onToggle — управляют состоянием поповера.
+ */
 function GroupButton({
   groupId,
   currentTool,
@@ -214,11 +325,13 @@ function GroupButton({
 }) {
   const items = GROUP_ITEMS[groupId];
   const activeInGroup = items.some((i) => i.id === currentTool);
+  // последний выбранный инструмент в группе (по умолчанию — первый)
   const last = lastUsed[groupId] ?? items[0].id;
   const LastIcon = (items.find((i) => i.id === last) ?? items[0]).icon;
 
   const single = items.length === 1;
 
+  /** Выбрать инструмент внутри группы и запомнить его как «последний» */
   const pick = (t: Tool) => {
     onPick(t);
     setLastUsed((prev) => ({ ...prev, [groupId]: t }));
@@ -231,6 +344,8 @@ function GroupButton({
         title={(items.find((i) => i.id === last) ?? items[0]).title}
         active={activeInGroup}
         onClick={() => {
+          // если в группе только один инструмент — сразу выбираем его,
+          // иначе открываем/закрываем палитру инструментов группы
           if (single) pick(items[0].id);
           else onToggle();
         }}
@@ -238,6 +353,7 @@ function GroupButton({
         <LastIcon />
       </Button>
 
+      {/* Поповер с инструментами группы (если их несколько) */}
       {!single && isOpen && (
         <div
           role="menu"
@@ -256,6 +372,20 @@ function GroupButton({
 }
 
 /* -------------------------------- Toolbar -------------------------------- */
+
+/**
+ * Toolbar — левый вертикальный блок инструментов редактора.
+ *
+ * Использует:
+ *  - состояние текущего инструмента (currentTool) из EditorPage;
+ *  - колбэки, которые прокидываются в канвас/редьюсер (onDelete, onAlign, onDuplicate и т.д.);
+ *  - флаги сетки и режимы работы с фоном.
+ *
+ * Визуально делится на три блока:
+ *  1) Группы инструментов (выбор, рисование, зоны, трансформация);
+ *  2) Команды редактирования (дубликат, удаление, выравнивание);
+ *  3) Настройки вида (сетка, фон, режим фона).
+ */
 export default function Toolbar({
   currentTool,
   setCurrentTool,
@@ -267,20 +397,33 @@ export default function Toolbar({
   onToggleGrid,
   backgroundMode,
   setBackgroundMode,
-  backgroundFit, // сейчас не используется, но оставляем в пропсах
+  backgroundFit, // сейчас не используется, но оставляем для совместимости
   setBackgroundFit, // аналогично
 }: ToolbarProps) {
+  /** Открыт ли поповер выравнивания (L/C/R) */
   const [alignOpen, setAlignOpen] = useState(false);
+
+  /**
+   * Карта «группа → последний использованный Tool».
+   * Нужна для того, чтобы, например, при повторном клике по DRAW показывать
+   * последнюю фигуру, а не всегда первую.
+   */
   const [lastUsed, setLastUsed] = useState<Partial<Record<GroupId, Tool>>>({
     [groupOf(currentTool)]: currentTool,
   });
 
+  /** При смене инструмента обновляем lastUsed для его группы */
   useEffect(() => {
     setLastUsed((prev) => ({ ...prev, [groupOf(currentTool)]: currentTool }));
   }, [currentTool]);
 
+  /** ref на скрытый <input type="file"> для загрузки фонового изображения */
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  /** Открыть диалог выбора файла */
   const pickFile = () => fileRef.current?.click();
+
+  /** Обработка выбранного изображения и передача его наверх в виде dataUrl */
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f || !onUploadBackground) return;
@@ -292,9 +435,10 @@ export default function Toolbar({
     reader.readAsDataURL(f);
   };
 
-  // открытая группа
+  /** Какая группа инструментов сейчас раскрыта (для поповера) */
   const [openGroup, setOpenGroup] = useState<GroupId | null>(null);
 
+  /** Выбрать инструмент в группе и закрыть её поповер */
   const handlePick = (t: Tool, groupId: GroupId) => {
     setCurrentTool(t);
     setLastUsed((prev) => ({ ...prev, [groupId]: t }));
@@ -303,7 +447,7 @@ export default function Toolbar({
 
   return (
     <aside className="w-[72px] bg-white border-r border-gray-200 flex flex-col items-center py-3 gap-4">
-      {/* Группы инструментов */}
+      {/* Группы инструментов (SELECT / DRAW / ZONES / TRANSFORM) */}
       <GroupButton
         groupId="select"
         label="ВЫБОР"
@@ -348,17 +492,22 @@ export default function Toolbar({
         onToggle={() => setOpenGroup((g) => (g === "transform" ? null : "transform"))}
       />
 
+      {/* Разделитель между выбором инструмента и командами редактирования */}
       <div className="w-8 h-px bg-gray-200 my-1" />
 
-      {/* Редактирование */}
+      {/* Блок команд редактирования выделения */}
       <div className="flex flex-col items-center gap-2">
+        {/* Дублировать выделение */}
         <Button title="Дублировать (Ctrl/⌘+D)" onClick={onDuplicate}>
           <IconDuplicate />
         </Button>
+
+        {/* Удалить выделение (или фон) */}
         <Button title="Удалить (Del)" onClick={onDelete}>
           <IconDelete />
         </Button>
 
+        {/* Выравнивание L/C/R во всплывающем меню */}
         <div className="relative">
           <Button title="Выравнивание (L/C/R)" onClick={() => setAlignOpen((v) => !v)}>
             <IconAlign />
@@ -379,10 +528,12 @@ export default function Toolbar({
         </div>
       </div>
 
+      {/* Разделитель между командами и настройками вида */}
       <div className="w-8 h-px bg-gray-200 my-1" />
 
-      {/* Вид / фон */}
+      {/* Настройки вида / фона */}
       <div className="flex flex-col items-center gap-2">
+        {/* Переключатель отображения сетки */}
         <Button
           title="Показать/скрыть сетку"
           active={!!showGrid}
@@ -392,28 +543,23 @@ export default function Toolbar({
           <IconGrid />
         </Button>
 
+        {/* Загрузка фонового изображения */}
         <Button title="Загрузить фон" onClick={pickFile}>
           <IconUpload />
         </Button>
 
+        {/* Переключатель режима работы с фоном: auto ↔ manual */}
         <Button
           title={backgroundMode === "manual" ? "Фон: вручную" : "Фон: автоматически"}
           active={backgroundMode === "manual"}
-          onClick={() =>
-            setBackgroundMode(backgroundMode === "manual" ? "auto" : "manual")
-          }
+          onClick={() => setBackgroundMode(backgroundMode === "manual" ? "auto" : "manual")}
         >
           <IconBg />
         </Button>
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        onChange={onFile}
-        className="hidden"
-      />
+      {/* Скрытый input для выбора картинок (используется в pickFile/onFile) */}
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
     </aside>
   );
 }

@@ -1,3 +1,18 @@
+/**
+ * SeatmapCanvas — основной холст редактора схемы.
+ * Отвечает за:
+ *  • визуализацию зон, рядов, мест, текстов и произвольных фигур;
+ *  • взаимодействия (выбор, перетаскивание, рамочное выделение, создание фигур/зон);
+ *  • масштабирование/прокрутку сцены и работу с фоновым изображением;
+ *  • вспомогательные оверлеи: трансформеры, «клин» зоны, сетка, zoom-кнопки.
+ *
+ * Использует данные:
+ *  - seats, rows, zones, texts, shapes — структура схемы (EditorPage хранит и передаёт вниз);
+ *  - selectedIds/currentTool — внешний режим и текущее выделение;
+ *  - backgroundImage/mode/fit/rect — состояние фоновой картинки;
+ *  - setState/setSelectedIds/onDuplicate — команды редактирования, прокинутые сверху.
+ */
+
 import Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
@@ -14,22 +29,27 @@ import {
   Transformer,
 } from "react-konva";
 import { Row, Seat, ShapeObject, TextObject, Zone } from "../../types/types";
-import BackgroundImageLayer from "../seatmap/BackgroundImageLayer";
-import DrawingZone from "../seatmap/DrawingZone";
-import GridLayer from "../seatmap/GridLayer";
-import SeatComponent from "../seatmap/SeatComponent";
-import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts";
-import ZoneBendOverlay from "../seatmap/ZoneBendOverlay";
-import ZoneComponent from "../seatmap/ZoneComponent";
-import { applyBendToZoneContent } from "../seatmap/zoneWarp";
-import ZoomControls from "../seatmap/ZoomControls";
+import BackgroundImageLayer from "../seatmap/BackgroundImageLayer"; // Отрисовка фона в auto-режиме
+import DrawingZone from "../seatmap/DrawingZone"; // Визуализация «превью» новой зоны при рисовании
+import GridLayer from "../seatmap/GridLayer"; // Сетка и её смещение с учётом pan/zoom
+import SeatComponent from "../seatmap/SeatComponent"; // Рендер и перетаскивание места
+import { useKeyboardShortcuts } from "../seatmap/useKeyboardShortcuts"; // Горячие клавиши (удалить/дублировать/и т.д.)
+import ZoneBendOverlay from "../seatmap/ZoneBendOverlay"; // UI «клина» (деформация по краям зоны)
+import ZoneComponent from "../seatmap/ZoneComponent"; // Рендер зоны и её содержимого (ряды/места)
+import ZoomControls from "../seatmap/ZoomControls"; // +/-/reset кнопки масштаба
 
 import { SeatmapState } from "../../pages/EditorPage";
 
-import { crisp, crispRect, crispSize } from "../../utils/crisp";
+import { crisp, crispRect, crispSize } from "../../utils/crisp"; // Хелперы для пиксель-перфект рендера
 
+// Улучшаем чёткость на HiDPI-экранах
 (Konva as any).pixelRatio = Math.max(window.devicePixelRatio || 1, 1);
 
+/**
+ * fitZoneWidthToContent — утилита для подгонки ширины зоны по содержимому.
+ * Возвращает новый объект zone с обновлённой позицией/шириной.
+ * (Сейчас не используется напрямую в компоненте; оставлена как вспомогательная.)
+ */
 function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16) {
   const rowsZ = rows.filter((r) => r.zoneId === zone.id);
   const seatsZ = seats.filter((s) => s.zoneId === zone.id);
@@ -53,12 +73,9 @@ function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16)
 
   if (!Number.isFinite(minX)) return zone;
 
-  const shiftX = Math.min(0, Math.floor(minX - pad));
-
+  const shiftX = Math.min(0, Math.floor(minX - pad)); // (сдвиг не используется ниже, но оставлен для ясности)
   const leftEdge = Math.min(0, Math.floor(minX - pad));
-
   const rightEdge = Math.ceil(maxX + pad);
-
   const neededWidth = rightEdge - leftEdge;
 
   return {
@@ -68,6 +85,10 @@ function fitZoneWidthToContent(zone: Zone, rows: Row[], seats: Seat[], pad = 16)
   };
 }
 
+/**
+ * useHTMLImage — загрузка HTMLImageElement по dataURL/URL с кросс-доменной поддержкой.
+ * Нужна для ручного режима фонового изображения (transformable Konva.Image).
+ */
 function useHTMLImage(src: string | null) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -85,6 +106,8 @@ function useHTMLImage(src: string | null) {
   }, [src]);
   return img;
 }
+
+/** Примитивная проверка пересечения прямоугольников (для утилит, если потребуются) */
 function rectsIntersect(
   a: { x: number; y: number; width: number; height: number },
   b: { x: number; y: number; width: number; height: number }
@@ -95,13 +118,24 @@ function rectsIntersect(
     by2 = b.y + b.height;
   return !(ax2 < b.x || a.x > bx2 || ay2 < b.y || a.y > by2);
 }
+
+/** Квадрат расстояния между точками (чтобы не делать sqrt при частых проверках) */
 const dist2 = (a: { x: number; y: number }, b: { x: number; y: number }) => {
   const dx = a.x - b.x,
     dy = a.y - b.y;
   return dx * dx + dy * dy;
 };
-const NEAR_R2 = 10 * 10;
+const NEAR_R2 = 10 * 10; // Радиус «снепа к первой точке» для полигона (в квадрате)
 
+/**
+ * Пропсы SeatmapCanvas:
+ *  - сиденья/ряды/зоны/тексты/фигуры — источник правды для рендера;
+ *  - setState — верхнеуровневый setState редактора (через useHistory);
+ *  - selectedIds/setSelectedIds — текущее выделение элементов;
+ *  - currentTool — режим работы (select/draw/rotate/bend/...);
+ *  - showGrid и настройки фона — визуальные опции;
+ *  - onDuplicate — команда «дублировать выделение».
+ */
 interface SeatmapCanvasProps {
   seats: Seat[];
   rows: Row[];
@@ -120,7 +154,7 @@ interface SeatmapCanvasProps {
     | "add-rect"
     | "add-ellipse"
     | "add-polygon"
-    | "bend"; // 🆕
+    | "bend"; // режим «клин» для зоны
   backgroundImage: string | null;
 
   showGrid: boolean;
@@ -137,6 +171,7 @@ interface SeatmapCanvasProps {
   setBackgroundImage?: (v: string | null) => void;
 }
 
+/** Константы канваса, сетки и типовых размеров мест */
 const SEAT_RADIUS = 12;
 const SEAT_SPACING_X = 30;
 const SEAT_SPACING_Y = 30;
@@ -144,6 +179,10 @@ const GRID_SIZE = 30;
 const CANVAS_WIDTH = 1486;
 const CANVAS_HEIGHT = 752;
 
+/**
+ * containRect — вписать изображение в рамку (без обрезки), вернуть рассчитанный rect.
+ * Используется для установки начального backgroundRect в manual-режиме.
+ */
 function containRect(imgW: number, imgH: number, boxW: number, boxH: number) {
   if (imgW === 0 || imgH === 0) {
     return { x: 0, y: 0, width: boxW, height: boxH };
@@ -177,28 +216,41 @@ function SeatmapCanvas({
   shapes,
   setBackgroundImage,
 }: SeatmapCanvasProps) {
+  /** drawingZone — временная зона при «рисовании прямоугольником» */
   const [drawingZone, setDrawingZone] = useState<Zone | null>(null);
+  /** hoveredZoneId — зона под курсором (для подсветки/подсказок, если нужны) */
   const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
+  /** ref на Konva.Stage — корневой узел сцены */
   const stageRef = useRef<Konva.Stage | null>(null);
+  /** Масштаб сцены и смещение (pan) */
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
 
+  /** refs для трансформирования фигур и текстов */
   const shapeRefs = useRef<Record<string, Konva.Group | null>>({});
+  /** «черновик» прямоугольника/эллипса при рисовании мышью */
   const [shapeDraft, setShapeDraft] = useState<ShapeObject | null>(null);
+  /** «черновик» полигона: набор вершин + флаг «ховер по первой точке» */
   const [polyDraft, setPolyDraft] = useState<{
     id: string;
     points: { x: number; y: number }[];
     hoverFirst?: boolean;
   } | null>(null);
 
+  /** Нормализация произвольного прямоугольника к (x,y,width,height) с верхним левым углом */
   const normRect = (x1: number, y1: number, x2: number, y2: number) => {
     const x = Math.min(x1, x2);
     const y = Math.min(y1, y2);
     return { x, y, width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
   };
 
+  /** Кламп значения в диапазон */
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+  /**
+   * zoomAtScreenPoint — масштабирование сцены так, чтобы «якорь» (экранная точка)
+   * оставался визуально на месте (стандартный UX графических редакторов).
+   */
   const zoomAtScreenPoint = (anchor: { x: number; y: number }, nextScaleRaw: number) => {
     const stage: Konva.Stage | null = stageRef.current;
     if (!stage) return;
@@ -209,6 +261,12 @@ function SeatmapCanvas({
     setStagePos(newPos);
   };
 
+  /**
+   * Горячие клавиши в режиме рисования полигона:
+   *  - Esc — отменить черновик;
+   *  - Enter — завершить;
+   *  - Backspace — удалить последнюю точку.
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!polyDraft) return;
@@ -228,6 +286,7 @@ function SeatmapCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [polyDraft]);
 
+  /** Завершить рисование полигона: нормализуем bbox и сохраняем ShapeObject */
   const finishPolygon = () => {
     if (!polyDraft || polyDraft.points.length < 3) {
       setPolyDraft(null);
@@ -274,6 +333,10 @@ function SeatmapCanvas({
     setPolyDraft(null);
   };
 
+  /**
+   * Масштабирование по Ctrl/Cmd + [+/-/0].
+   * Используем последнюю позицию курсора как «якорь», иначе — центр канваса.
+   */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
@@ -306,9 +369,11 @@ function SeatmapCanvas({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [scale]);
 
+  /** Перевод экранных координат в координаты «мира» Konva (с учётом масштаба и смещения) */
   const toWorldPoint = (stage: Konva.Stage, p: { x: number; y: number }) =>
     stage.getAbsoluteTransform().copy().invert().point(p);
 
+  /** Нажатый пробел — временная рука (pan). Блокируем в полях ввода. */
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -332,6 +397,7 @@ function SeatmapCanvas({
     };
   }, []);
 
+  /** Курсор: grab/crosshair/default — в зависимости от режима и пробела */
   useEffect(() => {
     const el = stageRef.current?.container();
     if (!el) return;
@@ -343,12 +409,14 @@ function SeatmapCanvas({
         : "default";
   }, [isSpacePressed, currentTool]);
 
+  /** Отключаем нативный touch-action, чтобы жесты не мешали Konva */
   useEffect(() => {
     const el = stageRef.current?.container();
     if (!el) return;
     el.style.touchAction = "none";
   }, []);
 
+  /** Состояние рамочного выделения (marquee) */
   const [marquee, setMarquee] = useState<{
     active: boolean;
     x: number;
@@ -364,10 +432,12 @@ function SeatmapCanvas({
   });
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  /** Начать рамочное выделение с точки p */
   const startMarquee = (p: { x: number; y: number }) => {
     dragStartRef.current = p;
     setMarquee({ active: true, x: p.x, y: p.y, w: 0, h: 0 });
   };
+  /** Обновить габариты рамки по текущей точке p */
   const updateMarquee = (p: { x: number; y: number }) => {
     if (!dragStartRef.current) return;
     const dx = p.x - dragStartRef.current.x;
@@ -378,7 +448,7 @@ function SeatmapCanvas({
     const h = Math.abs(dy);
     setMarquee((m) => ({ ...m, x, y, w, h }));
   };
-  // finishMarquee: выбираем ТОЛЬКО сиденья
+  /** Завершить рамочное выделение — выделяем ТОЛЬКО сиденья; Shift — добавление к выделению */
   const finishMarquee = (append: boolean) => {
     if (!marquee.active) return;
     const rx2 = marquee.x + marquee.w,
@@ -404,9 +474,16 @@ function SeatmapCanvas({
     dragStartRef.current = null;
   };
 
+  /** refs и состояние для ручного редактирования фонового изображения (manual) */
   const bgNodeRef = useRef<Konva.Image | null>(null);
   const bgTrRef = useRef<Konva.Transformer | null>(null);
   const [bgSelected, setBgSelected] = useState(false);
+
+  /**
+   * Delete/Backspace:
+   *  - можно удалить фон, если он выделен (manual),
+   *  - либо если фон есть, инструмент select и ничего не выделено (auto).
+   */
   useEffect(() => {
     const onDel = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement | null)?.tagName?.toLowerCase();
@@ -421,9 +498,6 @@ function SeatmapCanvas({
       const isDel = e.key === "Delete" || e.key === "Backspace";
       if (!isDel) return;
 
-      // ✅ можно удалять:
-      //   1) если фон выделен (manual)
-      //   2) или если фон есть, инструмент select и ничего не выделено (auto)
       const canDeleteBg =
         bgSelected || (!!backgroundImage && currentTool === "select" && selectedIds.length === 0);
 
@@ -448,15 +522,22 @@ function SeatmapCanvas({
     setBackgroundMode,
   ]);
 
+  /** Последняя позиция курсора на экране — используется как «якорь» зума */
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
+  /** Управление масштабом из внешних кнопок (+/-/reset) */
   const setScaleFromButtons = (nextScale: number) => {
     const anchor = lastPointerRef.current ?? { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
     zoomAtScreenPoint(anchor, nextScale);
   };
 
+  /** Загруженный HTMLImage для фона (manual) */
   const bgImg = useHTMLImage(backgroundImage);
 
+  /**
+   * При переключении в manual без заданного backgroundRect —
+   * вычисляем fit rect, чтобы изображение было вписано в канвас.
+   */
   useEffect(() => {
     if (backgroundMode === "manual" && !backgroundRect && backgroundImage) {
       const img = new window.Image();
@@ -469,6 +550,7 @@ function SeatmapCanvas({
     }
   }, [backgroundMode, backgroundRect, backgroundImage, setBackgroundRect]);
 
+  /** Подключаем Transformer к ноде фонового изображения, когда он доступен */
   useEffect(() => {
     if (bgTrRef.current && bgNodeRef.current) {
       bgTrRef.current.nodes([bgNodeRef.current]);
@@ -476,6 +558,10 @@ function SeatmapCanvas({
     }
   }, [backgroundMode, backgroundRect, bgImg]);
 
+  /**
+   * Глобальные хоткеи редактора (удаление, дублирование, перемещение по стрелкам и т.д.).
+   * Передаём текущие selectedIds и состояние для корректной работы.
+   */
   useKeyboardShortcuts({
     selectedIds,
     setSelectedIds,
@@ -484,6 +570,10 @@ function SeatmapCanvas({
     onDuplicate,
   });
 
+  /**
+   * createRowWithSeats — при создании зоны автоматически создаём ряды и места.
+   * На вход — параметры сетки; на выход — один Row и массив Seat для него.
+   */
   const createRowWithSeats = (
     zoneId: string,
     rowIndex: number,
@@ -519,27 +609,36 @@ function SeatmapCanvas({
     }));
     return { row, seats: newSeats };
   };
+
+  /** Снэп к центру клетки сетки (используется для добавления места по Alt) */
   const snapCenter = (v: number) => Math.floor(v / GRID_SIZE) * GRID_SIZE + GRID_SIZE / 2;
 
+  /**
+   * onMouseDown сцены:
+   *  - select: старт рамочного выделения на пустом месте;
+   *  - add-seat / add-text / add-rect / add-ellipse / add-polygon / add-zone: начало соответствующих действий.
+   */
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     const isEmpty =
-      e.target === stage || e.target?.name?.() === "zone-bg" || e.target?.name?.() === "zone-ui"; // 👈 добавили
+      e.target === stage || e.target?.name?.() === "zone-bg" || e.target?.name?.() === "zone-ui";
     if (isEmpty) setBgSelected(false);
     const p = stage.getPointerPosition();
     if (p) lastPointerRef.current = p;
 
+    // Рамочное выделение — только на «пустом» месте и не при панорамировании
     if (currentTool === "select" && isEmpty && !isSpacePressed) {
       const p = stage.getPointerPosition();
       if (p) startMarquee(toWorldPoint(stage, p));
     }
 
+    // Добавление одиночного места (Alt — снап к центру клетки)
     if (currentTool === "add-seat") {
       if (isSpacePressed) return;
       const p = stage.getPointerPosition();
       if (!p) return;
       const w = toWorldPoint(stage, p);
-      const useSnap = e.evt.altKey; // Alt — включить снап
+      const useSnap = e.evt.altKey;
       const x = useSnap ? snapCenter(w.x) : Math.round(w.x);
       const y = useSnap ? snapCenter(w.y) : Math.round(w.y);
 
@@ -561,6 +660,7 @@ function SeatmapCanvas({
       return;
     }
 
+    // Начало рисования зоны прямоугольником (со снапом к сетке)
     if (currentTool === "add-zone" && isEmpty) {
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
@@ -583,6 +683,7 @@ function SeatmapCanvas({
       setDrawingZone(newZone);
     }
 
+    // Добавление текстовой метки (со снапом к сетке)
     if (currentTool === "add-text") {
       const p = stage.getPointerPosition();
       if (!p) return;
@@ -604,6 +705,7 @@ function SeatmapCanvas({
       return;
     }
 
+    // Начало рисования прямоугольника/эллипса (черновик)
     if (currentTool === "add-rect" || currentTool === "add-ellipse") {
       if (isSpacePressed) return;
       const p = stage.getPointerPosition();
@@ -629,6 +731,7 @@ function SeatmapCanvas({
       return;
     }
 
+    // Добавление многоугольника: клики ставят точки; клик по первой точке замыкает контур
     if (currentTool === "add-polygon") {
       if (isSpacePressed) return;
       const p = stage.getPointerPosition();
@@ -643,10 +746,10 @@ function SeatmapCanvas({
         if (!prev) return { id: `poly-temp`, points: [{ x: px, y: py }], hoverFirst: false };
 
         const last = prev.points[prev.points.length - 1];
-        // защита от «той же точки»
+        // защита от повторной «той же точки»
         if (last && dist2(last, { x: px, y: py }) < 1) return prev;
 
-        // клик по первой точке — замыкаем, если точек >= 3
+        // клик по первой точке — замкнуть, если точек >= 3
         if (prev.points.length >= 3 && dist2(prev.points[0], { x: px, y: py }) <= NEAR_R2) {
           finishPolygon();
           return null;
@@ -658,6 +761,10 @@ function SeatmapCanvas({
     }
   };
 
+  /**
+   * onMouseMove сцены:
+   *  - обновление рамки выделения/черновиков/подсветки первой точки полигона.
+   */
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
     const p = stage.getPointerPosition();
@@ -675,7 +782,7 @@ function SeatmapCanvas({
       const ey = Math.round(realPos.y / GRID_SIZE) * GRID_SIZE;
       setDrawingZone((prev) => {
         if (!prev) return null;
-        const r = normRect(prev.x, prev.y, ex, ey); // ← всегда top-left + положительные width/height
+        const r = normRect(prev.x, prev.y, ex, ey); // всегда top-left + положительные width/height
         return { ...prev, x: r.x, y: r.y, width: r.width, height: r.height };
       });
     }
@@ -690,9 +797,9 @@ function SeatmapCanvas({
     if (polyDraft) {
       const w = toWorldPoint(stage, p);
       const px = w.x,
-        py = w.y; // для резинки не снапаем — выглядит живее
+        py = w.y; // «резинка» без снапа — плавнее ощущается
 
-      // показываем ховер по первой точке
+      // ховер по первой точке (для подсказки «замкнуть»)
       const showHover =
         polyDraft.points.length >= 3 && dist2(polyDraft.points[0], { x: px, y: py }) <= NEAR_R2;
 
@@ -701,6 +808,12 @@ function SeatmapCanvas({
     }
   };
 
+  /**
+   * onMouseUp сцены:
+   *  - завершение рамочного выделения;
+   *  - финализация новой зоны (с автогенерацией рядов/мест);
+   *  - финализация фигуры (прямоугольник/эллипс).
+   */
   const handleStageMouseUp = (e: KonvaEventObject<MouseEvent>) => {
     const stage: Konva.Stage = e.target.getStage();
 
@@ -712,11 +825,13 @@ function SeatmapCanvas({
     if (drawingZone) {
       const { x: startX, y: startY, width, height } = drawingZone; // уже нормализовано
 
+      // слишком маленькую зону не сохраняем
       if (width < SEAT_SPACING_X || height < SEAT_SPACING_Y) {
         setDrawingZone(null);
         return;
       }
 
+      // Создаём реальную зону и генерируем «сетку» рядов/мест
       const newZone: Zone = {
         id: `zone-${crypto.randomUUID()}`,
         x: startX,
@@ -791,8 +906,10 @@ function SeatmapCanvas({
     }
   };
 
+  /** refs для Konva.Text — чтобы управлять трансформером/выделением */
   const textRefs = useRef<Record<string, Konva.Text | null>>({});
 
+  /** По id строки/места находим родительскую зону (для быстрого «поднятия выделения» с Alt) */
   const parentZoneIdOf = (id: string) => {
     const r = rows.find((r) => r.id === id);
     if (r) return r.zoneId;
@@ -800,6 +917,12 @@ function SeatmapCanvas({
     return s?.zoneId ?? null;
   };
 
+  /**
+   * Общий клик по элементам сцены:
+   *  - Alt/Ctrl/Cmd — поднять выделение до зоны;
+   *  - Shift — инвертировать элемент в множественном выделении;
+   *  - иначе — выбрать только кликнутый элемент.
+   */
   const handleElementClick = (id: string, e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (currentTool === "add-seat" || currentTool === "add-text") return;
     e.cancelBubble = true;
@@ -817,6 +940,11 @@ function SeatmapCanvas({
     }
   };
 
+  /**
+   * Колёсико мыши:
+   *  - Ctrl/Cmd/Alt — жест «приближение/отдаление»;
+   *  - без модификаторов — панорамирование.
+   */
   const zoneRefs = useRef<Record<string, Konva.Group | null>>({});
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
@@ -843,6 +971,7 @@ function SeatmapCanvas({
     }
   };
 
+  /** В режиме «клин» всегда должен быть активен какой-то zone — если нет, берём первую */
   const canInteractZones = currentTool !== "add-seat";
   useEffect(() => {
     if (currentTool !== "bend") return;
@@ -862,12 +991,12 @@ function SeatmapCanvas({
         scaleY={scale}
         x={stagePos.x}
         y={stagePos.y}
-        draggable={isSpacePressed}
+        draggable={isSpacePressed} // Пробел зажат — перетаскиваем всю сцену
         dragDistance={2}
-        onWheel={handleWheel}
-        onMouseDown={handleStageMouseDown}
-        onMouseMove={handleStageMouseMove}
-        onMouseUp={handleStageMouseUp}
+        onWheel={handleWheel} // Зум/скролл
+        onMouseDown={handleStageMouseDown} // Начало действий (select/draw/…)
+        onMouseMove={handleStageMouseMove} // Обновление черновиков/рамки
+        onMouseUp={handleStageMouseUp} // Финализация действий
         onDragStart={(e: KonvaEventObject<MouseEvent>) => {
           const stage = stageRef.current;
           if (!stage || e.target !== stage) return;
@@ -887,13 +1016,15 @@ function SeatmapCanvas({
           if (el) el.style.cursor = isSpacePressed ? "grab" : "default";
         }}
         onDblClick={() => {
+          // Двойной клик в режиме полигона — завершить фигуру
           if (currentTool === "add-polygon") finishPolygon();
         }}
       >
-        {/* Фон */}
+        {/* ========================= ФОНОВОЕ ИЗОБРАЖЕНИЕ ========================= */}
         {backgroundImage &&
           backgroundMode !== "manual" &&
           (backgroundRect && bgImg ? (
+            // Auto-режим (через заранее рассчитанный rect)
             <Layer listening={false}>
               <KonvaImage
                 image={bgImg}
@@ -907,6 +1038,7 @@ function SeatmapCanvas({
               />
             </Layer>
           ) : (
+            // Auto-режим с вычислением размещения внутри компонента
             <BackgroundImageLayer
               dataUrl={backgroundImage}
               canvasW={CANVAS_WIDTH}
@@ -918,6 +1050,7 @@ function SeatmapCanvas({
           ))}
 
         {backgroundImage && backgroundMode === "manual" && bgImg && backgroundRect ? (
+          // Manual-режим: фоновую картинку можно таскать/масштабировать через Transformer
           <Layer
             listening={currentTool === "select" && !isSpacePressed}
             children={[
@@ -959,7 +1092,7 @@ function SeatmapCanvas({
               <Transformer
                 key="bgTr"
                 ref={bgTrRef}
-                nodes={bgSelected && bgNodeRef.current ? [bgNodeRef.current] : []} // ← только при выделении
+                nodes={bgSelected && bgNodeRef.current ? [bgNodeRef.current] : []} // Трансформер показываем только при выделении фона
                 rotateEnabled={false}
                 keepRatio
                 enabledAnchors={[
@@ -978,8 +1111,7 @@ function SeatmapCanvas({
           />
         ) : null}
 
-        {/* Сетка */}
-
+        {/* =============================== СЕТКА ================================ */}
         <GridLayer
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
@@ -989,17 +1121,17 @@ function SeatmapCanvas({
           stagePos={stagePos}
         />
 
-        {/* Зоны */}
-
+        {/* =============================== ЗОНЫ ================================= */}
         <Layer
           listening={canInteractZones}
           children={[
+            // Существующие зоны + их содержимое
             ...zones.map((zone) => (
               <ZoneComponent
                 key={zone.id}
-                zone={zone}
-                seats={seats}
-                rows={rows}
+                zone={zone} // модель зоны
+                seats={seats} // все места (фильтр по zoneId внутри)
+                rows={rows} // все ряды (фильтр по zoneId внутри)
                 isSelected={selectedIds.includes(zone.id)}
                 setGroupRef={(node) => {
                   zoneRefs.current[zone.id] = node;
@@ -1015,6 +1147,7 @@ function SeatmapCanvas({
                 scale={scale}
               />
             )),
+            // Превью рисуемой зоны (пока мышь тянет)
             <DrawingZone
               key="drawing-zone"
               drawingZone={drawingZone}
@@ -1024,15 +1157,16 @@ function SeatmapCanvas({
           ]}
         />
 
-        {/* SHAPES */}
+        {/* ============================ ПРОИЗВОЛЬНЫЕ ФИГУРЫ ===================== */}
         <Layer
           listening={currentTool === "select" && !isSpacePressed}
           children={[
+            // Сохранённые фигуры
             ...shapes.map((sh) => {
               const cx = sh.x + sh.width / 2;
               const cy = sh.y + sh.height / 2;
 
-              // снэп центра группы — чтобы вся фигура ложилась на пиксели
+              // Центр группы снапается к «чётким» пикселям — меньше размытия
               const cxS = crisp(cx, scale);
               const cyS = crisp(cy, scale);
 
@@ -1056,6 +1190,7 @@ function SeatmapCanvas({
                   draggable={currentTool === "select" && !isSpacePressed}
                   onClick={(e) => handleElementClick(sh.id, e)}
                   onDragEnd={(e) => {
+                    // По окончании перетаскивания — снап к сетке
                     const nx = e.target.x() - sh.width / 2;
                     const ny = e.target.y() - sh.height / 2;
                     const sx = Math.round(nx / GRID_SIZE) * GRID_SIZE;
@@ -1114,6 +1249,7 @@ function SeatmapCanvas({
               );
             }),
 
+            // Временный оверлей при рисовании прямоугольника/эллипса
             shapeDraft ? (
               <Group
                 key="shape-draft"
@@ -1151,10 +1287,11 @@ function SeatmapCanvas({
             ) : null,
           ]}
         />
-        {/* POLYGON DRAFT OVERLAY */}
+
+        {/* ========================== ОВЕРЛЕЙ ПОЛИГОНА ========================= */}
         {currentTool === "add-polygon" && polyDraft ? (
           <Layer listening>
-            {/* линия-резинка: существующие точки + курсор */}
+            {/* «Резинка» от последней точки к курсору */}
             <Line
               x={0}
               y={0}
@@ -1179,7 +1316,7 @@ function SeatmapCanvas({
               listening={false}
             />
 
-            {/* «магнит» на первой точке для замыкания */}
+            {/* Первая точка — «магнит» для замыкания */}
             {polyDraft.points.length > 0 && (
               <Circle
                 x={polyDraft.points[0].x}
@@ -1195,7 +1332,7 @@ function SeatmapCanvas({
               />
             )}
 
-            {/* маленькие узлы уже поставленных точек */}
+            {/* Маленькие узлы уже поставленных точек */}
             {polyDraft.points.map((p, i) => (
               <Circle
                 key={i}
@@ -1210,7 +1347,7 @@ function SeatmapCanvas({
           </Layer>
         ) : null}
 
-        {/* Свободные сиденья (вне зон) */}
+        {/* =================== СВОБОДНЫЕ МЕСТА (вне зон/рядов) ================== */}
         <Layer listening={currentTool === "select" && !isSpacePressed}>
           {seats
             .filter((s) => !s.zoneId)
@@ -1222,7 +1359,7 @@ function SeatmapCanvas({
                 isRowSelected={false}
                 onClick={handleElementClick}
                 onDragEnd={(_e, seatAfterDrag) => {
-                  // по желанию: оставляем снап ПОСЛЕ перетаскивания
+                  // Снапаем к сетке ПОСЛЕ перетаскивания
                   const nx = Math.round(seatAfterDrag.x / GRID_SIZE) * GRID_SIZE;
                   const ny = Math.round(seatAfterDrag.y / GRID_SIZE) * GRID_SIZE;
                   setState((prev) => ({
@@ -1239,7 +1376,7 @@ function SeatmapCanvas({
             ))}
         </Layer>
 
-        {/* Тексты */}
+        {/* ================================ ТЕКСТЫ ============================== */}
         <Layer
           listening={currentTool === "select" && !isSpacePressed}
           children={[
@@ -1250,31 +1387,30 @@ function SeatmapCanvas({
                   textRefs.current[t.id] = node;
                 }}
                 x={t.x}
- y={t.y}
+                y={t.y}
                 text={t.text}
-                fontSize={Math.round(t.fontSize ?? 18)} // целый размер
+                fontSize={Math.round(t.fontSize ?? 18)} // округление до целого — рендер чётче
                 fill={t.fill ?? "#111827"}
                 rotation={t.rotation ?? 0}
                 draggable={currentTool === "select" && !isSpacePressed}
                 onClick={(e) => handleElementClick(t.id, e)}
-                 onDragStart={(e) => (e.cancelBubble = true)}
-  onDragMove={(e) => (e.cancelBubble = true)}
-  onDragEnd={(e) => {
-    e.cancelBubble = true;
-    const { x, y } = e.target.position(); // БЕЗ снапа
-    setState((prev) => ({
-      ...prev,
-      texts: (prev.texts || []).map((tt) =>
-        tt.id === t.id ? { ...tt, x, y } : tt
-      ),
-    }));
-  }}
+                // Текст перетаскиваем без снапа (удобнее позиционировать)
+                onDragStart={(e) => (e.cancelBubble = true)}
+                onDragMove={(e) => (e.cancelBubble = true)}
+                onDragEnd={(e) => {
+                  e.cancelBubble = true;
+                  const { x, y } = e.target.position();
+                  setState((prev) => ({
+                    ...prev,
+                    texts: (prev.texts || []).map((tt) => (tt.id === t.id ? { ...tt, x, y } : tt)),
+                  }));
+                }}
               />
             )),
           ]}
         />
 
-        {/* Rotate transformer */}
+        {/* =========================== ПОВОРОТ ТРАНСФОРМЕР ====================== */}
         {currentTool === "rotate" && selectedIds.length === 1
           ? (() => {
               const selectedId = selectedIds[0];
@@ -1289,7 +1425,7 @@ function SeatmapCanvas({
                       key="rot"
                       nodes={[node]}
                       rotateEnabled
-                      enabledAnchors={[]}
+                      enabledAnchors={[]} // только вращение, без изменения размеров
                       onTransformEnd={() => {
                         const rotation = node.rotation();
                         setState((prev) => ({
@@ -1312,7 +1448,7 @@ function SeatmapCanvas({
             })()
           : null}
 
-        {/* 🆕 Bend overlay — редактирование изгибов выбранной зоны */}
+        {/* ============================= BEND OVERLAY =========================== */}
         {currentTool === "bend" && selectedIds.length === 1
           ? (() => {
               const z = zones.find((zz) => zz.id === selectedIds[0]);
@@ -1321,38 +1457,40 @@ function SeatmapCanvas({
                   children={[
                     <ZoneBendOverlay
                       scale={scale}
-                      key={`bend-${z.id}-${z.angleLeftDeg ?? 'na'}-${z.angleRightDeg ?? 'na'}`}
-                      zone={z}
+                      key={`bend-${z.id}-${z.angleLeftDeg ?? "na"}-${z.angleRightDeg ?? "na"}`}
+                      zone={z} // текущая зона для редактирования клина
                       setZone={(updater) =>
                         setState((prev) => ({
                           ...prev,
                           zones: prev.zones.map((one) => (one.id === z.id ? updater(one) : one)),
                         }))
                       }
+                      // onCommit: записываем только углы деформации (пересчёт геометрии делает ZoneComponent)
                       onCommit={(zoneAfter) => {
-  setState(prev => ({
-    ...prev,
-    zones: prev.zones.map(z =>
-      z.id === zoneAfter.id
-        ? {
-            ...z,
-            angleLeftDeg:  zoneAfter.angleLeftDeg,   // только углы!
-            angleRightDeg: zoneAfter.angleRightDeg,
-          }
-        : z
-    ),
-  }));
-}}
+                        setState((prev) => ({
+                          ...prev,
+                          zones: prev.zones.map((z) =>
+                            z.id === zoneAfter.id
+                              ? {
+                                  ...z,
+                                  angleLeftDeg: zoneAfter.angleLeftDeg,
+                                  angleRightDeg: zoneAfter.angleRightDeg,
+                                }
+                              : z
+                          ),
+                        }));
+                      }}
                     />,
                   ]}
                 />
               ) : null;
             })()
           : null}
-        {/* Выделение (рамка) для text/shape/zone в режиме select */}
+
+        {/* ========================== РАМКА ВЫДЕЛЕНИЯ (UI) ===================== */}
         {currentTool === "select" && selectedIds.length > 0
           ? (() => {
-              // соберём конва-ноды по выбранным id: shape -> text -> zone
+              // Собираем реальные Konva-ноды по выбранным id: shape -> text -> zone
               const nodes = selectedIds
                 .map((id) => shapeRefs.current[id] || textRefs.current[id] || zoneRefs.current[id])
                 .filter(Boolean);
@@ -1364,8 +1502,7 @@ function SeatmapCanvas({
                     <Transformer
                       key="select-tr"
                       nodes={nodes}
-                      // без ручек — только рамка
-                      enabledAnchors={[]}
+                      enabledAnchors={[]} // только рамка без ручек
                       rotateEnabled={false}
                       borderStroke="#3B82F6"
                       borderDash={[6, 4]}
@@ -1377,7 +1514,7 @@ function SeatmapCanvas({
             })()
           : null}
 
-        {/* Рамка выделения */}
+        {/* ============================ МАРКИЗА (MARQUEE) ====================== */}
         <Layer
           listening={false}
           children={[
@@ -1398,6 +1535,7 @@ function SeatmapCanvas({
         />
       </Stage>
 
+      {/* Кнопки управления масштабом (в правом нижнем углу) */}
       <ZoomControls scale={scale} setScale={setScaleFromButtons} />
     </div>
   );
